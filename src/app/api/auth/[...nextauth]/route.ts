@@ -1,13 +1,39 @@
-// src/app/api/auth/[...nextauth]/route.ts
-import NextAuth from 'next-auth'
-import CredentialsProvider from 'next-auth/providers/credentials'
-import { db } from '@/lib/db'
-import { usuarios } from '@/lib/db/schema/usuarios'
-import { eq } from 'drizzle-orm'
-import bcrypt from 'bcryptjs'
-import { env } from '@/lib/env'
+import NextAuth, { NextAuthOptions, DefaultSession } from 'next-auth';
+import CredentialsProvider from 'next-auth/providers/credentials';
+import { db } from '@/lib/db';
+import { usuarios } from '@/lib/db/schema/usuarios';
+import { eq } from 'drizzle-orm';
+import bcrypt from 'bcryptjs';
 
-export const authOptions = {
+// Estender os tipos do NextAuth
+declare module 'next-auth' {
+  interface User {
+    id: string;
+    nome: string;
+    matricula: string;
+    nivel: string;
+  }
+  
+  interface Session {
+    user: {
+      id: string;
+      nome: string;
+      matricula: string;
+      nivel: string;
+    } & DefaultSession['user'];
+  }
+}
+
+declare module 'next-auth/jwt' {
+  interface JWT {
+    id: string;
+    nome: string;
+    matricula: string;
+    nivel: string;
+  }
+}
+
+export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
       name: 'credentials',
@@ -17,36 +43,41 @@ export const authOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.matricula) {
-          return null
+          return null;
         }
 
-        // Buscar usuário pela matrícula
-        const user = await db.query.usuarios.findFirst({
-          where: eq(usuarios.matricula, credentials.matricula),
-        })
+        try {
+          // Buscar usuário pela matrícula
+          const user = await db.query.usuarios.findFirst({
+            where: eq(usuarios.matricula, credentials.matricula),
+          });
 
-        if (!user || !user.ativo) {
-          return null
-        }
-
-        // Se for admin, verificar senha
-        if (user.nivel === 'ADM') {
-          if (!credentials.senha) {
-            return null
+          if (!user || !user.ativo) {
+            return null;
           }
-          
-          const isValid = await bcrypt.compare(credentials.senha, user.senha || '')
-          if (!isValid) {
-            return null
-          }
-        }
 
-        // Retornar dados do usuário (sem senha)
-        return {
-          id: user.id,
-          nome: user.nome,
-          matricula: user.matricula,
-          nivel: user.nivel,
+          // Se for admin, verificar senha
+          if (user.nivel === 'ADM') {
+            if (!credentials.senha) {
+              return null;
+            }
+            
+            const isValid = await bcrypt.compare(credentials.senha, user.senha || '');
+            if (!isValid) {
+              return null;
+            }
+          }
+
+          // Retornar dados do usuário (sem senha)
+          return {
+            id: user.id,
+            nome: user.nome,
+            matricula: user.matricula,
+            nivel: user.nivel,
+          };
+        } catch (error) {
+          console.error('Erro na autenticação:', error);
+          return null;
         }
       },
     }),
@@ -54,21 +85,21 @@ export const authOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id
-        token.nome = user.nome
-        token.matricula = user.matricula
-        token.nivel = user.nivel
+        token.id = user.id;
+        token.nome = user.nome;
+        token.matricula = user.matricula;
+        token.nivel = user.nivel;
       }
-      return token
+      return token;
     },
     async session({ session, token }) {
       if (token && session.user) {
-        session.user.id = token.id as string
-        session.user.nome = token.nome as string
-        session.user.matricula = token.matricula as string
-        session.user.nivel = token.nivel as string
+        session.user.id = token.id;
+        session.user.nome = token.nome;
+        session.user.matricula = token.matricula;
+        session.user.nivel = token.nivel;
       }
-      return session
+      return session;
     },
   },
   pages: {
@@ -77,10 +108,10 @@ export const authOptions = {
   },
   session: {
     strategy: 'jwt',
-    maxAge: 8 * 60 * 60, // 8 horas
+    maxAge: 8 * 60 * 60,
   },
-  secret: env.NEXTAUTH_SECRET,
-}
+  secret: process.env.NEXTAUTH_SECRET,
+};
 
-const handler = NextAuth(authOptions)
-export { handler as GET, handler as POST }
+const handler = NextAuth(authOptions);
+export { handler as GET, handler as POST };
