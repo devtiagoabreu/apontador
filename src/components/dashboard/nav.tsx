@@ -13,6 +13,8 @@ import {
   Users,
   Package,
   AlertTriangle,
+  Layers,
+  XCircle,
 } from 'lucide-react';
 
 const navItems = [
@@ -47,6 +49,21 @@ const navItems = [
     icon: Package,
   },
   {
+    title: 'Estágios de Produção',
+    href: '/dashboard/estagios',
+    icon: Layers,
+  },
+  {
+    title: 'Motivos de Parada',
+    href: '/dashboard/motivos-parada',
+    icon: AlertTriangle,
+  },
+  {
+    title: 'Motivos de Cancelamento',
+    href: '/dashboard/motivos-cancelamento',
+    icon: XCircle,
+  },
+  {
     title: 'Ordens de Produção',
     href: '/dashboard/ops',
     icon: FileText,
@@ -60,11 +77,6 @@ const navItems = [
     title: 'Relatórios',
     href: '/dashboard/relatorios',
     icon: BarChart3,
-  },
-  {
-    title: 'Motivos de Parada',
-    href: '/dashboard/motivos-parada',
-    icon: AlertTriangle,
   },
 ];
 

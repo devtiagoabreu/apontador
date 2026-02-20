@@ -11,3 +11,31 @@ commit 1: Estrutura inicial do projeto e configurações base
 - Middleware para proteção de rotas
 - Utilitários e helpers diversos
 - Configurações de ambiente e gitignore
+
+commit 2: feat: adicionar dashboard admin com navegação
+
+✅ Layout completo do dashboard
+
+✅ Menu de navegação lateral
+
+✅ Cabeçalho com informações do usuário
+
+✅ Página inicial com cards de estatísticas
+
+✅ Proteção de rotas (apenas admin acessa)
+
+✅ Botão de logout funcionando
+
+📋 Commit 3: Estágios e Motivos de Cancelamento --> feat: adicionar CRUD de estágios e motivos de cancelamento
+
+✅ Menu atualizado com Estágios de Produção e Motivos de Cancelamento
+
+✅ Páginas completas de CRUD para ambos
+
+✅ Tabelas com ações de editar/excluir
+
+✅ Modais de formulário com validação
+
+✅ API routes funcionando
+
+✅ Componentes UI reutilizáveis
