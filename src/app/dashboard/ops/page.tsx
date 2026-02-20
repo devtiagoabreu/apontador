@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
 import { toast } from '@/components/ui/use-toast';
-import { Download, RefreshCw, Eye } from 'lucide-react';
+import { Download, RefreshCw } from 'lucide-react';
 import { formatDate, formatNumber } from '@/lib/utils';
 import {
   Dialog,
@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 
 interface OP {
-  op: number;
+  op: number; // Esta é a chave primária, não 'id'
   produto: string;
   depositoFinal: string | null;
   pecasVinculadas: string | null;
@@ -38,6 +38,7 @@ interface OP {
   dataUltimoApontamento: string | null;
 }
 
+// Adaptar as colunas para usar 'op' como identificador
 const columns = [
   { key: 'op' as const, title: 'OP' },
   { key: 'produto' as const, title: 'Produto' },
@@ -163,10 +164,11 @@ export default function OpsPage() {
         </Button>
       </div>
 
+      {/* Usar o DataTable com a opção de não ter ações de editar/excluir */}
       <DataTable
         data={ops}
         columns={columns}
-        onEdit={(op) => {
+        onRowClick={(op) => {
           setSelectedOp(op);
           setDetailsOpen(true);
         }}

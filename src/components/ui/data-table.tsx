@@ -14,7 +14,7 @@ import { Pencil, Trash2 } from 'lucide-react';
 interface Column<T> {
   key: keyof T;
   title: string;
-  format?: (value: any) => string;
+  format?: (value: any) => React.ReactNode;
 }
 
 interface DataTableProps<T> {
@@ -22,13 +22,15 @@ interface DataTableProps<T> {
   columns: Column<T>[];
   onEdit?: (item: T) => void;
   onDelete?: (item: T) => void;
+  onRowClick?: (item: T) => void; // Nova prop opcional
 }
 
-export function DataTable<T extends { id: string }>({
+export function DataTable<T extends Record<string, any>>({
   data,
   columns,
   onEdit,
   onDelete,
+  onRowClick,
 }: DataTableProps<T>) {
   return (
     <div className="rounded-md border">
@@ -44,13 +46,17 @@ export function DataTable<T extends { id: string }>({
         <TableBody>
           {data.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={columns.length + 1} className="text-center py-8 text-gray-500">
+              <TableCell colSpan={columns.length + (onEdit || onDelete ? 1 : 0)} className="text-center py-8 text-gray-500">
                 Nenhum registro encontrado
               </TableCell>
             </TableRow>
           ) : (
-            data.map((item) => (
-              <TableRow key={item.id}>
+            data.map((item, index) => (
+              <TableRow 
+                key={index}
+                className={onRowClick ? 'cursor-pointer hover:bg-gray-50' : ''}
+                onClick={() => onRowClick?.(item)}
+              >
                 {columns.map((column) => (
                   <TableCell key={String(column.key)}>
                     {column.format
@@ -59,7 +65,7 @@ export function DataTable<T extends { id: string }>({
                   </TableCell>
                 ))}
                 {(onEdit || onDelete) && (
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center gap-2">
                       {onEdit && (
                         <Button
