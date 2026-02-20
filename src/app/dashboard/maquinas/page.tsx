@@ -8,8 +8,11 @@ import { FormModal } from '@/components/ui/form-modal';
 import { z } from 'zod';
 import { toast } from '@/components/ui/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Checkbox } from '@/components/ui'; // Se estiver usando o index.ts
 import { Label } from '@/components/ui/label';
+
+// Definir o tipo para status
+type StatusMaquina = 'DISPONIVEL' | 'EM_PROCESSO' | 'PARADA';
 
 const maquinaSchema = z.object({
   nome: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres'),
@@ -50,10 +53,39 @@ export default function MaquinasPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedMaquina, setSelectedMaquina] = useState<Maquina | null>(null);
   const [selectedSetores, setSelectedSetores] = useState<string[]>([]);
+  const [formData, setFormData] = useState<Partial<Maquina>>({
+    nome: '',
+    codigo: '',
+    status: 'DISPONIVEL',
+    ativo: true,
+  });
 
   useEffect(() => {
     carregarDados();
   }, []);
+
+  useEffect(() => {
+    if (selectedMaquina) {
+      setFormData({
+        nome: selectedMaquina.nome,
+        codigo: selectedMaquina.codigo,
+        status: selectedMaquina.status,
+        ativo: selectedMaquina.ativo,
+      });
+      // Carregar setores da máquina
+      fetch(`/api/maquinas/${selectedMaquina.id}/setores`)
+        .then(res => res.json())
+        .then(data => setSelectedSetores(data.map((s: any) => s.setorId)));
+    } else {
+      setFormData({
+        nome: '',
+        codigo: '',
+        status: 'DISPONIVEL',
+        ativo: true,
+      });
+      setSelectedSetores([]);
+    }
+  }, [selectedMaquina]);
 
   async function carregarDados() {
     await Promise.all([carregarMaquinas(), carregarSetores()]);
@@ -87,15 +119,48 @@ export default function MaquinasPage() {
     }
   }
 
-  async function handleSubmit(data: any) {
+  async function handleSubmit() {
     try {
+      // Validar dados
+      if (!formData.nome || formData.nome.length < 3) {
+        toast({
+          title: 'Erro',
+          description: 'Nome deve ter no mínimo 3 caracteres',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (!formData.codigo) {
+        toast({
+          title: 'Erro',
+          description: 'Código é obrigatório',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (selectedSetores.length === 0) {
+        toast({
+          title: 'Erro',
+          description: 'Selecione pelo menos um setor',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const dataToSubmit = {
+        ...formData,
+        setores: selectedSetores,
+      };
+
       const url = selectedMaquina ? `/api/maquinas/${selectedMaquina.id}` : '/api/maquinas';
       const method = selectedMaquina ? 'PUT' : 'POST';
       
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(dataToSubmit),
       });
 
       if (!response.ok) throw new Error('Erro ao salvar');
@@ -108,6 +173,12 @@ export default function MaquinasPage() {
       setModalOpen(false);
       setSelectedMaquina(null);
       setSelectedSetores([]);
+      setFormData({
+        nome: '',
+        codigo: '',
+        status: 'DISPONIVEL',
+        ativo: true,
+      });
       carregarMaquinas();
     } catch (error) {
       toast({
@@ -143,6 +214,10 @@ export default function MaquinasPage() {
     }
   }
 
+  const handleInputChange = (field: keyof typeof formData, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
   // Custom form for máquina with multiple setores
   const renderMaquinaForm = () => (
     <div className="space-y-4">
@@ -151,8 +226,8 @@ export default function MaquinasPage() {
         <input
           id="nome"
           className="w-full rounded-md border border-input bg-background px-3 py-2"
-          value={selectedMaquina?.nome || ''}
-          onChange={(e) => setSelectedMaquina(prev => prev ? {...prev, nome: e.target.value} : null)}
+          value={formData.nome || ''}
+          onChange={(e) => handleInputChange('nome', e.target.value)}
         />
       </div>
 
@@ -161,8 +236,8 @@ export default function MaquinasPage() {
         <input
           id="codigo"
           className="w-full rounded-md border border-input bg-background px-3 py-2"
-          value={selectedMaquina?.codigo || ''}
-          onChange={(e) => setSelectedMaquina(prev => prev ? {...prev, codigo: e.target.value} : null)}
+          value={formData.codigo || ''}
+          onChange={(e) => handleInputChange('codigo', e.target.value)}
         />
       </div>
 
@@ -193,8 +268,8 @@ export default function MaquinasPage() {
       <div className="space-y-2">
         <Label htmlFor="status">Status</Label>
         <Select
-          value={selectedMaquina?.status || 'DISPONIVEL'}
-          onValueChange={(value) => setSelectedMaquina(prev => prev ? {...prev, status: value} : null)}
+          value={formData.status}
+          onValueChange={(value: StatusMaquina) => handleInputChange('status', value)}
         >
           <SelectTrigger>
             <SelectValue placeholder="Selecione o status" />
@@ -210,8 +285,8 @@ export default function MaquinasPage() {
       <div className="flex items-center space-x-2">
         <Checkbox
           id="ativo"
-          checked={selectedMaquina?.ativo ?? true}
-          onCheckedChange={(checked) => setSelectedMaquina(prev => prev ? {...prev, ativo: checked as boolean} : null)}
+          checked={formData.ativo}
+          onCheckedChange={(checked) => handleInputChange('ativo', checked)}
         />
         <Label htmlFor="ativo">Ativo</Label>
       </div>
@@ -224,7 +299,6 @@ export default function MaquinasPage() {
         <h1 className="text-3xl font-bold">Máquinas</h1>
         <Button onClick={() => {
           setSelectedMaquina(null);
-          setSelectedSetores([]);
           setModalOpen(true);
         }}>
           <Plus className="mr-2 h-4 w-4" />
@@ -237,10 +311,6 @@ export default function MaquinasPage() {
         columns={columns}
         onEdit={(maquina) => {
           setSelectedMaquina(maquina);
-          // Carregar setores da máquina
-          fetch(`/api/maquinas/${maquina.id}/setores`)
-            .then(res => res.json())
-            .then(data => setSelectedSetores(data.map((s: any) => s.setorId)));
           setModalOpen(true);
         }}
         onDelete={handleDelete}
@@ -253,11 +323,14 @@ export default function MaquinasPage() {
           setModalOpen(false);
           setSelectedMaquina(null);
           setSelectedSetores([]);
+          setFormData({
+            nome: '',
+            codigo: '',
+            status: 'DISPONIVEL',
+            ativo: true,
+          });
         }}
-        onSubmit={() => handleSubmit({
-          ...selectedMaquina,
-          setores: selectedSetores
-        })}
+        onSubmit={handleSubmit}
         title={selectedMaquina ? 'Editar Máquina' : 'Nova Máquina'}
         fields={[]}
         schema={maquinaSchema}
