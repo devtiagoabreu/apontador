@@ -7,7 +7,7 @@ import { ops } from '@/lib/db/schema/ops';
 import { maquinas } from '@/lib/db/schema/maquinas';
 import { usuarios } from '@/lib/db/schema/usuarios';
 import { motivosParada } from '@/lib/db/schema/motivos-parada';
-import { sql, and, gte, lte } from 'drizzle-orm';
+import { sql, and, gte, lte, eq } from 'drizzle-orm'; // ADICIONAR eq AQUI
 
 export async function GET(request: Request) {
   try {
