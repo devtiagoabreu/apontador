@@ -21,6 +21,15 @@ const usuarioSchema = z.object({
   nivel: z.enum(['ADM', 'OPERADOR']).default('OPERADOR'),
   senha: z.string().optional(),
   ativo: z.boolean().default(true),
+}).refine((data) => {
+  // Se for admin, senha é obrigatória
+  if (data.nivel === 'ADM' && !data.senha) {
+    return false;
+  }
+  return true;
+}, {
+  message: 'Senha é obrigatória para administradores',
+  path: ['senha'],
 });
 
 type Usuario = z.infer<typeof usuarioSchema> & { id: string };
@@ -94,6 +103,16 @@ export default function UsuariosPage() {
         delete data.senha;
       }
 
+      // Se for admin mas não tem senha, avisar
+      if (data.nivel === 'ADM' && !data.senha) {
+        toast({
+          title: 'Aviso',
+          description: 'Administradores devem ter uma senha definida',
+          variant: 'warning',
+        });
+        return;
+      }
+
       const url = selectedUsuario ? `/api/usuarios/${selectedUsuario.id}` : '/api/usuarios';
       const method = selectedUsuario ? 'PUT' : 'POST';
       
@@ -103,9 +122,18 @@ export default function UsuariosPage() {
         body: JSON.stringify(data),
       });
 
+      // Tentar parsear o JSON da resposta
+      let result;
+      try {
+        result = await response.json();
+      } catch (e) {
+        // Se não conseguir parsear o JSON, pegar o texto da resposta
+        const text = await response.text();
+        throw new Error(`Resposta inválida do servidor: ${text.substring(0, 100)}`);
+      }
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Erro ao salvar');
+        throw new Error(result.error || 'Erro ao salvar');
       }
 
       toast({
@@ -116,7 +144,9 @@ export default function UsuariosPage() {
       setModalOpen(false);
       setSelectedUsuario(null);
       carregarUsuarios();
+      
     } catch (error) {
+      console.error('Erro detalhado:', error);
       toast({
         title: 'Erro',
         description: error instanceof Error ? error.message : 'Erro ao salvar usuário',

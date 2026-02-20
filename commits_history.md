@@ -59,7 +59,7 @@
 ✅ Páginas de redirecionamento para cada tipo
 ✅ Integração com o leitor de QR Code no login
 
-## 📋 Commit 6: Crud completo com geração de QR Code --> feat: adicionar CRUD completo de usuários com geração de QR Code
+## 📋 Commit 7: Crud completo com geração de QR Code --> feat: adicionar CRUD completo de usuários com geração de QR Code
 
 ✅ Listagem de usuários com status (Ativo/Inativo)
 ✅ Criar/Editar usuários (ADM ou Operador)
