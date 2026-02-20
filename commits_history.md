@@ -84,3 +84,12 @@
 ✅ Registrar paradas com motivos predefinidos
 ✅ Retomar produção após uma parada
 ✅ Atualização automática do status da máquina e OP
+
+## 🚀 Commit 10: Dashboard com Gráficos e Relatórios --> feat: adicionar dashboard com gráficos e relatórios
+
+✅ Visualizar gráficos de produção diária e acumulada
+✅ Analisar paradas por motivo e tempo
+✅ Ver desempenho por operador e máquina
+✅ Filtrar dados por período personalizado
+✅ Exportar relatórios em PDF e Excel
+✅ Acompanhar indicadores de eficiência e disponibilidade
