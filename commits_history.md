@@ -76,3 +76,11 @@
 ✅ Histórico de atividades
 ✅ Navegação inferior com ícones grandes
 ✅ Menu lateral com informações do usuário
+
+## 🚀 Commit 9: Finalização de Apontamento e Registro de Paradas --> feat: finalizar apontamento e registrar paradas
+
+✅ Iniciar produção em uma máquina com OP selecionada
+✅ Finalizar produção informando a metragem produzida
+✅ Registrar paradas com motivos predefinidos
+✅ Retomar produção após uma parada
+✅ Atualização automática do status da máquina e OP
