@@ -108,11 +108,30 @@ export async function POST(request: Request) {
       );
     }
 
-    // Inserir produto
+    // Inserir produto - CORRIGIDO: convertendo números para string
     const [newProduto] = await db
       .insert(produtos)
       .values({
-        ...validated,
+        codigo: validated.codigo,
+        nome: validated.nome,
+        um: validated.um,
+        nivel: validated.nivel,
+        grupo: validated.grupo,
+        sub: validated.sub,
+        item: validated.item,
+        composicao: validated.composicao,
+        largura: validated.largura?.toString(),
+        gramaturaLinear: validated.gramaturaLinear?.toString(),
+        gramaturaM2: validated.gramaturaM2?.toString(),
+        tipoTecido: validated.tipoTecido,
+        ligamento: validated.ligamento,
+        fiosUrdume: validated.fiosUrdume?.toString(),
+        fiosTrama: validated.fiosTrama?.toString(),
+        classificacaoPeso: validated.classificacaoPeso,
+        parametrosEficiencia: validated.parametrosEficiencia,
+        metaDiaria: validated.metaDiaria?.toString(),
+        metaMensal: validated.metaMensal?.toString(),
+        ativo: validated.ativo,
         createdAt: new Date(),
         updatedAt: new Date(),
       })

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { produtos } from '@/lib/db/schema/produtos';
+import { ops } from '@/lib/db/schema/ops';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -103,11 +104,30 @@ export async function PUT(
       }
     }
 
-    // Atualizar produto
+    // Atualizar produto - CORRIGIDO: convertendo números para string
     const [updated] = await db
       .update(produtos)
       .set({
-        ...validated,
+        codigo: validated.codigo,
+        nome: validated.nome,
+        um: validated.um,
+        nivel: validated.nivel,
+        grupo: validated.grupo,
+        sub: validated.sub,
+        item: validated.item,
+        composicao: validated.composicao,
+        largura: validated.largura?.toString(),
+        gramaturaLinear: validated.gramaturaLinear?.toString(),
+        gramaturaM2: validated.gramaturaM2?.toString(),
+        tipoTecido: validated.tipoTecido,
+        ligamento: validated.ligamento,
+        fiosUrdume: validated.fiosUrdume?.toString(),
+        fiosTrama: validated.fiosTrama?.toString(),
+        classificacaoPeso: validated.classificacaoPeso,
+        parametrosEficiencia: validated.parametrosEficiencia,
+        metaDiaria: validated.metaDiaria?.toString(),
+        metaMensal: validated.metaMensal?.toString(),
+        ativo: validated.ativo,
         updatedAt: new Date(),
       })
       .where(eq(produtos.id, params.id))
@@ -157,7 +177,7 @@ export async function DELETE(
 
     // Verificar se produto está sendo usado em OPs
     const opsComProduto = await db.query.ops.findFirst({
-      where: eq(produtos.codigo, existing.codigo),
+      where: eq(ops.produto, existing.codigo),
     });
 
     if (opsComProduto) {
