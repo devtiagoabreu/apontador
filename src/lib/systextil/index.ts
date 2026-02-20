@@ -7,22 +7,23 @@ interface SystextilToken {
   scope: string;
 }
 
+// Interface ajustada para corresponder ao que a API retorna (campos minúsculos)
 interface SystextilOP {
-  OP: number;
-  PRODUTO: string;
-  DEPOSITO_FINAL: string;
-  PECAS_VINCULADAS: string;
-  QTDE_PROGRAMADO: number;
-  QTDE_CARREGADO: number;
-  QTDE_PRODUZIDA: number;
-  CALCULO_QUEBRA: number;
-  OBS: string;
-  UM: string;
-  NARRATIVA: string;
-  NIVEL: string;
-  GRUPO: string;
-  SUB: string;
-  ITEM: string;
+  op: number;           // minúsculo, não maiúsculo
+  produto: string;      // minúsculo
+  deposito_final: string;
+  pecas_vinculadas: string;
+  qtde_programado: number;
+  qtde_carregado: number;
+  qtde_produzida: number;
+  calculo_quebra: number;
+  obs: string;
+  um: string;
+  narrativa: string;
+  nivel: string;
+  grupo: string;
+  sub: string;
+  item: string;
 }
 
 interface SystextilResponse {
@@ -34,7 +35,6 @@ class SystextilService {
   private tokenExpiresAt: number | null = null;
 
   private async getAccessToken(): Promise<string> {
-    // Se token ainda é válido, reutiliza
     if (this.accessToken && this.tokenExpiresAt && Date.now() < this.tokenExpiresAt) {
       return this.accessToken;
     }
@@ -60,7 +60,7 @@ class SystextilService {
       const data: SystextilToken = await response.json();
       
       this.accessToken = data.access_token;
-      this.tokenExpiresAt = Date.now() + (data.expires_in * 1000) - 60000; // 1 minuto de margem
+      this.tokenExpiresAt = Date.now() + (data.expires_in * 1000) - 60000;
 
       return this.accessToken;
     } catch (error) {

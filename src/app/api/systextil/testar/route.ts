@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic';
+
 import { NextResponse } from 'next/server';
 import { env } from '@/lib/env';
 
@@ -73,11 +74,11 @@ export async function GET() {
     const items = apiData.items || [];
     diagnostics.data = {
       total: items.length,
-      amostra: items.slice(0, 3), // Mostrar apenas 3 exemplos
+      amostra: items.slice(0, 3),
       campos: items.length > 0 ? Object.keys(items[0]) : [],
       analise: {
-        opsComOpNula: items.filter((item: any) => !item.OP).length,
-        opsComProdutoNulo: items.filter((item: any) => !item.PRODUTO).length,
+        opsComOpNula: items.filter((item: any) => !item.op).length,
+        opsComProdutoNulo: items.filter((item: any) => !item.produto).length,
       }
     };
 
