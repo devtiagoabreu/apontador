@@ -58,3 +58,12 @@
 ✅ Impressão em lote (múltiplas cópias)
 ✅ Páginas de redirecionamento para cada tipo
 ✅ Integração com o leitor de QR Code no login
+
+## 📋 Commit 6: Crud completo com geração de QR Code --> feat: adicionar CRUD completo de usuários com geração de QR Code
+
+✅ Listagem de usuários com status (Ativo/Inativo)
+✅ Criar/Editar usuários (ADM ou Operador)
+✅ Senha apenas para administradores
+✅ Gerar QR Code para cada operador
+✅ Download e impressão do QR Code
+✅ Excluir usuários

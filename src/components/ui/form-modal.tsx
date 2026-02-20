@@ -18,7 +18,7 @@ import { Switch } from '@/components/ui/switch';
 interface Field {
   name: string;
   label: string;
-  type: 'text' | 'number' | 'switch' | 'textarea' | 'select';
+  type: 'text' | 'number' | 'switch' | 'textarea' | 'select' | 'password'; // ADICIONAR 'password' AQUI
   required?: boolean;
   options?: { value: string; label: string }[];
 }
@@ -31,7 +31,7 @@ interface FormModalProps {
   fields: Field[];
   initialData?: any;
   schema: z.ZodObject<any>;
-  children?: React.ReactNode; // ADICIONAR ESTA LINHA
+  children?: React.ReactNode;
 }
 
 export function FormModal({
@@ -42,7 +42,7 @@ export function FormModal({
   fields,
   initialData,
   schema,
-  children, // ADICIONAR ESTA LINHA
+  children,
 }: FormModalProps) {
   const {
     register,
@@ -124,6 +124,12 @@ export function FormModal({
                       </option>
                     ))}
                   </select>
+                ) : field.type === 'password' ? (  // ADICIONAR ESTE BLOCO AQUI
+                  <Input
+                    id={field.name}
+                    type="password"
+                    {...register(field.name)}
+                  />
                 ) : (
                   <Input
                     id={field.name}

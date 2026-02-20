@@ -22,7 +22,8 @@ interface DataTableProps<T> {
   columns: Column<T>[];
   onEdit?: (item: T) => void;
   onDelete?: (item: T) => void;
-  onRowClick?: (item: T) => void; // Nova prop opcional
+  onRowClick?: (item: T) => void;
+  extraActions?: (item: T) => React.ReactNode; // Nova prop
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -31,6 +32,7 @@ export function DataTable<T extends Record<string, any>>({
   onEdit,
   onDelete,
   onRowClick,
+  extraActions,
 }: DataTableProps<T>) {
   return (
     <div className="rounded-md border">
@@ -40,13 +42,13 @@ export function DataTable<T extends Record<string, any>>({
             {columns.map((column) => (
               <TableHead key={String(column.key)}>{column.title}</TableHead>
             ))}
-            {(onEdit || onDelete) && <TableHead className="w-[100px]">Ações</TableHead>}
+            {(onEdit || onDelete || extraActions) && <TableHead className="w-[140px]">Ações</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {data.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={columns.length + (onEdit || onDelete ? 1 : 0)} className="text-center py-8 text-gray-500">
+              <TableCell colSpan={columns.length + 1} className="text-center py-8 text-gray-500">
                 Nenhum registro encontrado
               </TableCell>
             </TableRow>
@@ -64,9 +66,10 @@ export function DataTable<T extends Record<string, any>>({
                       : String(item[column.key] ?? '')}
                   </TableCell>
                 ))}
-                {(onEdit || onDelete) && (
+                {(onEdit || onDelete || extraActions) && (
                   <TableCell onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      {extraActions?.(item)}
                       {onEdit && (
                         <Button
                           variant="ghost"
