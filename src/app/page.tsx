@@ -1,19 +1,17 @@
-// src/app/page.tsx
-import { redirect } from 'next/navigation'
-import { getServerSession } from 'next-auth'
-import { authOptions } from './api/auth/[...nextauth]/route'
+import { redirect } from 'next/navigation';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth'; // Mudei o caminho da importação
 
 export default async function HomePage() {
-  const session = await getServerSession(authOptions)
+  const session = await getServerSession(authOptions);
 
   if (session) {
-    // Redireciona baseado no nível do usuário
     if (session.user.nivel === 'ADM') {
-      redirect('/dashboard')
+      redirect('/dashboard');
     } else {
-      redirect('/apontamento')
+      redirect('/apontamento');
     }
   } else {
-    redirect('/login')
+    redirect('/login');
   }
 }

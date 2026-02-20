@@ -8,22 +8,20 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const nivel = searchParams.get('nivel');
     
-    let query = db.select({
+    const users = await db.select({
       id: usuarios.id,
       nome: usuarios.nome,
       matricula: usuarios.matricula,
       nivel: usuarios.nivel,
       ativo: usuarios.ativo
-    }).from(usuarios);
+    })
+    .from(usuarios)
+    .where(nivel ? eq(usuarios.nivel, nivel) : undefined);
     
-    if (nivel) {
-      query = query.where(eq(usuarios.nivel, nivel));
-    }
+    return NextResponse.json(users);
     
-    const allUsers = await query;
-    
-    return NextResponse.json(allUsers);
   } catch (error) {
+    console.error('Erro ao buscar usuários:', error);
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
 }
