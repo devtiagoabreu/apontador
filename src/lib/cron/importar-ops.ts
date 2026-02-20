@@ -14,8 +14,9 @@ export async function importarOpsAutomatico() {
     let ignoradas = 0;
 
     for (const opData of opsImportadas) {
+      // CORRIGIDO: usar opData.op (minúsculo) em vez de opData.OP
       const opExistente = await db.query.ops.findFirst({
-        where: eq(ops.op, opData.OP),
+        where: eq(ops.op, opData.op),
       });
 
       if (opExistente) {
@@ -24,26 +25,26 @@ export async function importarOpsAutomatico() {
       }
 
       const produtoExistente = await db.query.produtos.findFirst({
-        where: eq(produtos.codigo, opData.PRODUTO),
+        where: eq(produtos.codigo, opData.produto),
       });
 
       await db.insert(ops).values({
-        op: opData.OP,
-        produto: opData.PRODUTO,
-        depositoFinal: opData.DEPOSITO_FINAL,
-        pecasVinculadas: opData.PECAS_VINCULADAS,
-        qtdeProgramado: opData.QTDE_PROGRAMADO?.toString(),
-        qtdeCarregado: opData.QTDE_CARREGADO?.toString(),
-        qtdeProduzida: opData.QTDE_PRODUZIDA?.toString() || '0',
-        calculoQuebra: opData.CALCULO_QUEBRA?.toString(),
-        obs: opData.OBS,
-        um: opData.UM,
-        narrativa: opData.NARRATIVA,
-        nivel: opData.NIVEL,
-        grupo: opData.GRUPO,
-        sub: opData.SUB,
-        item: opData.ITEM,
-        produtoId: produtoExistente?.id,
+        op: opData.op,
+        produto: opData.produto,
+        depositoFinal: opData.deposito_final || null,
+        pecasVinculadas: opData.pecas_vinculadas || null,
+        qtdeProgramado: opData.qtde_programado?.toString() || null,
+        qtdeCarregado: opData.qtde_carregado?.toString() || null,
+        qtdeProduzida: opData.qtde_produzida?.toString() || '0',
+        calculoQuebra: opData.calculo_quebra?.toString() || null,
+        obs: opData.obs || null,
+        um: opData.um || null,
+        narrativa: opData.narrativa || null,
+        nivel: opData.nivel || null,
+        grupo: opData.grupo || null,
+        sub: opData.sub || null,
+        item: opData.item || null,
+        produtoId: produtoExistente?.id || null,
         codEstagioAtual: '00',
         estagioAtual: 'NENHUM',
         codMaquinaAtual: '00',
