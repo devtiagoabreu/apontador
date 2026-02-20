@@ -28,17 +28,27 @@ export default async function MachinePage({ params }: { params: { id: string } }
   }
 
   // Buscar apontamento ativo nesta máquina
-  const apontamentoAtivo = await db.query.apontamentos.findFirst({
-    where: and(
-      eq(apontamentos.maquinaId, params.id),
-      eq(apontamentos.status, 'EM_ANDAMENTO')
-    ),
-    with: {
-      op: true,
-    },
-  });
+  const apontamentoAtivo = await db
+    .select({
+      id: apontamentos.id,
+      dataInicio: apontamentos.dataInicio,
+      opId: apontamentos.opId,
+      opNumero: ops.op,
+      opProduto: ops.produto,
+      opProgramado: ops.qtdeProgramado,
+      opUm: ops.um,
+    })
+    .from(apontamentos)
+    .leftJoin(ops, eq(apontamentos.opId, ops.op))
+    .where(
+      and(
+        eq(apontamentos.maquinaId, params.id),
+        eq(apontamentos.status, 'EM_ANDAMENTO')
+      )
+    )
+    .then(rows => rows[0] || null);
 
-  // Buscar OPs disponíveis (que ainda não passaram pelo último estágio)
+  // Buscar OPs disponíveis (que não estão finalizadas ou canceladas)
   const opsDisponiveis = await db
     .select()
     .from(ops)
@@ -52,6 +62,7 @@ export default async function MachinePage({ params }: { params: { id: string } }
 
   return (
     <div className="p-4 space-y-4">
+      {/* Cabeçalho com botão voltar */}
       <div className="flex items-center gap-3">
         <Link href="/apontamento">
           <Button variant="ghost" size="icon" className="h-10 w-10">
@@ -64,7 +75,7 @@ export default async function MachinePage({ params }: { params: { id: string } }
         </div>
       </div>
 
-      {/* Status da máquina */}
+      {/* Card de status da máquina */}
       <MobileCard>
         <div className="flex items-center justify-between">
           <span className="text-gray-600">Status</span>
@@ -79,53 +90,68 @@ export default async function MachinePage({ params }: { params: { id: string } }
         </div>
       </MobileCard>
 
-      {/* Se tem apontamento ativo */}
+      {/* Se tem apontamento ativo, mostra detalhes e ações */}
       {apontamentoAtivo && (
         <MobileCard>
           <h2 className="font-medium mb-3">Produção em andamento</h2>
           <div className="space-y-2">
-            <p className="text-sm">OP: {apontamentoAtivo.op.op}</p>
-            <p className="text-sm text-gray-500">{apontamentoAtivo.op.produto}</p>
+            <p className="text-sm">OP: {apontamentoAtivo.opNumero}</p>
+            <p className="text-sm text-gray-500">{apontamentoAtivo.opProduto}</p>
             <p className="text-xs text-gray-400">
               Iniciado: {new Date(apontamentoAtivo.dataInicio).toLocaleString('pt-BR')}
             </p>
           </div>
+          
+          {/* Botões de ação */}
           <div className="flex gap-2 mt-4">
-            <Button className="flex-1" variant="default">
-              <CheckCircle className="mr-2 h-4 w-4" />
-              Finalizar
-            </Button>
-            <Button className="flex-1" variant="outline" className="text-yellow-600">
-              <Pause className="mr-2 h-4 w-4" />
-              Parada
-            </Button>
+            <Link href={`/apontamento/finalizar?apontamento=${apontamentoAtivo.id}`} className="flex-1">
+              <Button className="w-full" variant="default">
+                <CheckCircle className="mr-2 h-4 w-4" />
+                Finalizar
+              </Button>
+            </Link>
+            <Link href={`/apontamento/parada?apontamento=${apontamentoAtivo.id}`} className="flex-1">
+              <Button className="w-full text-yellow-600" variant="outline">
+                <Pause className="mr-2 h-4 w-4" />
+                Parada
+              </Button>
+            </Link>
           </div>
         </MobileCard>
       )}
 
-      {/* Lista de OPs disponíveis */}
+      {/* Se não tem apontamento ativo, mostra OPs disponíveis */}
       {!apontamentoAtivo && (
         <div className="space-y-3">
           <h2 className="font-medium">OPs disponíveis</h2>
-          {opsDisponiveis.map((op) => (
-            <MobileCard key={op.op}>
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="font-medium">OP {op.op}</p>
-                  <p className="text-sm text-gray-500">{op.produto}</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Programado: {op.qtdeProgramado} {op.um}
-                  </p>
-                </div>
-                <Link href={`/apontamento/iniciar?machine=${params.id}&op=${op.op}`}>
-                  <Button size="sm">
-                    <Play className="mr-1 h-4 w-4" />
-                    Iniciar
-                  </Button>
-                </Link>
-              </div>
+          
+          {opsDisponiveis.length === 0 ? (
+            <MobileCard>
+              <p className="text-center text-gray-500 py-4">
+                Nenhuma OP disponível no momento
+              </p>
             </MobileCard>
-          ))}
+          ) : (
+            opsDisponiveis.map((op) => (
+              <MobileCard key={op.op}>
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <p className="font-medium">OP {op.op}</p>
+                    <p className="text-sm text-gray-500 line-clamp-2">{op.produto}</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Programado: {Number(op.qtdeProgramado).toLocaleString('pt-BR')} {op.um}
+                    </p>
+                  </div>
+                  <Link href={`/apontamento/iniciar?machine=${params.id}&op=${op.op}`}>
+                    <Button size="sm" className="ml-2">
+                      <Play className="mr-1 h-4 w-4" />
+                      Iniciar
+                    </Button>
+                  </Link>
+                </div>
+              </MobileCard>
+            ))
+          )}
         </div>
       )}
     </div>
