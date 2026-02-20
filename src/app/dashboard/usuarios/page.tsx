@@ -6,7 +6,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { FormModal } from '@/components/ui/form-modal';
 import { z } from 'zod';
 import { toast } from '@/components/ui/use-toast';
-import { Plus, QrCode, Key } from 'lucide-react';
+import { Plus, QrCode } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -15,14 +15,20 @@ import {
 } from '@/components/ui/dialog';
 import { QRCodeSVG } from 'qrcode.react';
 
-const usuarioSchema = z.object({
+// Schema base (ZodObject)
+const usuarioBaseSchema = z.object({
   nome: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres'),
   matricula: z.string().min(1, 'Matrícula é obrigatória'),
   nivel: z.enum(['ADM', 'OPERADOR']).default('OPERADOR'),
   senha: z.string().optional(),
   ativo: z.boolean().default(true),
-}).refine((data) => {
-  // Se for admin, senha é obrigatória
+});
+
+// Tipo derivado do schema base
+type UsuarioFormData = z.infer<typeof usuarioBaseSchema>;
+
+// Schema com validação condicional (para uso no formulário)
+const usuarioSchema = usuarioBaseSchema.refine((data) => {
   if (data.nivel === 'ADM' && !data.senha) {
     return false;
   }
@@ -32,7 +38,7 @@ const usuarioSchema = z.object({
   path: ['senha'],
 });
 
-type Usuario = z.infer<typeof usuarioSchema> & { id: string };
+type Usuario = UsuarioFormData & { id: string };
 
 const columns = [
   { key: 'matricula' as const, title: 'Matrícula' },
@@ -96,7 +102,7 @@ export default function UsuariosPage() {
     }
   }
 
-  async function handleSubmit(data: any) {
+  async function handleSubmit(data: UsuarioFormData) {
     try {
       // Se for operador, remover senha
       if (data.nivel === 'OPERADOR') {
@@ -122,12 +128,10 @@ export default function UsuariosPage() {
         body: JSON.stringify(data),
       });
 
-      // Tentar parsear o JSON da resposta
       let result;
       try {
         result = await response.json();
       } catch (e) {
-        // Se não conseguir parsear o JSON, pegar o texto da resposta
         const text = await response.text();
         throw new Error(`Resposta inválida do servidor: ${text.substring(0, 100)}`);
       }
@@ -213,7 +217,7 @@ export default function UsuariosPage() {
         )}
       />
 
-      {/* Modal de usuário */}
+      {/* Modal de usuário - USANDO O SCHEMA BASE */}
       <FormModal
         open={modalOpen || !!selectedUsuario}
         onClose={() => {
@@ -224,7 +228,7 @@ export default function UsuariosPage() {
         title={selectedUsuario ? 'Editar Usuário' : 'Novo Usuário'}
         fields={formFields}
         initialData={selectedUsuario}
-        schema={usuarioSchema}
+        schema={usuarioBaseSchema} // USAR O SCHEMA BASE, NÃO O COM REFINE
       />
 
       {/* Modal de QR Code */}
