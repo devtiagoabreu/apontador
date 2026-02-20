@@ -1,7 +1,9 @@
 export const dynamic = 'force-dynamic';
+
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { systextilService } from '@/lib/systextil';
+import { eq } from 'drizzle-orm';
 
 export async function GET() {
   const result: any = {
@@ -22,40 +24,40 @@ export async function GET() {
     // Processar cada OP e verificar o que seria inserido
     for (const opData of opsImportadas) {
       try {
-        // Verificar se OP já existe
+        // Verificar se OP já existe - CORRIGIDO: usando opData.op (minúsculo)
         const opExistente = await db.query.ops.findFirst({
-          where: (ops, { eq }) => eq(ops.op, opData.OP),
+          where: (ops, { eq }) => eq(ops.op, opData.op),
         });
 
         result.opsProcessadas.push({
-          op: opData.OP,
-          produto: opData.PRODUTO,
+          op: opData.op,
+          produto: opData.produto,
           jaExiste: !!opExistente,
           dadosParaInsercao: {
-            op: opData.OP,
-            produto: opData.PRODUTO,
-            depositoFinal: opData.DEPOSITO_FINAL,
-            pecasVinculadas: opData.PECAS_VINCULADAS,
-            qtdeProgramado: opData.QTDE_PROGRAMADO?.toString(),
-            qtdeCarregado: opData.QTDE_CARREGADO?.toString(),
-            qtdeProduzida: opData.QTDE_PRODUZIDA?.toString() || '0',
-            calculoQuebra: opData.CALCULO_QUEBRA?.toString(),
-            obs: opData.OBS,
-            um: opData.UM,
-            narrativa: opData.NARRATIVA,
-            nivel: opData.NIVEL,
-            grupo: opData.GRUPO,
-            sub: opData.SUB,
-            item: opData.ITEM,
+            op: opData.op,
+            produto: opData.produto,
+            depositoFinal: opData.deposito_final,
+            pecasVinculadas: opData.pecas_vinculadas,
+            qtdeProgramado: opData.qtde_programado?.toString(),
+            qtdeCarregado: opData.qtde_carregado?.toString(),
+            qtdeProduzida: opData.qtde_produzida?.toString() || '0',
+            calculoQuebra: opData.calculo_quebra?.toString(),
+            obs: opData.obs,
+            um: opData.um,
+            narrativa: opData.narrativa,
+            nivel: opData.nivel,
+            grupo: opData.grupo,
+            sub: opData.sub,
+            item: opData.item,
           },
           validacoes: {
-            opValida: !!opData.OP,
-            produtoValido: !!opData.PRODUTO,
+            opValida: !!opData.op,
+            produtoValido: !!opData.produto,
           }
         });
       } catch (err) {
         result.erros.push({
-          op: opData.OP,
+          op: opData.op,
           erro: err instanceof Error ? err.message : String(err)
         });
       }
