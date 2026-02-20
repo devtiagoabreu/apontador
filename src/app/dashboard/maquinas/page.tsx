@@ -8,7 +8,7 @@ import { FormModal } from '@/components/ui/form-modal';
 import { z } from 'zod';
 import { toast } from '@/components/ui/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui'; // Se estiver usando o index.ts
+import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 
 // Definir o tipo para status
@@ -42,8 +42,8 @@ const columns = [
   },
   {
     key: 'ativo' as const,
-    title: 'Status',
-    format: (value: boolean) => value ? 'Ativo' : 'Inativo',
+    title: 'Ativo',
+    format: (value: boolean) => value ? 'Sim' : 'Não',
   },
 ];
 
@@ -332,7 +332,7 @@ export default function MaquinasPage() {
         }}
         onSubmit={handleSubmit}
         title={selectedMaquina ? 'Editar Máquina' : 'Nova Máquina'}
-        fields={[]}
+        fields={[]} // Passamos array vazio porque usaremos children
         schema={maquinaSchema}
       >
         {renderMaquinaForm()}

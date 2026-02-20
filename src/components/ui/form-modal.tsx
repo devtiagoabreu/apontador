@@ -18,8 +18,9 @@ import { Switch } from '@/components/ui/switch';
 interface Field {
   name: string;
   label: string;
-  type: 'text' | 'number' | 'switch' | 'textarea';
+  type: 'text' | 'number' | 'switch' | 'textarea' | 'select';
   required?: boolean;
+  options?: { value: string; label: string }[];
 }
 
 interface FormModalProps {
@@ -30,6 +31,7 @@ interface FormModalProps {
   fields: Field[];
   initialData?: any;
   schema: z.ZodObject<any>;
+  children?: React.ReactNode; // ADICIONAR ESTA LINHA
 }
 
 export function FormModal({
@@ -40,6 +42,7 @@ export function FormModal({
   fields,
   initialData,
   schema,
+  children, // ADICIONAR ESTA LINHA
 }: FormModalProps) {
   const {
     register,
@@ -67,56 +70,86 @@ export function FormModal({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {fields.map((field) => (
-            <div key={field.name} className="space-y-2">
-              <Label htmlFor={field.name}>
-                {field.label}
-                {field.required && <span className="text-red-500 ml-1">*</span>}
-              </Label>
-              
-              {field.type === 'switch' ? (
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id={field.name}
-                    checked={watch(field.name)}
-                    onCheckedChange={(checked) => setValue(field.name, checked)}
-                  />
-                  <span className="text-sm text-gray-600">
-                    {watch(field.name) ? 'Ativo' : 'Inativo'}
-                  </span>
-                </div>
-              ) : field.type === 'textarea' ? (
-                <textarea
-                  id={field.name}
-                  {...register(field.name)}
-                  className="w-full min-h-[100px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
-              ) : (
-                <Input
-                  id={field.name}
-                  type={field.type}
-                  {...register(field.name)}
-                />
-              )}
-              
-              {errors[field.name] && (
-                <p className="text-sm text-red-500">
-                  {errors[field.name]?.message as string}
-                </p>
-              )}
+        
+        {children ? (
+          // Se tiver children, renderiza o conteúdo personalizado
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            {children}
+            <div className="flex justify-end gap-3 pt-4">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? 'Salvando...' : 'Salvar'}
+              </Button>
             </div>
-          ))}
-          
-          <div className="flex justify-end gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Salvando...' : 'Salvar'}
-            </Button>
-          </div>
-        </form>
+          </form>
+        ) : (
+          // Se não tiver children, renderiza o formulário padrão
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            {fields.map((field) => (
+              <div key={field.name} className="space-y-2">
+                <Label htmlFor={field.name}>
+                  {field.label}
+                  {field.required && <span className="text-red-500 ml-1">*</span>}
+                </Label>
+                
+                {field.type === 'switch' ? (
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id={field.name}
+                      checked={watch(field.name)}
+                      onCheckedChange={(checked) => setValue(field.name, checked)}
+                    />
+                    <span className="text-sm text-gray-600">
+                      {watch(field.name) ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </div>
+                ) : field.type === 'textarea' ? (
+                  <textarea
+                    id={field.name}
+                    {...register(field.name)}
+                    className="w-full min-h-[100px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                ) : field.type === 'select' ? (
+                  <select
+                    id={field.name}
+                    {...register(field.name)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="">Selecione...</option>
+                    {field.options?.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <Input
+                    id={field.name}
+                    type={field.type}
+                    {...register(field.name)}
+                  />
+                )}
+                
+                {errors[field.name] && (
+                  <p className="text-sm text-red-500">
+                    {errors[field.name]?.message as string}
+                  </p>
+                )}
+              </div>
+            ))}
+            
+            <div className="flex justify-end gap-3 pt-4">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? 'Salvando...' : 'Salvar'}
+              </Button>
+            </div>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   );
