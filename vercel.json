@@ -1,8 +1,7 @@
 {
-  "crons": [
-    {
-      "path": "/api/cron/importar-ops",
-      "schedule": "0 * * * *"
-    }
-  ]
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "regions": ["gru1"]
 }
