@@ -50,3 +50,11 @@
 ✅ Prevenção de duplicatas
 ✅ Pronto para job automático
 
+## 🚀 Commit 6: Módulo de QR Codes --> feat: adicionar módulo de QR Codes para máquinas, operadores e OPs
+
+✅ Página de geração de QR Codes com abas
+✅ QR Codes para máquinas, operadores e OPs
+✅ Download e impressão de QR Codes
+✅ Impressão em lote (múltiplas cópias)
+✅ Páginas de redirecionamento para cada tipo
+✅ Integração com o leitor de QR Code no login
