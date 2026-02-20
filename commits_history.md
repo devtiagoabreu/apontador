@@ -41,3 +41,12 @@
 ✅ Validações e feedback visual
 ✅ Interface consistente com o restante do sistema
 
+## 📋 Commit 5: Integração com API Systêxtil e CRUD de OPs --> feat: integração com API Systêxtil e CRUD de OPs
+
+✅ Integração com API do Systêxtil
+✅ Importação manual de OPs
+✅ Listagem de OPs com status
+✅ Detalhes da OP em modal
+✅ Prevenção de duplicatas
+✅ Pronto para job automático
+
