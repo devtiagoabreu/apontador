@@ -67,3 +67,12 @@
 ✅ Gerar QR Code para cada operador
 ✅ Download e impressão do QR Code
 ✅ Excluir usuários
+
+## 🚀 Commit 8: Interface Mobile de Apontamento para Operadores --> feat: interface mobile de apontamento para operadores - adicionar componente Sheet manualmente usando @radix-ui/react-dialog
+
+✅ Interface mobile-first otimizada para celular
+✅ Leitura de QR Code para máquinas e OPs
+✅ Visualização de apontamentos em andamento
+✅ Histórico de atividades
+✅ Navegação inferior com ícones grandes
+✅ Menu lateral com informações do usuário
