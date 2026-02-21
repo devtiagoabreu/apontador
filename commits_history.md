@@ -108,5 +108,13 @@
 ✅ Limpeza da coluna finalizadas
 ✅ Atualização em tempo real dos cronômetros
 
+## 📋 Commit 12: Melhorias na Tela de OPs --> feat(ops): adicionar CRUD completo para OPs (criar, editar, cancelar)
+
+✅ Nova OP	Botão "Nova OP" no topo
+✅ Editar OP	Ícone de lápis na linha
+✅ Cancelar OP	Ícone de X vermelho (apenas OPs não finalizadas)
+✅ Visualizar	Clique na linha para detalhes
+✅ Motivos de cancelamento	Selecionar em lista cadastrada
+✅ Validações	Campos obrigatórios e tipos
 
 
