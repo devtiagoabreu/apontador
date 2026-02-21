@@ -33,6 +33,14 @@ export async function POST(
       );
     }
 
+    // Verificar se OP está em estágio que pode ser desfeito
+    if (!op.codEstagioAtual || op.codEstagioAtual === '00') {
+      return NextResponse.json(
+        { error: 'Não é possível desfazer - OP no estágio inicial' },
+        { status: 400 }
+      );
+    }
+
     // Buscar último apontamento concluído
     const ultimoApontamento = await db.query.apontamentos.findFirst({
       where: and(
@@ -49,9 +57,13 @@ export async function POST(
       );
     }
 
+    // Calcular código do estágio anterior
+    const codigoAtual = parseInt(op.codEstagioAtual);
+    const codigoAnterior = (codigoAtual - 1).toString().padStart(2, '0');
+    
     // Buscar estágio anterior
     const estagioAnterior = await db.query.estagios.findFirst({
-      where: eq(estagios.codigo, op.codEstagioAtual - 1),
+      where: eq(estagios.codigo, codigoAnterior),
     });
 
     if (!estagioAnterior) {
@@ -88,7 +100,7 @@ export async function POST(
           .where(eq(apontamentos.id, apontamentoAtual.id));
 
         // Liberar máquina atual
-        if (op.codMaquinaAtual !== '00') {
+        if (op.codMaquinaAtual && op.codMaquinaAtual !== '00') {
           await tx
             .update(maquinas)
             .set({
