@@ -28,26 +28,39 @@ export async function GET(request: Request) {
     const apenasKanban = searchParams.get('kanban') === 'true';
     const ativos = searchParams.get('ativos') === 'true';
 
-    // Construir a query de forma diferente para evitar problemas de tipo
-    let conditions = [];
-    
-    if (ativos) {
-      conditions.push(eq(estagios.ativo, true));
-    }
+    let result;
 
+    // Abordagem com if/else em vez de reatribuição
     if (apenasKanban) {
-      conditions.push(eq(estagios.mostrarNoKanban, true));
-      conditions.push(eq(estagios.ativo, true));
+      // Filtrar apenas estágios que aparecem no Kanban
+      result = await db
+        .select()
+        .from(estagios)
+        .where(
+          and(
+            eq(estagios.mostrarNoKanban, true),
+            eq(estagios.ativo, true)
+          )
+        )
+        .orderBy(estagios.ordem);
+    } 
+    else if (ativos) {
+      // Apenas ativos
+      result = await db
+        .select()
+        .from(estagios)
+        .where(eq(estagios.ativo, true))
+        .orderBy(estagios.ordem);
+    } 
+    else {
+      // Todos
+      result = await db
+        .select()
+        .from(estagios)
+        .orderBy(estagios.ordem);
     }
 
-    let query = db.select().from(estagios);
-    
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
-
-    const allEstagios = await query.orderBy(estagios.ordem);
-    return NextResponse.json(allEstagios);
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Erro ao buscar estágios:', error);
     return NextResponse.json(
