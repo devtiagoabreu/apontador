@@ -4,25 +4,40 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { DataTable } from '@/components/ui/data-table';
-import { FormModal } from '@/components/ui/form-modal';
-import { z } from 'zod';
 import { toast } from '@/components/ui/use-toast';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
-// Definir o tipo para status
 type StatusMaquina = 'DISPONIVEL' | 'EM_PROCESSO' | 'PARADA';
 
-const maquinaSchema = z.object({
-  nome: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres'),
-  codigo: z.string().min(1, 'Código é obrigatório').max(20),
-  setores: z.array(z.string()).min(1, 'Selecione pelo menos um setor'),
-  status: z.enum(['DISPONIVEL', 'EM_PROCESSO', 'PARADA']).default('DISPONIVEL'),
-  ativo: z.boolean().default(true),
-});
+interface Maquina {
+  id: string;
+  nome: string;
+  codigo: string;
+  status: StatusMaquina;
+  ativo: boolean;
+  setoresNomes?: string;
+  setores?: string[];
+}
 
-type Maquina = z.infer<typeof maquinaSchema> & { id: string; setoresNomes?: string };
+interface Setor {
+  id: string;
+  nome: string;
+}
 
 const columns = [
   { key: 'codigo' as const, title: 'Código' },
@@ -37,26 +52,42 @@ const columns = [
         'EM_PROCESSO': 'Em Processo',
         'PARADA': 'Parada'
       };
-      return statusMap[value as keyof typeof statusMap] || value;
+      const colors = {
+        'DISPONIVEL': 'bg-green-100 text-green-800',
+        'EM_PROCESSO': 'bg-blue-100 text-blue-800',
+        'PARADA': 'bg-yellow-100 text-yellow-800'
+      };
+      return (
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${colors[value as keyof typeof colors] || 'bg-gray-100'}`}>
+          {statusMap[value as keyof typeof statusMap] || value}
+        </span>
+      );
     }
   },
   {
     key: 'ativo' as const,
     title: 'Ativo',
-    format: (value: boolean) => value ? 'Sim' : 'Não',
+    format: (value: boolean) => (
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+        value ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+      }`}>
+        {value ? 'Sim' : 'Não'}
+      </span>
+    )
   },
 ];
 
 export default function MaquinasPage() {
   const [maquinas, setMaquinas] = useState<Maquina[]>([]);
-  const [setores, setSetores] = useState<any[]>([]);
+  const [setores, setSetores] = useState<Setor[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedMaquina, setSelectedMaquina] = useState<Maquina | null>(null);
   const [selectedSetores, setSelectedSetores] = useState<string[]>([]);
-  const [formData, setFormData] = useState<Partial<Maquina>>({
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
     nome: '',
     codigo: '',
-    status: 'DISPONIVEL',
+    status: 'DISPONIVEL' as StatusMaquina,
     ativo: true,
   });
 
@@ -73,9 +104,12 @@ export default function MaquinasPage() {
         ativo: selectedMaquina.ativo,
       });
       // Carregar setores da máquina
-      fetch(`/api/maquinas/${selectedMaquina.id}/setores`)
-        .then(res => res.json())
-        .then(data => setSelectedSetores(data.map((s: any) => s.setorId)));
+      if (selectedMaquina.id) {
+        fetch(`/api/maquinas/${selectedMaquina.id}/setores`)
+          .then(res => res.json())
+          .then(data => setSelectedSetores(data.map((s: any) => s.setorId)))
+          .catch(err => console.error('Erro ao carregar setores:', err));
+      }
     } else {
       setFormData({
         nome: '',
@@ -88,12 +122,20 @@ export default function MaquinasPage() {
   }, [selectedMaquina]);
 
   async function carregarDados() {
-    await Promise.all([carregarMaquinas(), carregarSetores()]);
+    setLoading(true);
+    try {
+      await Promise.all([carregarMaquinas(), carregarSetores()]);
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function carregarMaquinas() {
     try {
       const response = await fetch('/api/maquinas');
+      if (!response.ok) throw new Error('Erro ao carregar máquinas');
       const data = await response.json();
       setMaquinas(data);
     } catch (error) {
@@ -108,6 +150,7 @@ export default function MaquinasPage() {
   async function carregarSetores() {
     try {
       const response = await fetch('/api/setores');
+      if (!response.ok) throw new Error('Erro ao carregar setores');
       const data = await response.json();
       setSetores(data);
     } catch (error) {
@@ -122,7 +165,7 @@ export default function MaquinasPage() {
   async function handleSubmit() {
     try {
       // Validar dados
-      if (!formData.nome || formData.nome.length < 3) {
+      if (!formData.nome || formData.nome.trim().length < 3) {
         toast({
           title: 'Erro',
           description: 'Nome deve ter no mínimo 3 caracteres',
@@ -131,7 +174,7 @@ export default function MaquinasPage() {
         return;
       }
 
-      if (!formData.codigo) {
+      if (!formData.codigo || formData.codigo.trim().length === 0) {
         toast({
           title: 'Erro',
           description: 'Código é obrigatório',
@@ -150,9 +193,14 @@ export default function MaquinasPage() {
       }
 
       const dataToSubmit = {
-        ...formData,
+        nome: formData.nome.trim(),
+        codigo: formData.codigo.trim().toUpperCase(),
+        status: formData.status,
+        ativo: formData.ativo,
         setores: selectedSetores,
       };
+
+      console.log('📦 Enviando dados:', dataToSubmit);
 
       const url = selectedMaquina ? `/api/maquinas/${selectedMaquina.id}` : '/api/maquinas';
       const method = selectedMaquina ? 'PUT' : 'POST';
@@ -163,13 +211,19 @@ export default function MaquinasPage() {
         body: JSON.stringify(dataToSubmit),
       });
 
-      if (!response.ok) throw new Error('Erro ao salvar');
+      const data = await response.json();
+      console.log('📦 Resposta:', data);
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao salvar máquina');
+      }
 
       toast({
         title: 'Sucesso',
         description: `Máquina ${selectedMaquina ? 'atualizada' : 'criada'} com sucesso`,
       });
 
+      // Fechar modal e limpar formulário
       setModalOpen(false);
       setSelectedMaquina(null);
       setSelectedSetores([]);
@@ -179,25 +233,32 @@ export default function MaquinasPage() {
         status: 'DISPONIVEL',
         ativo: true,
       });
-      carregarMaquinas();
+      
+      // Recarregar lista
+      await carregarMaquinas();
+      
     } catch (error) {
+      console.error('❌ Erro detalhado:', error);
       toast({
         title: 'Erro',
-        description: 'Não foi possível salvar a máquina',
+        description: error instanceof Error ? error.message : 'Erro ao salvar máquina',
         variant: 'destructive',
       });
     }
   }
 
   async function handleDelete(maquina: Maquina) {
-    if (!confirm('Tem certeza que deseja excluir esta máquina?')) return;
+    if (!confirm(`Tem certeza que deseja excluir a máquina ${maquina.nome}?`)) return;
 
     try {
       const response = await fetch(`/api/maquinas/${maquina.id}`, {
         method: 'DELETE',
       });
 
-      if (!response.ok) throw new Error('Erro ao excluir');
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Erro ao excluir');
+      }
 
       toast({
         title: 'Sucesso',
@@ -208,7 +269,7 @@ export default function MaquinasPage() {
     } catch (error) {
       toast({
         title: 'Erro',
-        description: 'Não foi possível excluir a máquina',
+        description: error instanceof Error ? error.message : 'Não foi possível excluir a máquina',
         variant: 'destructive',
       });
     }
@@ -218,51 +279,64 @@ export default function MaquinasPage() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  // Custom form for máquina with multiple setores
-  const renderMaquinaForm = () => (
-    <div className="space-y-4">
+  // Renderização do formulário
+  const renderForm = () => (
+    <div className="space-y-4 py-4">
       <div className="space-y-2">
         <Label htmlFor="nome">Nome *</Label>
-        <input
+        <Input
           id="nome"
-          className="w-full rounded-md border border-input bg-background px-3 py-2"
-          value={formData.nome || ''}
+          value={formData.nome}
           onChange={(e) => handleInputChange('nome', e.target.value)}
+          placeholder="Ex: JIGGER 01"
+          className="w-full"
         />
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="codigo">Código *</Label>
-        <input
+        <Input
           id="codigo"
-          className="w-full rounded-md border border-input bg-background px-3 py-2"
-          value={formData.codigo || ''}
-          onChange={(e) => handleInputChange('codigo', e.target.value)}
+          value={formData.codigo}
+          onChange={(e) => handleInputChange('codigo', e.target.value.toUpperCase())}
+          placeholder="Ex: JG001"
+          className="w-full uppercase"
         />
       </div>
 
       <div className="space-y-2">
         <Label>Setores * (múltiplos)</Label>
         <div className="border rounded-md p-4 space-y-2 max-h-48 overflow-y-auto">
-          {setores.map((setor) => (
-            <div key={setor.id} className="flex items-center space-x-2">
-              <Checkbox
-                id={setor.id}
-                checked={selectedSetores.includes(setor.id)}
-                onCheckedChange={(checked) => {
-                  if (checked) {
-                    setSelectedSetores([...selectedSetores, setor.id]);
-                  } else {
-                    setSelectedSetores(selectedSetores.filter(id => id !== setor.id));
-                  }
-                }}
-              />
-              <Label htmlFor={setor.id} className="text-sm">
-                {setor.nome}
-              </Label>
-            </div>
-          ))}
+          {setores.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-4">
+              Nenhum setor encontrado. Cadastre setores primeiro.
+            </p>
+          ) : (
+            setores.map((setor) => (
+              <div key={setor.id} className="flex items-center space-x-2">
+                <Checkbox
+                  id={setor.id}
+                  checked={selectedSetores.includes(setor.id)}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setSelectedSetores([...selectedSetores, setor.id]);
+                    } else {
+                      setSelectedSetores(selectedSetores.filter(id => id !== setor.id));
+                    }
+                  }}
+                />
+                <Label htmlFor={setor.id} className="text-sm cursor-pointer">
+                  {setor.nome}
+                </Label>
+              </div>
+            ))
+          )}
         </div>
+        {selectedSetores.length > 0 && (
+          <p className="text-xs text-gray-500">
+            {selectedSetores.length} setor(es) selecionado(s)
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -282,13 +356,15 @@ export default function MaquinasPage() {
         </Select>
       </div>
 
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-2 pt-2">
         <Checkbox
           id="ativo"
           checked={formData.ativo}
           onCheckedChange={(checked) => handleInputChange('ativo', checked)}
         />
-        <Label htmlFor="ativo">Ativo</Label>
+        <Label htmlFor="ativo" className="text-sm cursor-pointer">
+          Máquina Ativa
+        </Label>
       </div>
     </div>
   );
@@ -306,37 +382,50 @@ export default function MaquinasPage() {
         </Button>
       </div>
 
-      <DataTable
-        data={maquinas}
-        columns={columns}
-        onEdit={(maquina) => {
-          setSelectedMaquina(maquina);
-          setModalOpen(true);
-        }}
-        onDelete={handleDelete}
-      />
+      {loading && !maquinas.length ? (
+        <div className="text-center py-8 text-gray-500">
+          Carregando máquinas...
+        </div>
+      ) : (
+        <DataTable
+          data={maquinas}
+          columns={columns}
+          onEdit={(maquina) => {
+            setSelectedMaquina(maquina);
+            setModalOpen(true);
+          }}
+          onDelete={handleDelete}
+        />
+      )}
 
-      {/* Modal personalizado para máquina */}
-      <FormModal
-        open={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          setSelectedMaquina(null);
-          setSelectedSetores([]);
-          setFormData({
-            nome: '',
-            codigo: '',
-            status: 'DISPONIVEL',
-            ativo: true,
-          });
-        }}
-        onSubmit={handleSubmit}
-        title={selectedMaquina ? 'Editar Máquina' : 'Nova Máquina'}
-        fields={[]} // Passamos array vazio porque usaremos children
-        schema={maquinaSchema}
-      >
-        {renderMaquinaForm()}
-      </FormModal>
+      {/* Modal de máquina */}
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedMaquina ? 'Editar Máquina' : 'Nova Máquina'}
+            </DialogTitle>
+          </DialogHeader>
+
+          {renderForm()}
+
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setModalOpen(false);
+                setSelectedMaquina(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button type="button" onClick={handleSubmit}>
+              {selectedMaquina ? 'Atualizar' : 'Salvar'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
