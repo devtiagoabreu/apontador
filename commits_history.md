@@ -93,3 +93,20 @@
 ✅ Filtrar dados por período personalizado
 ✅ Exportar relatórios em PDF e Excel
 ✅ Acompanhar indicadores de eficiência e disponibilidade
+
+## 📋 Commit 11: Estrutura Completa do Kanban --> feat(kanban): adicionar Kanban completo com seleção de máquina, cronômetros e menu de contexto
+
+✅ Colunas dinâmicas baseadas nos estágios cadastrados
+✅ Cores personalizadas por estágio
+✅ Cards com cronômetro (verde/amarelo/vermelho conforme eficiência)
+✅ Drag and drop entre colunas
+✅ Seleção de máquina ao mover para novo estágio
+✅ Menu de contexto (botão direito):
+  ✅ Editar tempos
+  ✅ Desfazer processo
+  ✅ Cancelar OP
+✅ Limpeza da coluna finalizadas
+✅ Atualização em tempo real dos cronômetros
+
+
+

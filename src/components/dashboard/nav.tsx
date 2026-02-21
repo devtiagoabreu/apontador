@@ -78,6 +78,11 @@ const navItems = [
     href: '/dashboard/relatorios',
     icon: BarChart3,
   },
+  {
+    title: 'Modo Kanban',
+    href: '/dashboard/kanban',
+    icon: LayoutDashboard, // ou um ícone específico
+  },
 ];
 
 export function DashboardNav() {
