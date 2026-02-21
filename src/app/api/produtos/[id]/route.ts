@@ -21,8 +21,8 @@ const productoSchema = z.object({
   gramaturaM2: z.number(),
   tipoTecido: z.enum(['PLANO', 'MALHA', 'NAO_TECIDO']),
   ligamento: z.string(),
-  fiosUrdume: z.number(),
-  fiosTrama: z.number(),
+  fiosUrdume: z.number(), // Este é number no banco
+  fiosTrama: z.number(),   // Este é number no banco
   classificacaoPeso: z.enum(['LEVE', 'MEDIO', 'PESADO']),
   parametrosEficiencia: z.any(),
   metaDiaria: z.number().optional().nullable(),
@@ -104,10 +104,11 @@ export async function PUT(
       }
     }
 
-    // Atualizar produto - CORRIGIDO: convertendo números para string
+    // Atualizar produto - CORRIGIDO definindo os tipos corretos para cada campo
     const [updated] = await db
       .update(produtos)
       .set({
+        // Campos string
         codigo: validated.codigo,
         nome: validated.nome,
         um: validated.um,
@@ -115,19 +116,29 @@ export async function PUT(
         grupo: validated.grupo,
         sub: validated.sub,
         item: validated.item,
+        tipoTecido: validated.tipoTecido,
+        ligamento: validated.ligamento,
+        classificacaoPeso: validated.classificacaoPeso,
+        
+        // Campos JSON
         composicao: validated.composicao,
+        parametrosEficiencia: validated.parametrosEficiencia,
+        
+        // Campos decimal (vão como string)
         largura: validated.largura?.toString(),
         gramaturaLinear: validated.gramaturaLinear?.toString(),
         gramaturaM2: validated.gramaturaM2?.toString(),
-        tipoTecido: validated.tipoTecido,
-        ligamento: validated.ligamento,
-        fiosUrdume: validated.fiosUrdume?.toString(),
-        fiosTrama: validated.fiosTrama?.toString(),
-        classificacaoPeso: validated.classificacaoPeso,
-        parametrosEficiencia: validated.parametrosEficiencia,
         metaDiaria: validated.metaDiaria?.toString(),
         metaMensal: validated.metaMensal?.toString(),
+        
+        // Campos integer (vão como number)
+        fiosUrdume: validated.fiosUrdume,
+        fiosTrama: validated.fiosTrama,
+        
+        // Campos boolean
         ativo: validated.ativo,
+        
+        // Timestamp
         updatedAt: new Date(),
       })
       .where(eq(produtos.id, params.id))

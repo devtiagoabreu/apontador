@@ -108,10 +108,11 @@ export async function POST(request: Request) {
       );
     }
 
-    // Inserir produto - CORRIGIDO: convertendo números para string
+    // Inserir produto - CORRIGIDO com tipos corretos
     const [newProduto] = await db
       .insert(produtos)
       .values({
+        // Campos string (varchar)
         codigo: validated.codigo,
         nome: validated.nome,
         um: validated.um,
@@ -119,19 +120,29 @@ export async function POST(request: Request) {
         grupo: validated.grupo,
         sub: validated.sub,
         item: validated.item,
+        tipoTecido: validated.tipoTecido,
+        ligamento: validated.ligamento,
+        classificacaoPeso: validated.classificacaoPeso,
+        
+        // Campos JSON
         composicao: validated.composicao,
+        parametrosEficiencia: validated.parametrosEficiencia,
+        
+        // Campos decimal (vão como string no banco)
         largura: validated.largura?.toString(),
         gramaturaLinear: validated.gramaturaLinear?.toString(),
         gramaturaM2: validated.gramaturaM2?.toString(),
-        tipoTecido: validated.tipoTecido,
-        ligamento: validated.ligamento,
-        fiosUrdume: validated.fiosUrdume?.toString(),
-        fiosTrama: validated.fiosTrama?.toString(),
-        classificacaoPeso: validated.classificacaoPeso,
-        parametrosEficiencia: validated.parametrosEficiencia,
         metaDiaria: validated.metaDiaria?.toString(),
         metaMensal: validated.metaMensal?.toString(),
+        
+        // Campos integer (vão como number)
+        fiosUrdume: validated.fiosUrdume,
+        fiosTrama: validated.fiosTrama,
+        
+        // Campos boolean
         ativo: validated.ativo,
+        
+        // Timestamps
         createdAt: new Date(),
         updatedAt: new Date(),
       })
