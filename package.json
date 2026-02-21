@@ -13,7 +13,9 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/lib/db/seed.ts",
     "db:reset": "tsx src/lib/db/reset.ts",
-    "test:neon": "node scripts/test-neon.js"
+    "test:neon": "node scripts/test-neon.js",
+    "db:produtos-migration": "tsx src/lib/db/run-migration.ts",
+    "db:migrate-estagios": "tsx src/lib/db/migrations/run-estagios-migration.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.3.2",
