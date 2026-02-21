@@ -102,7 +102,10 @@ export default function MotivosParadaPage() {
         method: 'DELETE',
       });
 
-      if (!response.ok) throw new Error('Erro ao excluir');
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Erro ao excluir');
+      }
 
       toast({
         title: 'Sucesso',
@@ -113,7 +116,7 @@ export default function MotivosParadaPage() {
     } catch (error) {
       toast({
         title: 'Erro',
-        description: 'Não foi possível excluir o motivo',
+        description: error instanceof Error ? error.message : 'Não foi possível excluir o motivo',
         variant: 'destructive',
       });
     }
