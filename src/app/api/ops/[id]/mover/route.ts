@@ -85,8 +85,8 @@ export async function POST(
           })
           .where(eq(apontamentos.id, apontamentoAtual.id));
 
-        // Liberar máquina anterior
-        if (op.codMaquinaAtual !== '00') {
+        // Liberar máquina anterior (se existir)
+        if (op.codMaquinaAtual && op.codMaquinaAtual !== '00') {
           await tx
             .update(maquinas)
             .set({
