@@ -18,7 +18,7 @@ import { Switch } from '@/components/ui/switch';
 interface Field {
   name: string;
   label: string;
-  type: 'text' | 'number' | 'switch' | 'textarea' | 'select' | 'password'; // ADICIONAR 'password' AQUI
+  type: 'text' | 'number' | 'switch' | 'textarea' | 'select' | 'password' | 'color'; // ADICIONAR 'color'
   required?: boolean;
   options?: { value: string; label: string }[];
 }
@@ -72,7 +72,6 @@ export function FormModal({
         </DialogHeader>
         
         {children ? (
-          // Se tiver children, renderiza o conteúdo personalizado
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             {children}
             <div className="flex justify-end gap-3 pt-4">
@@ -85,7 +84,6 @@ export function FormModal({
             </div>
           </form>
         ) : (
-          // Se não tiver children, renderiza o formulário padrão
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             {fields.map((field) => (
               <div key={field.name} className="space-y-2">
@@ -124,11 +122,12 @@ export function FormModal({
                       </option>
                     ))}
                   </select>
-                ) : field.type === 'password' ? (  // ADICIONAR ESTE BLOCO AQUI
+                ) : field.type === 'color' ? ( // ADICIONAR ESTE BLOCO
                   <Input
                     id={field.name}
-                    type="password"
+                    type="color"
                     {...register(field.name)}
+                    className="h-10 w-full"
                   />
                 ) : (
                   <Input
