@@ -2,28 +2,36 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { apontamentos } from '@/lib/db/schema/apontamentos';
-import { ops } from '@/lib/db/schema/ops';
-import { maquinas } from '@/lib/db/schema/maquinas';
-import { usuarios } from '@/lib/db/schema/usuarios';
-import { motivosParada } from '@/lib/db/schema/motivos-parada';
-import { eq, desc, and, sql } from 'drizzle-orm';
-import { z } from 'zod';
+import { sql } from 'drizzle-orm';
 
-const apontamentoSchema = z.object({
-  opId: z.number().int().positive(),
-  maquinaId: z.string().uuid(),
-  operadorInicioId: z.string().uuid(),
-  operadorFimId: z.string().uuid().optional(),
-  metragemProcessada: z.number().optional(),
-  dataInicio: z.string().datetime(),
-  dataFim: z.string().datetime(),
-  status: z.enum(['EM_ANDAMENTO', 'CONCLUIDO', 'CANCELADO']),
-  motivoParadaId: z.string().uuid().optional(),
-  inicioParada: z.string().datetime().optional(),
-  fimParada: z.string().datetime().optional(),
-  observacoes: z.string().optional(),
-});
+interface ApontamentoRow {
+  id: string;
+  op_id: number;
+  maquina_id: string;
+  produto_id: string | null;
+  estagio_id: string | null;
+  operador_inicio_id: string;
+  operador_fim_id: string | null;
+  metragem_processada: string | null;
+  data_inicio: string;
+  data_fim: string;
+  status: string;
+  motivo_parada_id: string | null;
+  inicio_parada: string | null;
+  fim_parada: string | null;
+  observacoes: string | null;
+  created_at: string;
+  updated_at: string;
+  op_numero: number | null;
+  op_produto: string | null;
+  maquina_nome: string | null;
+  maquina_codigo: string | null;
+  operador_inicio_nome: string | null;
+  operador_inicio_matricula: string | null;
+  operador_fim_nome: string | null;
+  operador_fim_matricula: string | null;
+  motivo_descricao: string | null;
+}
 
 export async function GET(request: Request) {
   try {
@@ -38,96 +46,106 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = (page - 1) * limit;
 
-    // Filtros
-    const opId = searchParams.get('opId');
-    const maquinaId = searchParams.get('maquinaId');
-    const operadorId = searchParams.get('operadorId');
-    const dataInicio = searchParams.get('dataInicio');
-    const dataFim = searchParams.get('dataFim');
-    const status = searchParams.get('status');
+    // Buscar apontamentos
+    const result = await db.execute(sql`
+      SELECT 
+        a.*,
+        o.op as op_numero,
+        o.produto as op_produto,
+        m.nome as maquina_nome,
+        m.codigo as maquina_codigo,
+        ui.nome as operador_inicio_nome,
+        ui.matricula as operador_inicio_matricula,
+        uf.nome as operador_fim_nome,
+        uf.matricula as operador_fim_matricula,
+        mp.descricao as motivo_descricao
+      FROM apontamentos a
+      LEFT JOIN ops o ON a.op_id = o.op
+      LEFT JOIN maquinas m ON a.maquina_id = m.id
+      LEFT JOIN usuarios ui ON a.operador_inicio_id = ui.id
+      LEFT JOIN usuarios uf ON a.operador_fim_id = uf.id
+      LEFT JOIN motivos_parada mp ON a.motivo_parada_id = mp.id
+      ORDER BY a.data_inicio DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `);
 
-    let conditions = [];
-
-    if (opId) {
-      conditions.push(eq(apontamentos.opId, parseInt(opId)));
-    }
-    if (maquinaId) {
-      conditions.push(eq(apontamentos.maquinaId, maquinaId));
-    }
-    if (operadorId) {
-      conditions.push(
-        sql`${apontamentos.operadorInicioId} = ${operadorId} OR ${apontamentos.operadorFimId} = ${operadorId}`
-      );
-    }
-    if (dataInicio) {
-      conditions.push(sql`DATE(${apontamentos.dataInicio}) >= DATE(${dataInicio})`);
-    }
-    if (dataFim) {
-      conditions.push(sql`DATE(${apontamentos.dataFim}) <= DATE(${dataFim})`);
-    }
-    if (status) {
-      conditions.push(eq(apontamentos.status, status));
-    }
-
-    // Buscar apontamentos com joins
-    const allApontamentos = await db
-      .select({
-        id: apontamentos.id,
-        opId: apontamentos.opId,
-        maquinaId: apontamentos.maquinaId,
-        operadorInicioId: apontamentos.operadorInicioId,
-        operadorFimId: apontamentos.operadorFimId,
-        metragemProcessada: apontamentos.metragemProcessada,
-        dataInicio: apontamentos.dataInicio,
-        dataFim: apontamentos.dataFim,
-        status: apontamentos.status,
-        motivoParadaId: apontamentos.motivoParadaId,
-        inicioParada: apontamentos.inicioParada,
-        fimParada: apontamentos.fimParada,
-        observacoes: apontamentos.observacoes,
-        createdAt: apontamentos.createdAt,
-        updatedAt: apontamentos.updatedAt,
-        op: {
-          op: ops.op,
-          produto: ops.produto,
-        },
-        maquina: {
-          nome: maquinas.nome,
-          codigo: maquinas.codigo,
-        },
-        operadorInicio: {
-          nome: usuarios.nome,
-          matricula: usuarios.matricula,
-        },
-        operadorFim: {
-          nome: usuarios.nome,
-          matricula: usuarios.matricula,
-        },
-        motivoParada: {
-          descricao: motivosParada.descricao,
-        },
-      })
-      .from(apontamentos)
-      .leftJoin(ops, eq(apontamentos.opId, ops.op))
-      .leftJoin(maquinas, eq(apontamentos.maquinaId, maquinas.id))
-      .leftJoin(usuarios, eq(apontamentos.operadorInicioId, usuarios.id))
-      .leftJoin(usuarios, eq(apontamentos.operadorFimId, usuarios.id))
-      .leftJoin(motivosParada, eq(apontamentos.motivoParadaId, motivosParada.id))
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(apontamentos.dataInicio))
-      .limit(limit)
-      .offset(offset);
+    // Converter com segurança
+    const rows = result.rows.map(row => ({
+      id: String(row.id || ''),
+      op_id: Number(row.op_id || 0),
+      maquina_id: String(row.maquina_id || ''),
+      produto_id: row.produto_id ? String(row.produto_id) : null,
+      estagio_id: row.estagio_id ? String(row.estagio_id) : null,
+      operador_inicio_id: String(row.operador_inicio_id || ''),
+      operador_fim_id: row.operador_fim_id ? String(row.operador_fim_id) : null,
+      metragem_processada: row.metragem_processada ? String(row.metragem_processada) : null,
+      data_inicio: String(row.data_inicio || ''),
+      data_fim: String(row.data_fim || ''),
+      status: String(row.status || ''),
+      motivo_parada_id: row.motivo_parada_id ? String(row.motivo_parada_id) : null,
+      inicio_parada: row.inicio_parada ? String(row.inicio_parada) : null,
+      fim_parada: row.fim_parada ? String(row.fim_parada) : null,
+      observacoes: row.observacoes ? String(row.observacoes) : null,
+      created_at: String(row.created_at || ''),
+      updated_at: String(row.updated_at || ''),
+      op_numero: row.op_numero ? Number(row.op_numero) : null,
+      op_produto: row.op_produto ? String(row.op_produto) : null,
+      maquina_nome: row.maquina_nome ? String(row.maquina_nome) : null,
+      maquina_codigo: row.maquina_codigo ? String(row.maquina_codigo) : null,
+      operador_inicio_nome: row.operador_inicio_nome ? String(row.operador_inicio_nome) : null,
+      operador_inicio_matricula: row.operador_inicio_matricula ? String(row.operador_inicio_matricula) : null,
+      operador_fim_nome: row.operador_fim_nome ? String(row.operador_fim_nome) : null,
+      operador_fim_matricula: row.operador_fim_matricula ? String(row.operador_fim_matricula) : null,
+      motivo_descricao: row.motivo_descricao ? String(row.motivo_descricao) : null,
+    }));
 
     // Contar total
-    const totalResult = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(apontamentos)
-      .where(conditions.length > 0 ? and(...conditions) : undefined);
+    const totalResult = await db.execute(sql`
+      SELECT COUNT(*) as total FROM apontamentos
+    `);
 
-    const total = Number(totalResult[0]?.count || 0);
+    const total = Number(totalResult.rows[0]?.total || 0);
+
+    // Formatar os dados para o frontend
+    const data = rows.map(row => ({
+      id: row.id,
+      opId: row.op_id,
+      maquinaId: row.maquina_id,
+      operadorInicioId: row.operador_inicio_id,
+      operadorFimId: row.operador_fim_id,
+      metragemProcessada: row.metragem_processada ? parseFloat(row.metragem_processada) : null,
+      dataInicio: row.data_inicio,
+      dataFim: row.data_fim,
+      status: row.status,
+      motivoParadaId: row.motivo_parada_id,
+      inicioParada: row.inicio_parada,
+      fimParada: row.fim_parada,
+      observacoes: row.observacoes,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      op: row.op_numero ? {
+        op: row.op_numero,
+        produto: row.op_produto
+      } : null,
+      maquina: row.maquina_nome ? {
+        nome: row.maquina_nome,
+        codigo: row.maquina_codigo
+      } : null,
+      operadorInicio: row.operador_inicio_nome ? {
+        nome: row.operador_inicio_nome,
+        matricula: row.operador_inicio_matricula
+      } : null,
+      operadorFim: row.operador_fim_nome ? {
+        nome: row.operador_fim_nome,
+        matricula: row.operador_fim_matricula
+      } : null,
+      motivoParada: row.motivo_descricao ? {
+        descricao: row.motivo_descricao
+      } : null
+    }));
 
     return NextResponse.json({
-      data: allApontamentos,
+      data,
       pagination: {
         page,
         limit,
@@ -137,84 +155,9 @@ export async function GET(request: Request) {
     });
 
   } catch (error) {
-    console.error('Erro ao buscar apontamentos:', error);
+    console.error('❌ Erro detalhado:', error);
     return NextResponse.json(
-      { error: 'Erro interno ao buscar apontamentos' },
-      { status: 500 }
-    );
-  }
-}
-
-export async function POST(request: Request) {
-  try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const validated = apontamentoSchema.parse(body);
-
-    // Verificar se OP existe
-    const op = await db.query.ops.findFirst({
-      where: eq(ops.op, validated.opId),
-    });
-
-    if (!op) {
-      return NextResponse.json(
-        { error: 'OP não encontrada' },
-        { status: 404 }
-      );
-    }
-
-    // Verificar se máquina existe
-    const maquina = await db.query.maquinas.findFirst({
-      where: eq(maquinas.id, validated.maquinaId),
-    });
-
-    if (!maquina) {
-      return NextResponse.json(
-        { error: 'Máquina não encontrada' },
-        { status: 404 }
-      );
-    }
-
-    // Inserir apontamento
-    const [newApontamento] = await db
-      .insert(apontamentos)
-      .values({
-        opId: validated.opId,
-        maquinaId: validated.maquinaId,
-        operadorInicioId: validated.operadorInicioId,
-        operadorFimId: validated.operadorFimId,
-        metragemProcessada: validated.metragemProcessada?.toString(), // CONVERTER PARA STRING
-        dataInicio: new Date(validated.dataInicio),
-        dataFim: new Date(validated.dataFim),
-        status: validated.status,
-        motivoParadaId: validated.motivoParadaId,
-        inicioParada: validated.inicioParada ? new Date(validated.inicioParada) : null,
-        fimParada: validated.fimParada ? new Date(validated.fimParada) : null,
-        observacoes: validated.observacoes,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
-    
-    return NextResponse.json(newApontamento, { status: 201 });
-
-  } catch (error) {
-    console.error('Erro ao criar apontamento:', error);
-    
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Dados inválidos', detalhes: error.errors },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json(
-      { error: 'Erro interno ao criar apontamento' },
+      { error: 'Erro interno ao buscar apontamentos', details: String(error) },
       { status: 500 }
     );
   }
