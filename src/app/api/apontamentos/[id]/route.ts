@@ -116,11 +116,18 @@ export async function PUT(
     const [updated] = await db
       .update(apontamentos)
       .set({
-        ...validated,
+        opId: validated.opId,
+        maquinaId: validated.maquinaId,
+        operadorInicioId: validated.operadorInicioId,
+        operadorFimId: validated.operadorFimId,
+        metragemProcessada: validated.metragemProcessada?.toString(), // CONVERTER PARA STRING
         dataInicio: new Date(validated.dataInicio),
         dataFim: new Date(validated.dataFim),
+        status: validated.status,
+        motivoParadaId: validated.motivoParadaId,
         inicioParada: validated.inicioParada ? new Date(validated.inicioParada) : null,
         fimParada: validated.fimParada ? new Date(validated.fimParada) : null,
+        observacoes: validated.observacoes,
         updatedAt: new Date(),
       })
       .where(eq(apontamentos.id, params.id))

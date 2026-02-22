@@ -184,16 +184,23 @@ export async function POST(request: Request) {
     const [newApontamento] = await db
       .insert(apontamentos)
       .values({
-        ...validated,
+        opId: validated.opId,
+        maquinaId: validated.maquinaId,
+        operadorInicioId: validated.operadorInicioId,
+        operadorFimId: validated.operadorFimId,
+        metragemProcessada: validated.metragemProcessada?.toString(), // CONVERTER PARA STRING
         dataInicio: new Date(validated.dataInicio),
         dataFim: new Date(validated.dataFim),
+        status: validated.status,
+        motivoParadaId: validated.motivoParadaId,
         inicioParada: validated.inicioParada ? new Date(validated.inicioParada) : null,
         fimParada: validated.fimParada ? new Date(validated.fimParada) : null,
+        observacoes: validated.observacoes,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
       .returning();
-
+    
     return NextResponse.json(newApontamento, { status: 201 });
 
   } catch (error) {
