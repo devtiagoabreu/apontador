@@ -118,3 +118,13 @@
 ✅ Validações	Campos obrigatórios e tipos
 
 
+## 📋 Commit: Tela de Apontamentos --> feat(apontamentos): adicionar tela completa de gerenciamento de apontamentos 
+
+✅ Lista completa:	Todos os apontamentos com paginação
+✅ Filtros	Por: OP, máquina, operador, data, status
+✅ Criar manual:	Novo apontamento com validação
+✅ Editar:	Alterar dados de apontamento existente
+✅ Excluir:	Remover apontamento (com confirmação)
+✅ Visualizar:	Detalhes completos do apontamento
+✅ Relações:	Mostra OP, máquina, operadores
+✅ Paradas:	Registro de motivos de parada

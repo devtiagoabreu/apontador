@@ -24,6 +24,11 @@ const navItems = [
     icon: LayoutDashboard,
   },
   {
+    title: 'Apontamentos',
+    href: '/dashboard/apontamentos',
+    icon: Calendar,
+  },
+  {
     title: 'Áreas',
     href: '/dashboard/areas',
     icon: Factory,

@@ -1,4 +1,3 @@
-// src/lib/db/schema/apontamentos.ts
 import { pgTable, uuid, integer, decimal, timestamp, varchar, text } from 'drizzle-orm/pg-core';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
@@ -31,18 +30,30 @@ export const apontamentos = pgTable('apontamentos', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
-export const insertApontamentoSchema = createInsertSchema(apontamentos, {
-  opId: z.number().int().positive(),
-  maquinaId: z.string().uuid(),
+// Schema base para inserção (sem refine)
+export const insertApontamentoBaseSchema = createInsertSchema(apontamentos, {
+  opId: z.number().int().positive('OP é obrigatória'),
+  maquinaId: z.string().uuid('Máquina inválida'),
+  operadorInicioId: z.string().uuid('Operador inválido'),
+  operadorFimId: z.string().uuid('Operador inválido').optional(),
   metragemProcessada: z.number().optional(),
   dataInicio: z.date(),
   dataFim: z.date(),
   status: z.enum(['EM_ANDAMENTO', 'CONCLUIDO', 'CANCELADO']).default('EM_ANDAMENTO'),
+  motivoParadaId: z.string().uuid().optional(),
+  inicioParada: z.date().optional(),
+  fimParada: z.date().optional(),
   observacoes: z.string().optional(),
-}).refine((data) => data.dataFim >= data.dataInicio, {
-  message: "Data fim não pode ser menor que data início",
-  path: ["dataFim"],
 });
+
+// Schema com validação (para uso no handleSubmit)
+export const insertApontamentoSchema = insertApontamentoBaseSchema.refine(
+  (data) => data.dataFim >= data.dataInicio,
+  {
+    message: "Data fim não pode ser menor que data início",
+    path: ["dataFim"],
+  }
+);
 
 export const selectApontamentoSchema = createSelectSchema(apontamentos);
 

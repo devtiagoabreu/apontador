@@ -18,7 +18,7 @@ import { Switch } from '@/components/ui/switch';
 interface Field {
   name: string;
   label: string;
-  type: 'text' | 'number' | 'switch' | 'textarea' | 'select' | 'password' | 'color';
+  type: 'text' | 'number' | 'switch' | 'textarea' | 'select' | 'password' | 'color' | 'datetime-local'; // ADICIONAR AQUI
   required?: boolean;
   options?: { value: string; label: string }[];
 }
