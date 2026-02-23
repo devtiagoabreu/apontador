@@ -10,6 +10,7 @@ import { motivosParada } from '@/lib/db/schema/motivos-parada';
 import { estagios } from '@/lib/db/schema/estagios';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { sql } from 'drizzle-orm';
 
 const apontamentoSchema = z.object({
   opId: z.number().int().positive().optional(),
@@ -38,77 +39,100 @@ export async function GET(
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const apontamento = await db
-      .select({
-        id: apontamentos.id,
-        tipo: apontamentos.tipo,
-        opId: apontamentos.opId,
-        maquinaId: apontamentos.maquinaId,
-        operadorInicioId: apontamentos.operadorInicioId,
-        operadorFimId: apontamentos.operadorFimId,
-        metragemProcessada: apontamentos.metragemProcessada,
-        dataInicio: apontamentos.dataInicio,
-        dataFim: apontamentos.dataFim,
-        status: apontamentos.status,
-        motivoParadaId: apontamentos.motivoParadaId,
-        observacoes: apontamentos.observacoes,
-        estagioId: apontamentos.estagioId,
-        isReprocesso: apontamentos.isReprocesso,
-        createdAt: apontamentos.createdAt,
-        updatedAt: apontamentos.updatedAt,
-        
-        // Relacionamentos
-        op: apontamentos.opId ? {
-          op: ops.op,
-          produto: ops.produto,
-          codEstagioAtual: ops.codEstagioAtual,
-          estagioAtual: ops.estagioAtual,
-        } : null,
-        
-        maquina: {
-          nome: maquinas.nome,
-          codigo: maquinas.codigo,
-        },
-        
-        operadorInicio: {
-          nome: usuarios.nome,
-          matricula: usuarios.matricula,
-        },
-        
-        operadorFim: apontamentos.operadorFimId ? {
-          nome: usuarios.nome,
-          matricula: usuarios.matricula,
-        } : null,
-        
-        motivoParada: apontamentos.motivoParadaId ? {
-          descricao: motivosParada.descricao,
-          codigo: motivosParada.codigo,
-        } : null,
-        
-        estagio: apontamentos.estagioId ? {
-          nome: estagios.nome,
-          codigo: estagios.codigo,
-          cor: estagios.cor,
-        } : null,
-      })
-      .from(apontamentos)
-      .leftJoin(ops, eq(apontamentos.opId, ops.op))
-      .leftJoin(maquinas, eq(apontamentos.maquinaId, maquinas.id))
-      .leftJoin(usuarios, eq(apontamentos.operadorInicioId, usuarios.id))
-      .leftJoin(usuarios, eq(apontamentos.operadorFimId, usuarios.id))
-      .leftJoin(motivosParada, eq(apontamentos.motivoParadaId, motivosParada.id))
-      .leftJoin(estagios, eq(apontamentos.estagioId, estagios.id))
-      .where(eq(apontamentos.id, params.id))
-      .then(rows => rows[0]);
+    // Buscar apontamento com joins usando SQL raw para evitar problemas de tipo
+    const result = await db.execute(sql`
+      SELECT 
+        a.*,
+        o.op as op_numero,
+        o.produto as op_produto,
+        o.cod_estagio_atual as op_cod_estagio,
+        o.estagio_atual as op_estagio,
+        m.nome as maquina_nome,
+        m.codigo as maquina_codigo,
+        ui.nome as operador_inicio_nome,
+        ui.matricula as operador_inicio_matricula,
+        uf.nome as operador_fim_nome,
+        uf.matricula as operador_fim_matricula,
+        mp.descricao as motivo_descricao,
+        mp.codigo as motivo_codigo,
+        e.nome as estagio_nome,
+        e.codigo as estagio_codigo,
+        e.cor as estagio_cor
+      FROM apontamentos a
+      LEFT JOIN ops o ON a.op_id = o.op
+      LEFT JOIN maquinas m ON a.maquina_id = m.id
+      LEFT JOIN usuarios ui ON a.operador_inicio_id = ui.id
+      LEFT JOIN usuarios uf ON a.operador_fim_id = uf.id
+      LEFT JOIN motivos_parada mp ON a.motivo_parada_id = mp.id
+      LEFT JOIN estagios e ON a.estagio_id = e.id
+      WHERE a.id = ${params.id}
+    `);
 
-    if (!apontamento) {
+    if (result.rows.length === 0) {
       return NextResponse.json(
         { error: 'Apontamento não encontrado' },
         { status: 404 }
       );
     }
 
+    const row = result.rows[0];
+
+    // Formatar resposta
+    const apontamento = {
+      id: row.id,
+      tipo: row.tipo,
+      opId: row.op_id,
+      maquinaId: row.maquina_id,
+      operadorInicioId: row.operador_inicio_id,
+      operadorFimId: row.operador_fim_id,
+      metragemProcessada: row.metragem_processada ? parseFloat(row.metragem_processada) : null,
+      dataInicio: row.data_inicio,
+      dataFim: row.data_fim,
+      status: row.status,
+      motivoParadaId: row.motivo_parada_id,
+      observacoes: row.observacoes,
+      estagioId: row.estagio_id,
+      isReprocesso: row.is_reprocesso || false,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      
+      // Relacionamentos
+      op: row.op_numero ? {
+        op: row.op_numero,
+        produto: row.op_produto,
+        codEstagioAtual: row.op_cod_estagio,
+        estagioAtual: row.op_estagio,
+      } : null,
+      
+      maquina: {
+        nome: row.maquina_nome,
+        codigo: row.maquina_codigo,
+      },
+      
+      operadorInicio: {
+        nome: row.operador_inicio_nome,
+        matricula: row.operador_inicio_matricula,
+      },
+      
+      operadorFim: row.operador_fim_nome ? {
+        nome: row.operador_fim_nome,
+        matricula: row.operador_fim_matricula,
+      } : null,
+      
+      motivoParada: row.motivo_descricao ? {
+        descricao: row.motivo_descricao,
+        codigo: row.motivo_codigo,
+      } : null,
+      
+      estagio: row.estagio_nome ? {
+        nome: row.estagio_nome,
+        codigo: row.estagio_codigo,
+        cor: row.estagio_cor,
+      } : null,
+    };
+
     return NextResponse.json(apontamento);
+    
   } catch (error) {
     console.error('Erro ao buscar apontamento:', error);
     return NextResponse.json(
@@ -176,6 +200,7 @@ export async function PUT(
       .returning();
 
     return NextResponse.json(updated);
+    
   } catch (error) {
     console.error('Erro ao atualizar apontamento:', error);
     
@@ -206,6 +231,7 @@ export async function DELETE(
 
     await db.delete(apontamentos).where(eq(apontamentos.id, params.id));
     return NextResponse.json({ success: true });
+    
   } catch (error) {
     console.error('Erro ao excluir apontamento:', error);
     return NextResponse.json(
