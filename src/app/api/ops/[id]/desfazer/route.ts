@@ -114,12 +114,17 @@ export async function POST(
       // Criar novo apontamento no estágio anterior
       if (maquinaAnterior) {
         await tx.insert(apontamentos).values({
+          tipo: 'PRODUCAO', // CAMPO OBRIGATÓRIO!
           opId,
           maquinaId: maquinaAnterior.id,
+          estagioId: estagioAnterior.id,
           operadorInicioId: session.user.id,
           dataInicio: agora,
           dataFim: agora,
           status: 'EM_ANDAMENTO',
+          isReprocesso: false, // Desfazer não é reprocesso
+          createdAt: agora,
+          updatedAt: agora,
         });
 
         // Ocupar máquina anterior
