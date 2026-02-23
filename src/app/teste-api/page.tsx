@@ -51,15 +51,36 @@ export default function TesteApiPage() {
   async function carregarDados() {
     try {
       // Tenta carregar do banco, mas usa os fixos como fallback
-      const [estagiosRes, maquinasRes, operadoresRes] = await Promise.all([
-        fetch('/api/estagios?ativos=true').catch(() => ({ json: () => [] })),
-        fetch('/api/maquinas').catch(() => ({ json: () => [] })),
-        fetch('/api/usuarios?nivel=OPERADOR').catch(() => ({ json: () => [] })),
-      ]);
+      let estagiosData = [];
+      let maquinasData = [];
+      let operadoresData = [];
 
-      const estagiosData = await estagiosRes.json().catch(() => []);
-      const maquinasData = await maquinasRes.json().catch(() => []);
-      const operadoresData = await operadoresRes.json().catch(() => []);
+      try {
+        const estagiosRes = await fetch('/api/estagios?ativos=true');
+        if (estagiosRes.ok) {
+          estagiosData = await estagiosRes.json();
+        }
+      } catch (e) {
+        console.log('Erro ao carregar estágios, usando fixos');
+      }
+
+      try {
+        const maquinasRes = await fetch('/api/maquinas');
+        if (maquinasRes.ok) {
+          maquinasData = await maquinasRes.json();
+        }
+      } catch (e) {
+        console.log('Erro ao carregar máquinas, usando fixos');
+      }
+
+      try {
+        const operadoresRes = await fetch('/api/usuarios?nivel=OPERADOR');
+        if (operadoresRes.ok) {
+          operadoresData = await operadoresRes.json();
+        }
+      } catch (e) {
+        console.log('Erro ao carregar operadores, usando fixos');
+      }
 
       // Usa dados da API se existirem, senão usa os fixos
       setEstagios(estagiosData.length > 0 ? estagiosData : estagiosFixos);
@@ -109,9 +130,9 @@ export default function TesteApiPage() {
     setStatus(null);
 
     try {
-      let body = requestBody;
+      // Validar JSON
       try {
-        JSON.parse(body);
+        JSON.parse(requestBody);
       } catch (e) {
         setResponse({ error: 'JSON inválido', details: String(e) });
         setLoading(false);
@@ -123,7 +144,7 @@ export default function TesteApiPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: method !== 'GET' ? body : undefined,
+        body: method !== 'GET' ? requestBody : undefined,
       });
 
       setStatus(res.status);
@@ -190,6 +211,7 @@ export default function TesteApiPage() {
                 id="endpoint"
                 value={endpoint}
                 onChange={(e) => setEndpoint(e.target.value)}
+                placeholder="/api/apontamentos"
               />
             </div>
 
@@ -197,7 +219,7 @@ export default function TesteApiPage() {
               <Label htmlFor="method">Método</Label>
               <Select value={method} onValueChange={setMethod}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Selecione o método" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="GET">GET</SelectItem>
@@ -236,6 +258,7 @@ export default function TesteApiPage() {
                 onChange={(e) => setRequestBody(e.target.value)}
                 rows={15}
                 className="font-mono text-sm"
+                placeholder="Cole seu JSON aqui..."
               />
             </div>
 
