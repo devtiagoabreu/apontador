@@ -128,7 +128,7 @@ interface Filtros {
   status?: string;
 }
 
-// SCHEMA DO FORMULÁRIO - FLEXÍVEL
+// SCHEMA DO FORMULÁRIO - VERSÃO CORRIGIDA
 const apontamentoSchema = z.object({
   tipo: z.enum(['PRODUCAO', 'PARADA']),
   maquinaId: z.string().min(1, 'Máquina é obrigatória'),
@@ -138,9 +138,10 @@ const apontamentoSchema = z.object({
   dataFim: z.string().min(1, 'Data fim é obrigatória'),
   status: z.enum(['EM_ANDAMENTO', 'CONCLUIDO', 'CANCELADO']),
   observacoes: z.string().optional(),
-  opId: z.number().optional(),
+  // CORREÇÕES: aceitar string e converter para número
+  opId: z.union([z.string(), z.number()]).optional().transform(val => val ? Number(val) : undefined),
   estagioId: z.string().optional(),
-  metragemProcessada: z.number().optional(),
+  metragemProcessada: z.union([z.string(), z.number()]).optional().transform(val => val ? Number(val) : undefined),
   isReprocesso: z.boolean().default(false),
   motivoParadaId: z.string().optional(),
 });
