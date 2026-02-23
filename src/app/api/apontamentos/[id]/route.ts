@@ -39,7 +39,7 @@ export async function GET(
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    // Buscar apontamento com joins usando SQL raw para evitar problemas de tipo
+    // Buscar apontamento com joins usando SQL raw
     const result = await db.execute(sql`
       SELECT 
         a.*,
@@ -77,57 +77,77 @@ export async function GET(
 
     const row = result.rows[0];
 
-    // Formatar resposta
+    // Função auxiliar para converter com segurança
+    const safeParseFloat = (value: any): number | null => {
+      if (value === null || value === undefined) return null;
+      const str = String(value);
+      if (str.trim() === '') return null;
+      const num = parseFloat(str);
+      return isNaN(num) ? null : num;
+    };
+
+    // Função auxiliar para converter string para boolean
+    const safeParseBoolean = (value: any): boolean => {
+      if (value === null || value === undefined) return false;
+      if (typeof value === 'boolean') return value;
+      if (typeof value === 'string') {
+        return value.toLowerCase() === 'true' || value === '1';
+      }
+      if (typeof value === 'number') return value === 1;
+      return false;
+    };
+
+    // Formatar resposta com conversões seguras
     const apontamento = {
-      id: row.id,
-      tipo: row.tipo,
-      opId: row.op_id,
-      maquinaId: row.maquina_id,
-      operadorInicioId: row.operador_inicio_id,
-      operadorFimId: row.operador_fim_id,
-      metragemProcessada: row.metragem_processada ? parseFloat(row.metragem_processada) : null,
-      dataInicio: row.data_inicio,
-      dataFim: row.data_fim,
-      status: row.status,
-      motivoParadaId: row.motivo_parada_id,
-      observacoes: row.observacoes,
-      estagioId: row.estagio_id,
-      isReprocesso: row.is_reprocesso || false,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      id: String(row.id || ''),
+      tipo: String(row.tipo || ''),
+      opId: row.op_id ? parseInt(String(row.op_id)) : null,
+      maquinaId: String(row.maquina_id || ''),
+      operadorInicioId: String(row.operador_inicio_id || ''),
+      operadorFimId: row.operador_fim_id ? String(row.operador_fim_id) : null,
+      metragemProcessada: safeParseFloat(row.metragem_processada),
+      dataInicio: row.data_inicio ? String(row.data_inicio) : '',
+      dataFim: row.data_fim ? String(row.data_fim) : '',
+      status: String(row.status || ''),
+      motivoParadaId: row.motivo_parada_id ? String(row.motivo_parada_id) : null,
+      observacoes: row.observacoes ? String(row.observacoes) : null,
+      estagioId: row.estagio_id ? String(row.estagio_id) : null,
+      isReprocesso: safeParseBoolean(row.is_reprocesso),
+      createdAt: row.created_at ? String(row.created_at) : '',
+      updatedAt: row.updated_at ? String(row.updated_at) : '',
       
       // Relacionamentos
       op: row.op_numero ? {
-        op: row.op_numero,
-        produto: row.op_produto,
-        codEstagioAtual: row.op_cod_estagio,
-        estagioAtual: row.op_estagio,
+        op: parseInt(String(row.op_numero)),
+        produto: String(row.op_produto || ''),
+        codEstagioAtual: row.op_cod_estagio ? String(row.op_cod_estagio) : null,
+        estagioAtual: row.op_estagio ? String(row.op_estagio) : null,
       } : null,
       
       maquina: {
-        nome: row.maquina_nome,
-        codigo: row.maquina_codigo,
+        nome: String(row.maquina_nome || ''),
+        codigo: String(row.maquina_codigo || ''),
       },
       
       operadorInicio: {
-        nome: row.operador_inicio_nome,
-        matricula: row.operador_inicio_matricula,
+        nome: String(row.operador_inicio_nome || ''),
+        matricula: String(row.operador_inicio_matricula || ''),
       },
       
       operadorFim: row.operador_fim_nome ? {
-        nome: row.operador_fim_nome,
-        matricula: row.operador_fim_matricula,
+        nome: String(row.operador_fim_nome),
+        matricula: String(row.operador_fim_matricula || ''),
       } : null,
       
       motivoParada: row.motivo_descricao ? {
-        descricao: row.motivo_descricao,
-        codigo: row.motivo_codigo,
+        descricao: String(row.motivo_descricao),
+        codigo: row.motivo_codigo ? String(row.motivo_codigo) : null,
       } : null,
       
       estagio: row.estagio_nome ? {
-        nome: row.estagio_nome,
-        codigo: row.estagio_codigo,
-        cor: row.estagio_cor,
+        nome: String(row.estagio_nome),
+        codigo: String(row.estagio_codigo || ''),
+        cor: String(row.estagio_cor || '#3b82f6'),
       } : null,
     };
 
