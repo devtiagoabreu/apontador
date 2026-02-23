@@ -139,3 +139,11 @@
 ✅ dashboard/kanban/page.tsx	Kanban com 2 modais (finalizar + iniciar)
 ✅ api/ops/[id]/mover/route.ts	API de mover com flag reprocesso
 https://chat.deepseek.com/share/i76mazgjla0gb74ric
+
+## 📋 COMMIT 15: Adicionar Estágio na Tela de Apontamentos --> feat: adicionar estágio na tela de apontamentos (lista, filtros, edição)
+
+✅ Adiciona coluna "Estágio" na lista com a cor do estágio
+✅ Adiciona filtro por estágio nos filtros
+✅ Mostra estágio nos detalhes do apontamento
+✅ Permite editar estágio no modal de edição
+✅ Campos dinâmicos (produção vs parada)

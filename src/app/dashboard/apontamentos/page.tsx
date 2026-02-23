@@ -30,44 +30,50 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface Apontamento {
   id: string;
-  opId: number;
+  tipo: 'PRODUCAO' | 'PARADA';
+  opId: number | null;
   maquinaId: string;
   operadorInicioId: string;
-  operadorFimId?: string;
-  metragemProcessada?: number;
+  operadorFimId: string | null;
+  metragemProcessada: number | null;
   dataInicio: string;
   dataFim: string;
   status: 'EM_ANDAMENTO' | 'CONCLUIDO' | 'CANCELADO';
-  motivoParadaId?: string;
-  inicioParada?: string;
-  fimParada?: string;
-  observacoes?: string;
-  createdAt: string;
-  updatedAt: string;
+  motivoParadaId: string | null;
+  observacoes: string | null;
+  estagioId: string | null;
+  isReprocesso: boolean;
   
-  // Relacionamentos (join)
+  // Relacionamentos
   op?: {
     op: number;
     produto: string;
-  };
+  } | null;
   maquina?: {
     nome: string;
     codigo: string;
-  };
+  } | null;
   operadorInicio?: {
     nome: string;
     matricula: string;
-  };
+  } | null;
   operadorFim?: {
     nome: string;
     matricula: string;
-  };
+  } | null;
   motivoParada?: {
     descricao: string;
-  };
+  } | null;
+  estagio?: {
+    id: string;
+    nome: string;
+    codigo: string;
+    cor: string;
+  } | null;
 }
 
 interface OP {
@@ -95,9 +101,35 @@ interface MotivoParada {
   descricao: string;
 }
 
-// Schema base para o FormModal (ZodObject)
+interface Estagio {
+  id: string;
+  codigo: string;
+  nome: string;
+  cor: string;
+}
+
+interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+interface Filtros {
+  tipo?: string;
+  opId?: string;
+  maquinaId?: string;
+  estagioId?: string;
+  operadorId?: string;
+  dataInicio?: string;
+  dataFim?: string;
+  status?: string;
+}
+
+// Schema base para o FormModal
 const apontamentoBaseSchema = z.object({
-  opId: z.number().int().positive('OP é obrigatória'),
+  tipo: z.enum(['PRODUCAO', 'PARADA']),
+  opId: z.number().int().positive().optional(),
   maquinaId: z.string().min(1, 'Máquina é obrigatória'),
   operadorInicioId: z.string().min(1, 'Operador é obrigatório'),
   operadorFimId: z.string().optional(),
@@ -106,23 +138,23 @@ const apontamentoBaseSchema = z.object({
   dataFim: z.string().min(1, 'Data fim é obrigatória'),
   status: z.enum(['EM_ANDAMENTO', 'CONCLUIDO', 'CANCELADO']),
   motivoParadaId: z.string().optional(),
-  inicioParada: z.string().optional(),
-  fimParada: z.string().optional(),
   observacoes: z.string().optional(),
-});
-
-// Schema com validação (para o handleSubmit)
-const apontamentoSchema = apontamentoBaseSchema.refine((data) => {
-  if (data.dataFim < data.dataInicio) {
-    return false;
-  }
-  return true;
-}, {
-  message: 'Data fim não pode ser menor que data início',
-  path: ['dataFim'],
+  estagioId: z.string().optional(),
+  isReprocesso: z.boolean().default(false),
 });
 
 const columns = [
+  { 
+    key: 'tipo' as const, 
+    title: 'Tipo',
+    format: (value: string) => (
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+        value === 'PRODUCAO' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'
+      }`}>
+        {value === 'PRODUCAO' ? '🔨 Produção' : '⏸️ Parada'}
+      </span>
+    )
+  },
   { 
     key: 'op' as const, 
     title: 'OP',
@@ -132,6 +164,19 @@ const columns = [
     key: 'maquina' as const, 
     title: 'Máquina',
     format: (value: any) => value?.nome || '-'
+  },
+  { 
+    key: 'estagio' as const, 
+    title: 'Estágio',
+    format: (value: any) => {
+      if (!value) return '-';
+      return (
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: value.cor }} />
+          <span>{value.nome}</span>
+        </div>
+      );
+    }
   },
   { 
     key: 'operadorInicio' as const, 
@@ -170,27 +215,16 @@ const columns = [
     }
   },
   { 
+    key: 'isReprocesso' as const, 
+    title: 'Reprocesso',
+    format: (value: boolean) => value ? '🔄 Sim' : '✅ Não'
+  },
+  { 
     key: 'motivoParada' as const, 
     title: 'Motivo Parada',
     format: (value: any) => value?.descricao || '-'
   },
 ];
-
-interface PaginationInfo {
-  page: number;
-  limit: number;
-  total: number;
-  totalPages: number;
-}
-
-interface Filtros {
-  opId?: string;
-  maquinaId?: string;
-  operadorId?: string;
-  dataInicio?: string;
-  dataFim?: string;
-  status?: string;
-}
 
 export default function ApontamentosPage() {
   const [apontamentos, setApontamentos] = useState<Apontamento[]>([]);
@@ -198,6 +232,7 @@ export default function ApontamentosPage() {
   const [maquinas, setMaquinas] = useState<Maquina[]>([]);
   const [operadores, setOperadores] = useState<Usuario[]>([]);
   const [motivosParada, setMotivosParada] = useState<MotivoParada[]>([]);
+  const [estagios, setEstagios] = useState<Estagio[]>([]);
   const [pagination, setPagination] = useState<PaginationInfo>({
     page: 1,
     limit: 50,
@@ -223,22 +258,25 @@ export default function ApontamentosPage() {
 
   async function carregarDadosIniciais() {
     try {
-      const [opsRes, maquinasRes, operadoresRes, motivosRes] = await Promise.all([
+      const [opsRes, maquinasRes, operadoresRes, motivosRes, estagiosRes] = await Promise.all([
         fetch('/api/ops?limit=1000'),
         fetch('/api/maquinas'),
         fetch('/api/usuarios?nivel=OPERADOR'),
         fetch('/api/motivos-parada'),
+        fetch('/api/estagios?ativos=true'),
       ]);
 
       const opsData = await opsRes.json();
       const maquinasData = await maquinasRes.json();
       const operadoresData = await operadoresRes.json();
       const motivosData = await motivosRes.json();
+      const estagiosData = await estagiosRes.json();
 
       setOps(opsData.data || opsData);
       setMaquinas(maquinasData);
       setOperadores(operadoresData);
       setMotivosParada(motivosData);
+      setEstagios(estagiosData);
     } catch (error) {
       console.error('Erro ao carregar dados iniciais:', error);
     }
@@ -364,74 +402,117 @@ export default function ApontamentosPage() {
   const openEditModal = (apontamento: Apontamento) => {
     setSelectedApontamento(apontamento);
     setFormData({
-      opId: apontamento.opId,
+      tipo: apontamento.tipo,
+      opId: apontamento.opId || undefined,
       maquinaId: apontamento.maquinaId,
       operadorInicioId: apontamento.operadorInicioId,
-      operadorFimId: apontamento.operadorFimId,
-      metragemProcessada: apontamento.metragemProcessada,
+      operadorFimId: apontamento.operadorFimId || undefined,
+      metragemProcessada: apontamento.metragemProcessada || undefined,
       dataInicio: apontamento.dataInicio.slice(0, 16),
       dataFim: apontamento.dataFim.slice(0, 16),
       status: apontamento.status,
-      motivoParadaId: apontamento.motivoParadaId,
-      inicioParada: apontamento.inicioParada?.slice(0, 16),
-      fimParada: apontamento.fimParada?.slice(0, 16),
-      observacoes: apontamento.observacoes,
+      motivoParadaId: apontamento.motivoParadaId || undefined,
+      observacoes: apontamento.observacoes || undefined,
+      estagioId: apontamento.estagioId || undefined,
+      isReprocesso: apontamento.isReprocesso || false,
     });
     setEditMode(true);
     setModalOpen(true);
   };
 
-  const formFields = [
-    { 
-      name: 'opId', 
-      label: 'OP', 
-      type: 'select' as const, 
-      required: true,
-      options: ops.map(op => ({ value: op.op.toString(), label: `OP ${op.op} - ${op.produto.substring(0, 30)}` }))
-    },
-    { 
-      name: 'maquinaId', 
-      label: 'Máquina', 
-      type: 'select' as const, 
-      required: true,
-      options: maquinas.map(m => ({ value: m.id, label: `${m.codigo} - ${m.nome}` }))
-    },
-    { 
-      name: 'operadorInicioId', 
-      label: 'Operador (Início)', 
-      type: 'select' as const, 
-      required: true,
-      options: operadores.map(op => ({ value: op.id, label: `${op.matricula} - ${op.nome}` }))
-    },
-    { 
-      name: 'operadorFimId', 
-      label: 'Operador (Fim)', 
-      type: 'select' as const, 
-      options: operadores.map(op => ({ value: op.id, label: `${op.matricula} - ${op.nome}` }))
-    },
-    { name: 'dataInicio', label: 'Data Início', type: 'datetime-local' as const, required: true },
-    { name: 'dataFim', label: 'Data Fim', type: 'datetime-local' as const, required: true },
-    { name: 'metragemProcessada', label: 'Metragem Processada', type: 'number' as const },
-    { 
-      name: 'status', 
-      label: 'Status', 
-      type: 'select' as const,
-      options: [
-        { value: 'EM_ANDAMENTO', label: 'Em Andamento' },
-        { value: 'CONCLUIDO', label: 'Concluído' },
-        { value: 'CANCELADO', label: 'Cancelado' },
-      ]
-    },
-    { 
-      name: 'motivoParadaId', 
-      label: 'Motivo de Parada', 
-      type: 'select' as const,
-      options: motivosParada.map(m => ({ value: m.id, label: `${m.codigo} - ${m.descricao}` }))
-    },
-    { name: 'inicioParada', label: 'Início da Parada', type: 'datetime-local' as const },
-    { name: 'fimParada', label: 'Fim da Parada', type: 'datetime-local' as const },
-    { name: 'observacoes', label: 'Observações', type: 'textarea' as const },
-  ];
+  // Construir campos do formulário dinamicamente baseado no tipo
+  const getFormFields = () => {
+    const baseFields = [
+      { 
+        name: 'tipo', 
+        label: 'Tipo', 
+        type: 'select' as const, 
+        required: true,
+        options: [
+          { value: 'PRODUCAO', label: 'Produção' },
+          { value: 'PARADA', label: 'Parada' },
+        ]
+      },
+      { 
+        name: 'maquinaId', 
+        label: 'Máquina', 
+        type: 'select' as const, 
+        required: true,
+        options: maquinas.map(m => ({ value: m.id, label: `${m.codigo} - ${m.nome}` }))
+      },
+      { 
+        name: 'operadorInicioId', 
+        label: 'Operador (Início)', 
+        type: 'select' as const, 
+        required: true,
+        options: operadores.map(op => ({ value: op.id, label: `${op.matricula} - ${op.nome}` }))
+      },
+      { 
+        name: 'operadorFimId', 
+        label: 'Operador (Fim)', 
+        type: 'select' as const, 
+        options: operadores.map(op => ({ value: op.id, label: `${op.matricula} - ${op.nome}` }))
+      },
+      { name: 'dataInicio', label: 'Data Início', type: 'datetime-local' as const, required: true },
+      { name: 'dataFim', label: 'Data Fim', type: 'datetime-local' as const, required: true },
+      { 
+        name: 'status', 
+        label: 'Status', 
+        type: 'select' as const,
+        options: [
+          { value: 'EM_ANDAMENTO', label: 'Em Andamento' },
+          { value: 'CONCLUIDO', label: 'Concluído' },
+          { value: 'CANCELADO', label: 'Cancelado' },
+        ]
+      },
+      { name: 'observacoes', label: 'Observações', type: 'textarea' as const },
+    ];
+
+    // Campos específicos para PRODUÇÃO
+    if (formData.tipo === 'PRODUCAO') {
+      return [
+        ...baseFields,
+        { 
+          name: 'opId', 
+          label: 'OP', 
+          type: 'select' as const, 
+          required: true,
+          options: ops.map(op => ({ value: op.op.toString(), label: `OP ${op.op} - ${op.produto.substring(0, 30)}` }))
+        },
+        { 
+          name: 'estagioId', 
+          label: 'Estágio', 
+          type: 'select' as const, 
+          required: true,
+          options: estagios.map(e => ({ value: e.id, label: e.nome }))
+        },
+        { name: 'metragemProcessada', label: 'Metragem Processada', type: 'number' as const },
+        { name: 'isReprocesso', label: 'É Reprocesso?', type: 'switch' as const },
+      ];
+    }
+
+    // Campos específicos para PARADA
+    if (formData.tipo === 'PARADA') {
+      return [
+        ...baseFields,
+        { 
+          name: 'motivoParadaId', 
+          label: 'Motivo de Parada', 
+          type: 'select' as const, 
+          required: true,
+          options: motivosParada.map(m => ({ value: m.id, label: `${m.codigo} - ${m.descricao}` }))
+        },
+        { 
+          name: 'opId', 
+          label: 'OP Vinculada (opcional)', 
+          type: 'select' as const, 
+          options: ops.map(op => ({ value: op.op.toString(), label: `OP ${op.op} - ${op.produto.substring(0, 30)}` }))
+        },
+      ];
+    }
+
+    return baseFields;
+  };
 
   return (
     <div className="space-y-6">
@@ -450,7 +531,7 @@ export default function ApontamentosPage() {
             onClick={() => {
               setEditMode(false);
               setSelectedApontamento(null);
-              setFormData({});
+              setFormData({ tipo: 'PRODUCAO' });
               setModalOpen(true);
             }}
           >
@@ -521,12 +602,27 @@ export default function ApontamentosPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
+                  <p className="text-sm font-medium text-gray-500">Tipo</p>
+                  <p className="text-sm">{selectedApontamento.tipo === 'PRODUCAO' ? '🔨 Produção' : '⏸️ Parada'}</p>
+                </div>
+                <div>
                   <p className="text-sm font-medium text-gray-500">OP</p>
-                  <p className="text-sm">OP {selectedApontamento.op?.op} - {selectedApontamento.op?.produto}</p>
+                  <p className="text-sm">{selectedApontamento.op ? `OP ${selectedApontamento.op.op}` : '-'}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Máquina</p>
                   <p className="text-sm">{selectedApontamento.maquina?.nome} ({selectedApontamento.maquina?.codigo})</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Estágio</p>
+                  {selectedApontamento.estagio ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: selectedApontamento.estagio.cor }} />
+                      <p className="text-sm">{selectedApontamento.estagio.nome}</p>
+                    </div>
+                  ) : (
+                    <p className="text-sm">-</p>
+                  )}
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Operador (Início)</p>
@@ -534,7 +630,7 @@ export default function ApontamentosPage() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Operador (Fim)</p>
-                  <p className="text-sm">{selectedApontamento.operadorFim?.nome || '-'} {selectedApontamento.operadorFim?.matricula}</p>
+                  <p className="text-sm">{selectedApontamento.operadorFim?.nome || '-'}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Data Início</p>
@@ -549,6 +645,10 @@ export default function ApontamentosPage() {
                   <p className="text-sm">{selectedApontamento.metragemProcessada ? `${formatNumber(selectedApontamento.metragemProcessada)} m` : '-'}</p>
                 </div>
                 <div>
+                  <p className="text-sm font-medium text-gray-500">Reprocesso</p>
+                  <p className="text-sm">{selectedApontamento.isReprocesso ? '🔄 Sim' : '✅ Não'}</p>
+                </div>
+                <div>
                   <p className="text-sm font-medium text-gray-500">Status</p>
                   <p className="text-sm">{selectedApontamento.status}</p>
                 </div>
@@ -556,13 +656,8 @@ export default function ApontamentosPage() {
 
               {selectedApontamento.motivoParada && (
                 <div className="bg-yellow-50 p-3 rounded-lg">
-                  <p className="text-sm font-medium text-yellow-700">Parada</p>
+                  <p className="text-sm font-medium text-yellow-700">Motivo da Parada</p>
                   <p className="text-sm text-yellow-600">{selectedApontamento.motivoParada.descricao}</p>
-                  {selectedApontamento.inicioParada && (
-                    <p className="text-xs text-yellow-500 mt-1">
-                      {formatDate(selectedApontamento.inicioParada)} - {selectedApontamento.fimParada ? formatDate(selectedApontamento.fimParada) : 'Em andamento'}
-                    </p>
-                  )}
                 </div>
               )}
 
@@ -585,6 +680,23 @@ export default function ApontamentosPage() {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="filtroTipo">Tipo</Label>
+              <Select 
+                value={filtros.tipo || ''} 
+                onValueChange={(value) => setFiltros(prev => ({ ...prev, tipo: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os tipos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="PRODUCAO">Produção</SelectItem>
+                  <SelectItem value="PARADA">Parada</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="filtroOp">OP</Label>
               <Select 
@@ -619,6 +731,26 @@ export default function ApontamentosPage() {
                   {maquinas.map(m => (
                     <SelectItem key={m.id} value={m.id}>
                       {m.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="filtroEstagio">Estágio</Label>
+              <Select 
+                value={filtros.estagioId || ''} 
+                onValueChange={(value) => setFiltros(prev => ({ ...prev, estagioId: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os estágios" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Todos</SelectItem>
+                  {estagios.map(e => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {e.nome}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -699,7 +831,7 @@ export default function ApontamentosPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Criação/Edição - USANDO O SCHEMA BASE */}
+      {/* Modal de Criação/Edição */}
       <FormModal
         open={modalOpen}
         onClose={() => {
@@ -710,9 +842,9 @@ export default function ApontamentosPage() {
         }}
         onSubmit={editMode ? handleUpdateApontamento : handleCreateApontamento}
         title={editMode ? 'Editar Apontamento' : 'Novo Apontamento'}
-        fields={formFields}
+        fields={getFormFields()}
         initialData={formData}
-        schema={apontamentoBaseSchema} // ✅ USANDO O SCHEMA BASE
+        schema={apontamentoBaseSchema}
       />
     </div>
   );
