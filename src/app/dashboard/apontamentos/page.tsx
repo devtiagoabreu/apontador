@@ -10,8 +10,7 @@ import {
   RefreshCw, 
   Filter,
   ChevronLeft, 
-  ChevronRight,
-  Calendar
+  ChevronRight
 } from 'lucide-react';
 import { formatDate, formatNumber } from '@/lib/utils';
 import {
@@ -126,21 +125,25 @@ interface Filtros {
   status?: string;
 }
 
-// Schema base para o FormModal
+// Schema MAIS FLEXÍVEL para o FormModal
 const apontamentoBaseSchema = z.object({
   tipo: z.enum(['PRODUCAO', 'PARADA']),
-  opId: z.number().int().positive().optional(),
   maquinaId: z.string().min(1, 'Máquina é obrigatória'),
   operadorInicioId: z.string().min(1, 'Operador é obrigatório'),
   operadorFimId: z.string().optional(),
-  metragemProcessada: z.number().optional(),
   dataInicio: z.string().min(1, 'Data início é obrigatória'),
   dataFim: z.string().min(1, 'Data fim é obrigatória'),
   status: z.enum(['EM_ANDAMENTO', 'CONCLUIDO', 'CANCELADO']),
-  motivoParadaId: z.string().optional(),
   observacoes: z.string().optional(),
+  
+  // Campos opcionais para produção
+  opId: z.number().int().positive().optional(),
   estagioId: z.string().optional(),
-  isReprocesso: z.boolean().default(false),
+  metragemProcessada: z.number().optional(),
+  isReprocesso: z.boolean().optional(),
+  
+  // Campos opcionais para parada
+  motivoParadaId: z.string().optional(),
 });
 
 const columns = [
@@ -256,23 +259,11 @@ export default function ApontamentosPage() {
     carregarApontamentos(1);
   }, [filtros]);
 
+  // Monitorar mudanças no tipo para debug
   useEffect(() => {
-    // Quando o tipo muda, resetar campos específicos
-    if (formData.tipo === 'PRODUCAO') {
-      setFormData(prev => ({
-        ...prev,
-        motivoParadaId: undefined,
-      }));
-    } else if (formData.tipo === 'PARADA') {
-      setFormData(prev => ({
-        ...prev,
-        opId: undefined,
-        estagioId: undefined,
-        metragemProcessada: undefined,
-        isReprocesso: false,
-      }));
-    }
-  }, [formData.tipo]);
+    console.log('Tipo atual:', formData.tipo);
+    console.log('FormData completo:', formData);
+  }, [formData]);
 
   async function carregarDadosIniciais() {
     try {
@@ -327,6 +318,8 @@ export default function ApontamentosPage() {
 
   async function handleCreateApontamento(data: any) {
     try {
+      console.log('Criando apontamento:', data);
+      
       const response = await fetch('/api/apontamentos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -347,6 +340,7 @@ export default function ApontamentosPage() {
       setFormData({});
       await carregarApontamentos(1);
     } catch (error) {
+      console.error('Erro:', error);
       toast({
         title: 'Erro',
         description: error instanceof Error ? error.message : 'Erro ao criar apontamento',
@@ -359,6 +353,8 @@ export default function ApontamentosPage() {
     if (!selectedApontamento) return;
 
     try {
+      console.log('Atualizando apontamento:', data);
+      
       const response = await fetch(`/api/apontamentos/${selectedApontamento.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -381,6 +377,7 @@ export default function ApontamentosPage() {
       setFormData({});
       await carregarApontamentos(pagination.page);
     } catch (error) {
+      console.error('Erro:', error);
       toast({
         title: 'Erro',
         description: error instanceof Error ? error.message : 'Erro ao atualizar apontamento',
@@ -420,7 +417,6 @@ export default function ApontamentosPage() {
   const openEditModal = (apontamento: Apontamento) => {
     console.log('Editando apontamento:', apontamento);
     
-    // Garantir que todos os campos estejam no formato correto
     const formDataPreparado: any = {
       tipo: apontamento.tipo,
       maquinaId: apontamento.maquinaId,
@@ -431,7 +427,6 @@ export default function ApontamentosPage() {
       observacoes: apontamento.observacoes || '',
     };
 
-    // Campos opcionais
     if (apontamento.operadorFimId) {
       formDataPreparado.operadorFimId = apontamento.operadorFimId;
     }
@@ -517,13 +512,9 @@ export default function ApontamentosPage() {
       { name: 'observacoes', label: 'Observações', type: 'textarea' as const },
     ];
 
-    // Se não tiver tipo selecionado, retorna só os campos base
-    if (!formData.tipo) {
-      return baseFields;
-    }
-
-    // Campos específicos para PRODUÇÃO
+    // FORÇAR atualização baseado no formData.tipo
     if (formData.tipo === 'PRODUCAO') {
+      console.log('📦 Renderizando campos de PRODUÇÃO');
       return [
         ...baseFields,
         { 
@@ -545,8 +536,8 @@ export default function ApontamentosPage() {
       ];
     }
 
-    // Campos específicos para PARADA
     if (formData.tipo === 'PARADA') {
+      console.log('⏸️ Renderizando campos de PARADA');
       return [
         ...baseFields,
         { 
@@ -568,6 +559,7 @@ export default function ApontamentosPage() {
       ];
     }
 
+    // Se não tiver tipo definido, retorna só os campos base
     return baseFields;
   };
 
@@ -601,7 +593,6 @@ export default function ApontamentosPage() {
         </div>
       </div>
 
-      {/* Info e Paginação */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-gray-500">
           Mostrando {apontamentos.length} de {pagination.total} apontamentos
