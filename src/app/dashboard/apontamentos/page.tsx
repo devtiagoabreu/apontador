@@ -123,6 +123,7 @@ interface Filtros {
   status?: string;
 }
 
+// Schema flexível
 const apontamentoBaseSchema = z.object({
   tipo: z.enum(['PRODUCAO', 'PARADA']).optional(),
   maquinaId: z.string().optional(),
@@ -305,10 +306,44 @@ export default function ApontamentosPage() {
 
   async function handleSubmit(data: any) {
     try {
-      const cleanData = JSON.parse(JSON.stringify(data));
-      
-      console.log('Enviando dados:', cleanData);
+      // Garantir que todos os campos obrigatórios estão presentes
+      const dadosCompletos: any = {
+        tipo: data.tipo || 'PRODUCAO',
+        maquinaId: data.maquinaId,
+        operadorInicioId: data.operadorInicioId,
+        dataInicio: data.dataInicio || new Date().toISOString(),
+        dataFim: data.dataFim || new Date().toISOString(),
+        status: data.status || 'EM_ANDAMENTO',
+        observacoes: data.observacoes || null,
+      };
 
+      // Adicionar campos específicos apenas se existirem
+      if (data.operadorFimId) {
+        dadosCompletos.operadorFimId = data.operadorFimId;
+      }
+
+      if (data.tipo === 'PRODUCAO') {
+        dadosCompletos.opId = data.opId;
+        dadosCompletos.estagioId = data.estagioId;
+        if (data.metragemProcessada) {
+          dadosCompletos.metragemProcessada = data.metragemProcessada;
+        }
+        if (data.isReprocesso !== undefined) {
+          dadosCompletos.isReprocesso = data.isReprocesso;
+        }
+      }
+
+      if (data.tipo === 'PARADA') {
+        dadosCompletos.motivoParadaId = data.motivoParadaId;
+        if (data.opId) {
+          dadosCompletos.opId = data.opId; // OP opcional na parada
+        }
+      }
+
+      console.log('📦 Enviando dados completos:', dadosCompletos);
+
+      const cleanData = JSON.parse(JSON.stringify(dadosCompletos));
+      
       const url = editMode && selectedApontamento 
         ? `/api/apontamentos/${selectedApontamento.id}` 
         : '/api/apontamentos';
@@ -348,13 +383,12 @@ export default function ApontamentosPage() {
   const openEditModal = (apontamento: Apontamento) => {
     console.log('Editando:', apontamento);
     
-    // CORREÇÃO: converter null para string vazia
     const dados = {
       id: apontamento.id,
       tipo: apontamento.tipo,
       maquinaId: apontamento.maquinaId,
       operadorInicioId: apontamento.operadorInicioId,
-      operadorFimId: apontamento.operadorFimId || '', // <- null vira string vazia
+      operadorFimId: apontamento.operadorFimId || '',
       dataInicio: apontamento.dataInicio.slice(0, 16),
       dataFim: apontamento.dataFim.slice(0, 16),
       status: apontamento.status,
@@ -363,8 +397,10 @@ export default function ApontamentosPage() {
       estagioId: apontamento.estagioId,
       metragemProcessada: apontamento.metragemProcessada,
       isReprocesso: apontamento.isReprocesso || false,
-      motivoParadaId: apontamento.motivoParadaId || '', // <- null vira string vazia
+      motivoParadaId: apontamento.motivoParadaId || '',
     };
+    
+    console.log('Dados preparados para edição:', dados);
     
     setSelectedApontamento(apontamento);
     setFormData(dados);
@@ -375,7 +411,11 @@ export default function ApontamentosPage() {
   const handleNovoApontamento = () => {
     setEditMode(false);
     setSelectedApontamento(null);
-    setFormData({ tipo: 'PRODUCAO' });
+    setFormData({ 
+      tipo: 'PRODUCAO',
+      status: 'EM_ANDAMENTO',
+      isReprocesso: false 
+    });
     setModalOpen(true);
   };
 
@@ -545,6 +585,7 @@ export default function ApontamentosPage() {
         }}
       />
 
+      {/* Modal de Detalhes */}
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -618,6 +659,7 @@ export default function ApontamentosPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Modal de Filtros */}
       <Dialog open={filtrosOpen} onOpenChange={setFiltrosOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -775,6 +817,7 @@ export default function ApontamentosPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Modal de Criação/Edição */}
       <FormModal
         open={modalOpen}
         onClose={() => {
