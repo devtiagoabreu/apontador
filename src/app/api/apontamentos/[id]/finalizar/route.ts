@@ -3,14 +3,15 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { apontamentos } from '@/lib/db/schema/apontamentos';
-import { ops } from '@/lib/db/schema/ops';
 import { maquinas } from '@/lib/db/schema/maquinas';
-import { estagios } from '@/lib/db/schema/estagios';
-import { eq, and, sql } from 'drizzle-orm';
+import { ops } from '@/lib/db/schema/ops';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 const finalizarSchema = z.object({
-  metragem: z.number().positive('Metragem deve ser positiva'),
+  dataFim: z.string().datetime().optional(),
+  metragemProcessada: z.number().optional(),
+  observacoes: z.string().optional(),
 });
 
 export async function POST(
@@ -26,6 +27,7 @@ export async function POST(
 
     const body = await request.json();
     const validated = finalizarSchema.parse(body);
+    const agora = new Date();
 
     // Buscar apontamento
     const apontamento = await db.query.apontamentos.findFirst({
@@ -39,96 +41,88 @@ export async function POST(
       );
     }
 
-    if (apontamento.status !== 'EM_ANDAMENTO') {
-      return NextResponse.json(
-        { error: 'Apontamento não está em andamento' },
-        { status: 400 }
-      );
-    }
+    // Se for uma PARADA, precisamos saber se tem OP vinculada
+    if (apontamento.tipo === 'PARADA') {
+      await db.transaction(async (tx) => {
+        // Finalizar a parada
+        await tx
+          .update(apontamentos)
+          .set({
+            dataFim: validated.dataFim ? new Date(validated.dataFim) : agora,
+            status: 'CONCLUIDO',
+            observacoes: validated.observacoes || apontamento.observacoes,
+            updatedAt: agora,
+          })
+          .where(eq(apontamentos.id, params.id));
 
-    // Buscar OP
-    const op = await db.query.ops.findFirst({
-      where: eq(ops.op, apontamento.opId),
-    });
-
-    if (!op) {
-      return NextResponse.json({ error: 'OP não encontrada' }, { status: 404 });
-    }
-
-    // Buscar máquina
-    const maquina = await db.query.maquinas.findFirst({
-      where: eq(maquinas.id, apontamento.maquinaId),
-    });
-
-    if (!maquina) {
-      return NextResponse.json({ error: 'Máquina não encontrada' }, { status: 404 });
-    }
-
-    const agora = new Date();
-
-    // Iniciar transação
-    await db.transaction(async (tx) => {
-      // Atualizar apontamento
-      await tx
-        .update(apontamentos)
-        .set({
-          dataFim: agora,
-          metragemProcessada: validated.metragem.toString(),
-          operadorFimId: session.user.id,
-          status: 'CONCLUIDO',
-          updatedAt: agora,
-        })
-        .where(eq(apontamentos.id, params.id));
-
-      // Verificar se é o último estágio (Revisão)
-      const ultimoEstagio = await tx.query.estagios.findFirst({
-        where: eq(estagios.nome, 'REVISÃO'),
+        // Decidir novo status da máquina baseado se tem OP vinculada
+        if (apontamento.opId) {
+          // Tem OP vinculada - volta para EM_PROCESSO
+          await tx
+            .update(maquinas)
+            .set({
+              status: 'EM_PROCESSO',
+              updatedAt: agora,
+            })
+            .where(eq(maquinas.id, apontamento.maquinaId));
+        } else {
+          // Não tem OP - volta para DISPONIVEL
+          await tx
+            .update(maquinas)
+            .set({
+              status: 'DISPONIVEL',
+              updatedAt: agora,
+            })
+            .where(eq(maquinas.id, apontamento.maquinaId));
+        }
       });
 
-      if (op.codEstagioAtual === ultimoEstagio?.codigo) {
-        // É o último estágio - finalizar OP
+      return NextResponse.json({ success: true, tipo: 'PARADA' });
+    }
+
+    // Se for PRODUÇÃO
+    if (apontamento.tipo === 'PRODUCAO') {
+      await db.transaction(async (tx) => {
+        // Finalizar apontamento de produção
         await tx
-          .update(ops)
+          .update(apontamentos)
           .set({
-            qtdeProduzida: validated.metragem.toString(),
-            status: 'FINALIZADA',
-            codMaquinaAtual: '00',
-            maquinaAtual: 'NENHUMA',
-            codEstagioAtual: '99',
-            estagioAtual: 'FINALIZADA',
-            dataUltimoApontamento: agora,
+            dataFim: validated.dataFim ? new Date(validated.dataFim) : agora,
+            metragemProcessada: validated.metragemProcessada?.toString(),
+            status: 'CONCLUIDO',
+            observacoes: validated.observacoes,
+            updatedAt: agora,
           })
-          .where(eq(ops.op, apontamento.opId));
-      } else {
-        // Não é o último estágio - avançar para o próximo
-        const proximoEstagio = await tx.query.estagios.findFirst({
-          where: sql`${estagios.ordem} > ${op.codEstagioAtual}`,
-          orderBy: (estagios, { asc }) => [asc(estagios.ordem)],
-        });
+          .where(eq(apontamentos.id, params.id));
 
+        // Atualizar a OP com a metragem produzida
+        if (apontamento.opId) {
+          await tx
+            .update(ops)
+            .set({
+              qtdeProduzida: validated.metragemProcessada?.toString(),
+              dataUltimoApontamento: agora,
+            })
+            .where(eq(ops.op, apontamento.opId));
+        }
+
+        // Liberar a máquina
         await tx
-          .update(ops)
+          .update(maquinas)
           .set({
-            codMaquinaAtual: '00',
-            maquinaAtual: 'NENHUMA',
-            codEstagioAtual: proximoEstagio?.codigo || '00',
-            estagioAtual: proximoEstagio?.nome || 'NENHUM',
-            dataUltimoApontamento: agora,
+            status: 'DISPONIVEL',
+            updatedAt: agora,
           })
-          .where(eq(ops.op, apontamento.opId));
-      }
+          .where(eq(maquinas.id, apontamento.maquinaId));
+      });
 
-      // Liberar máquina
-      await tx
-        .update(maquinas)
-        .set({
-          status: 'DISPONIVEL',
-          updatedAt: agora,
-        })
-        .where(eq(maquinas.id, apontamento.maquinaId));
-    });
+      return NextResponse.json({ success: true, tipo: 'PRODUCAO' });
+    }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json(
+      { error: 'Tipo de apontamento inválido' },
+      { status: 400 }
+    );
 
   } catch (error) {
     console.error('Erro ao finalizar apontamento:', error);

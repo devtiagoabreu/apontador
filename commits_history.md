@@ -131,3 +131,11 @@
 
 ## 📋 COMMIT 14: Adicionar flag isReprocesso e vincular OP nas paradas
 
+✅ migrations/run-apontamentos-migration.ts	Adiciona coluna is_reprocesso
+✅ schema/apontamentos.ts	Schema atualizado com novo campo
+✅ api/paradas/route.ts	API de paradas com OP opcional
+✅ api/paradas/[id]/finalizar/route.ts	Finalizar parada (volta status correto)
+✅ apontamento/iniciar/page.tsx	Mobile com checkbox de reprocesso
+✅ dashboard/kanban/page.tsx	Kanban com 2 modais (finalizar + iniciar)
+✅ api/ops/[id]/mover/route.ts	API de mover com flag reprocesso
+https://chat.deepseek.com/share/i76mazgjla0gb74ric
