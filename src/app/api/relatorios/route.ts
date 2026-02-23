@@ -7,7 +7,7 @@ import { ops } from '@/lib/db/schema/ops';
 import { maquinas } from '@/lib/db/schema/maquinas';
 import { usuarios } from '@/lib/db/schema/usuarios';
 import { motivosParada } from '@/lib/db/schema/motivos-parada';
-import { sql, and, gte, lte, eq } from 'drizzle-orm'; // ADICIONAR eq AQUI
+import { sql, and, gte, lte, eq } from 'drizzle-orm';
 
 export async function GET(request: Request) {
   try {
@@ -53,6 +53,7 @@ export async function GET(request: Request) {
             and(
               gte(apontamentos.dataFim, dataInicio),
               lte(apontamentos.dataFim, dataFim),
+              eq(apontamentos.tipo, 'PRODUCAO'),
               eq(apontamentos.status, 'CONCLUIDO')
             )
           )
@@ -60,20 +61,21 @@ export async function GET(request: Request) {
         break;
 
       case 'paradas':
+        // Calcular duração da parada (dataFim - dataInicio)
         dados = await db
           .select({
             motivo: motivosParada.descricao,
             quantidade: sql<number>`COUNT(*)`,
-            minutos: sql<number>`SUM(EXTRACT(EPOCH FROM (${apontamentos.fimParada} - ${apontamentos.inicioParada}))/60)`,
+            minutos: sql<number>`SUM(EXTRACT(EPOCH FROM (${apontamentos.dataFim} - ${apontamentos.dataInicio}))/60)`,
           })
           .from(apontamentos)
           .leftJoin(motivosParada, eq(apontamentos.motivoParadaId, motivosParada.id))
           .where(
             and(
-              gte(apontamentos.inicioParada, dataInicio),
-              lte(apontamentos.fimParada, dataFim),
-              sql`${apontamentos.inicioParada} IS NOT NULL`,
-              sql`${apontamentos.fimParada} IS NOT NULL`
+              gte(apontamentos.dataInicio, dataInicio),
+              lte(apontamentos.dataFim, dataFim),
+              eq(apontamentos.tipo, 'PARADA'),
+              eq(apontamentos.status, 'CONCLUIDO')
             )
           )
           .groupBy(motivosParada.descricao);
@@ -95,6 +97,7 @@ export async function GET(request: Request) {
             and(
               gte(apontamentos.dataFim, dataInicio),
               lte(apontamentos.dataFim, dataFim),
+              eq(apontamentos.tipo, 'PRODUCAO'),
               eq(apontamentos.status, 'CONCLUIDO')
             )
           )
@@ -107,9 +110,18 @@ export async function GET(request: Request) {
             nome: maquinas.nome,
             codigo: maquinas.codigo,
             totalMetragem: sql<number>`SUM(${apontamentos.metragemProcessada})`,
-            tempoProducao: sql<number>`SUM(EXTRACT(EPOCH FROM (${apontamentos.dataFim} - ${apontamentos.dataInicio}))/60)`,
-            tempoParada: sql<number>`SUM(EXTRACT(EPOCH FROM (${apontamentos.fimParada} - ${apontamentos.inicioParada}))/60)`,
-            disponibilidade: sql<number>`100 * (1 - (SUM(EXTRACT(EPOCH FROM (${apontamentos.fimParada} - ${apontamentos.inicioParada}))/60) / NULLIF(SUM(EXTRACT(EPOCH FROM (${apontamentos.dataFim} - ${apontamentos.dataInicio}))/60), 0)))`,
+            tempoProducao: sql<number>`SUM(CASE WHEN ${apontamentos.tipo} = 'PRODUCAO' THEN EXTRACT(EPOCH FROM (${apontamentos.dataFim} - ${apontamentos.dataInicio}))/60 ELSE 0 END)`,
+            tempoParada: sql<number>`SUM(CASE WHEN ${apontamentos.tipo} = 'PARADA' THEN EXTRACT(EPOCH FROM (${apontamentos.dataFim} - ${apontamentos.dataInicio}))/60 ELSE 0 END)`,
+            disponibilidade: sql<number>`
+              100 * (1 - (
+                SUM(CASE WHEN ${apontamentos.tipo} = 'PARADA' THEN EXTRACT(EPOCH FROM (${apontamentos.dataFim} - ${apontamentos.dataInicio}))/60 ELSE 0 END) 
+                / 
+                NULLIF(
+                  SUM(EXTRACT(EPOCH FROM (${apontamentos.dataFim} - ${apontamentos.dataInicio}))/60), 
+                  0
+                )
+              ))
+            `,
           })
           .from(apontamentos)
           .leftJoin(maquinas, eq(apontamentos.maquinaId, maquinas.id))
