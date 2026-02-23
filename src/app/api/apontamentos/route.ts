@@ -11,6 +11,7 @@ import { estagios } from '@/lib/db/schema/estagios';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 
+// Schema mais flexível para debug
 const apontamentoSchema = z.object({
   tipo: z.enum(['PRODUCAO', 'PARADA']),
   maquinaId: z.string().uuid(),
@@ -40,7 +41,8 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = (page - 1) * limit;
 
-    // Buscar apontamentos com joins
+    console.log(`📊 Buscando apontamentos - página ${page}, limite ${limit}`);
+
     const result = await db.execute(sql`
       SELECT 
         a.*,
@@ -67,14 +69,12 @@ export async function GET(request: Request) {
       LIMIT ${limit} OFFSET ${offset}
     `);
 
-    // Contar total
     const totalResult = await db.execute(sql`
       SELECT COUNT(*) as total FROM apontamentos
     `);
 
     const total = Number(totalResult.rows[0]?.total || 0);
 
-    // Formatar dados
     const data = result.rows.map((row: any) => ({
       id: row.id,
       tipo: row.tipo,
@@ -118,6 +118,8 @@ export async function GET(request: Request) {
       } : null
     }));
 
+    console.log(`✅ Retornando ${data.length} apontamentos`);
+
     return NextResponse.json({
       data,
       pagination: {
@@ -129,7 +131,7 @@ export async function GET(request: Request) {
     });
 
   } catch (error) {
-    console.error('Erro ao buscar apontamentos:', error);
+    console.error('❌ Erro ao buscar apontamentos:', error);
     return NextResponse.json(
       { error: 'Erro interno ao buscar apontamentos' },
       { status: 500 }
@@ -138,15 +140,25 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  console.log('📦 POST /api/apontamentos - Recebendo requisição');
+  
   try {
     const session = await getServerSession(authOptions);
     
     if (!session) {
+      console.log('❌ Não autorizado - sessão inválida');
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
+    console.log('👤 Usuário autenticado:', session.user.id);
+
     const body = await request.json();
+    console.log('📦 Dados recebidos:', JSON.stringify(body, null, 2));
+
+    // Validar dados
     const validated = apontamentoSchema.parse(body);
+    console.log('✅ Dados validados com sucesso');
+
     const agora = new Date();
 
     // Preparar dados para inserção
@@ -157,47 +169,60 @@ export async function POST(request: Request) {
       dataInicio: new Date(validated.dataInicio),
       dataFim: new Date(validated.dataFim),
       status: validated.status,
-      observacoes: validated.observacoes,
+      observacoes: validated.observacoes || null,
       createdAt: agora,
       updatedAt: agora,
     };
 
-    // Adicionar campos opcionais
+    console.log('📝 Dados base preparados');
+
+    // Adicionar campos opcionais apenas se existirem
     if (validated.operadorFimId) {
       dadosInserir.operadorFimId = validated.operadorFimId;
+      console.log('➕ operadorFimId:', validated.operadorFimId);
     }
 
     if (validated.opId) {
       dadosInserir.opId = validated.opId;
+      console.log('➕ opId:', validated.opId);
     }
 
     if (validated.estagioId) {
       dadosInserir.estagioId = validated.estagioId;
+      console.log('➕ estagioId:', validated.estagioId);
     }
 
     if (validated.metragemProcessada !== undefined) {
       dadosInserir.metragemProcessada = validated.metragemProcessada.toString();
+      console.log('➕ metragemProcessada:', validated.metragemProcessada);
     }
 
     if (validated.isReprocesso !== undefined) {
       dadosInserir.isReprocesso = validated.isReprocesso;
+      console.log('➕ isReprocesso:', validated.isReprocesso);
     }
 
     if (validated.motivoParadaId) {
       dadosInserir.motivoParadaId = validated.motivoParadaId;
+      console.log('➕ motivoParadaId:', validated.motivoParadaId);
     }
+
+    console.log('💾 Inserindo no banco:', JSON.stringify(dadosInserir, null, 2));
 
     const [novoApontamento] = await db
       .insert(apontamentos)
       .values(dadosInserir)
       .returning();
 
+    console.log('✅ Apontamento criado com sucesso:', novoApontamento.id);
+
     return NextResponse.json(novoApontamento, { status: 201 });
 
   } catch (error) {
-    console.error('Erro ao criar apontamento:', error);
+    console.error('❌ Erro detalhado:', error);
     
     if (error instanceof z.ZodError) {
+      console.error('❌ Erro de validação Zod:', error.errors);
       return NextResponse.json(
         { error: 'Dados inválidos', detalhes: error.errors },
         { status: 400 }
@@ -205,7 +230,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(
-      { error: 'Erro interno ao criar apontamento' },
+      { error: 'Erro interno ao criar apontamento', details: String(error) },
       { status: 500 }
     );
   }
