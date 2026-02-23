@@ -11,7 +11,9 @@ import { z } from 'zod';
 
 const moverSchema = z.object({
   estagioId: z.string(),
-  maquinaId: z.string().optional(),
+  maquinaId: z.string(),
+  isReprocesso: z.boolean().default(false),
+  metragemFinalizada: z.number().optional(),
 });
 
 export async function POST(
@@ -53,12 +55,21 @@ export async function POST(
       );
     }
 
-    // Se estágio destino não é parada/finalizada, precisa de máquina
-    if (validated.estagioId !== 'paradas' && 
-        validated.estagioId !== 'finalizadas' && 
-        !validated.maquinaId) {
+    // Buscar máquina
+    const maquina = await db.query.maquinas.findFirst({
+      where: eq(maquinas.id, validated.maquinaId),
+    });
+
+    if (!maquina) {
       return NextResponse.json(
-        { error: 'É necessário selecionar uma máquina' },
+        { error: 'Máquina não encontrada' },
+        { status: 404 }
+      );
+    }
+
+    if (maquina.status !== 'DISPONIVEL') {
+      return NextResponse.json(
+        { error: 'Máquina não está disponível' },
         { status: 400 }
       );
     }
@@ -67,7 +78,7 @@ export async function POST(
     await db.transaction(async (tx) => {
       const agora = new Date();
 
-      // Finalizar apontamento atual se existir
+      // Buscar apontamento atual em andamento
       const apontamentoAtual = await tx.query.apontamentos.findFirst({
         where: and(
           eq(apontamentos.opId, opId),
@@ -76,16 +87,18 @@ export async function POST(
       });
 
       if (apontamentoAtual) {
+        // Finalizar apontamento atual
         await tx
           .update(apontamentos)
           .set({
             dataFim: agora,
+            metragemProcessada: validated.metragemFinalizada?.toString(),
             status: 'CONCLUIDO',
             updatedAt: agora,
           })
           .where(eq(apontamentos.id, apontamentoAtual.id));
 
-        // Liberar máquina anterior (se existir)
+        // Liberar máquina anterior
         if (op.codMaquinaAtual && op.codMaquinaAtual !== '00') {
           await tx
             .update(maquinas)
@@ -97,33 +110,29 @@ export async function POST(
         }
       }
 
-      // Se for para estágio normal (com máquina)
-      if (validated.maquinaId) {
-        const maquina = await tx.query.maquinas.findFirst({
-          where: eq(maquinas.id, validated.maquinaId),
-        });
+      // Criar novo apontamento
+      await tx.insert(apontamentos).values({
+        tipo: 'PRODUCAO',
+        opId,
+        maquinaId: maquina.id,
+        estagioId: estagioDestino.id,
+        operadorInicioId: session.user.id,
+        dataInicio: agora,
+        dataFim: agora,
+        status: 'EM_ANDAMENTO',
+        isReprocesso: validated.isReprocesso,
+        createdAt: agora,
+        updatedAt: agora,
+      });
 
-        if (maquina) {
-          // Criar novo apontamento
-          await tx.insert(apontamentos).values({
-            opId,
-            maquinaId: maquina.id,
-            operadorInicioId: session.user.id,
-            dataInicio: agora,
-            dataFim: agora,
-            status: 'EM_ANDAMENTO',
-          });
-
-          // Ocupar máquina
-          await tx
-            .update(maquinas)
-            .set({
-              status: 'EM_PROCESSO',
-              updatedAt: agora,
-            })
-            .where(eq(maquinas.id, maquina.id));
-        }
-      }
+      // Ocupar nova máquina
+      await tx
+        .update(maquinas)
+        .set({
+          status: 'EM_PROCESSO',
+          updatedAt: agora,
+        })
+        .where(eq(maquinas.id, maquina.id));
 
       // Atualizar OP
       await tx
@@ -131,14 +140,9 @@ export async function POST(
         .set({
           codEstagioAtual: estagioDestino.codigo,
           estagioAtual: estagioDestino.nome,
-          codMaquinaAtual: validated.maquinaId ? 
-            (await tx.query.maquinas.findFirst({ where: eq(maquinas.id, validated.maquinaId) }))?.codigo || '00' : 
-            '00',
-          maquinaAtual: validated.maquinaId ?
-            (await tx.query.maquinas.findFirst({ where: eq(maquinas.id, validated.maquinaId) }))?.nome || 'NENHUMA' :
-            'NENHUMA',
+          codMaquinaAtual: maquina.codigo,
+          maquinaAtual: maquina.nome,
           dataUltimoApontamento: agora,
-          status: validated.estagioId === 'finalizadas' ? 'FINALIZADA' : 'EM_ANDAMENTO',
         })
         .where(eq(ops.op, opId));
     });

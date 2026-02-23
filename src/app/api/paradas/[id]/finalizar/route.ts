@@ -35,13 +35,13 @@ export async function POST(
     await db
       .update(apontamentos)
       .set({
-        fimParada: agora,
         dataFim: agora,
+        status: 'CONCLUIDO',
         updatedAt: agora,
       })
       .where(eq(apontamentos.id, params.id));
 
-    // Verificar se tem OP vinculada para decidir status da máquina
+    // Decidir novo status da máquina baseado se tem OP vinculada
     if (parada.opId) {
       // Tinha OP - volta para EM_PROCESSO
       await db

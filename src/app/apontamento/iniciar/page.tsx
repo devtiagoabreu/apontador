@@ -4,10 +4,26 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { MobileCard } from '@/components/mobile/card';
 import { ArrowLeft, Play, AlertCircle } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { Suspense } from 'react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+
+interface Estagio {
+  id: string;
+  codigo: string;
+  nome: string;
+}
 
 function IniciarContent() {
   const router = useRouter();
@@ -16,6 +32,9 @@ function IniciarContent() {
   const opNumero = searchParams.get('op');
   
   const [loading, setLoading] = useState(false);
+  const [estagios, setEstagios] = useState<Estagio[]>([]);
+  const [estagioId, setEstagioId] = useState<string>('');
+  const [isReprocesso, setIsReprocesso] = useState(false);
   const [maquina, setMaquina] = useState<any>(null);
   const [op, setOp] = useState<any>(null);
   const [carregandoDados, setCarregandoDados] = useState(true);
@@ -28,16 +47,28 @@ function IniciarContent() {
 
   async function carregarDados() {
     try {
-      const [maquinaRes, opRes] = await Promise.all([
+      const [maquinaRes, opRes, estagiosRes] = await Promise.all([
         fetch(`/api/maquinas/${machineId}`),
         fetch(`/api/ops/${opNumero}`),
+        fetch('/api/estagios?ativos=true'),
       ]);
 
       const maquinaData = await maquinaRes.json();
       const opData = await opRes.json();
+      const estagiosData = await estagiosRes.json();
 
       setMaquina(maquinaData);
       setOp(opData);
+      setEstagios(estagiosData);
+      
+      // Sugerir próximo estágio baseado na ordem
+      if (opData.codEstagioAtual && opData.codEstagioAtual !== '00') {
+        const proximoCodigo = (parseInt(opData.codEstagioAtual) + 1).toString().padStart(2, '0');
+        const proximoEstagio = estagiosData.find((e: Estagio) => e.codigo === proximoCodigo);
+        if (proximoEstagio) {
+          setEstagioId(proximoEstagio.id);
+        }
+      }
     } catch (error) {
       toast({
         title: 'Erro',
@@ -50,14 +81,27 @@ function IniciarContent() {
   }
 
   async function handleIniciar() {
+    if (!estagioId) {
+      toast({
+        title: 'Erro',
+        description: 'Selecione o estágio de produção',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await fetch('/api/apontamentos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          tipo: 'PRODUCAO',
           opId: parseInt(opNumero!),
           maquinaId: machineId,
+          estagioId,
+          isReprocesso,
+          dataInicio: new Date().toISOString(),
         }),
       });
 
@@ -69,7 +113,9 @@ function IniciarContent() {
 
       toast({
         title: 'Sucesso',
-        description: 'Produção iniciada com sucesso',
+        description: isReprocesso 
+          ? 'Reprocesso iniciado com sucesso' 
+          : 'Produção iniciada com sucesso',
       });
 
       router.push(`/apontamento/machine/${machineId}`);
@@ -149,6 +195,41 @@ function IniciarContent() {
               <p className="text-xs text-gray-400 mt-1">
                 Programado: {Number(op.qtdeProgramado).toLocaleString('pt-BR')} {op.um}
               </p>
+            </div>
+
+            {/* Seleção de Estágio */}
+            <div className="space-y-2 pt-2">
+              <Label htmlFor="estagio">Estágio de Produção *</Label>
+              <Select value={estagioId} onValueChange={setEstagioId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o estágio" />
+                </SelectTrigger>
+                <SelectContent>
+                  {estagios.map((estagio) => (
+                    <SelectItem key={estagio.id} value={estagio.id}>
+                      {estagio.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Checkbox de Reprocesso */}
+            <div className="flex items-start space-x-2 pt-2">
+              <Checkbox
+                id="reprocesso"
+                checked={isReprocesso}
+                onCheckedChange={(checked) => setIsReprocesso(checked as boolean)}
+                className="mt-1"
+              />
+              <div className="space-y-1">
+                <Label htmlFor="reprocesso" className="text-sm font-medium">
+                  🔄 É reprocesso?
+                </Label>
+                <p className="text-xs text-gray-500">
+                  Marque se este produto já passou por este estágio anteriormente
+                </p>
+              </div>
             </div>
           </div>
 

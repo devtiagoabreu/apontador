@@ -22,6 +22,20 @@ import { KanbanCard } from './components/kanban-card';
 import { MachineSelector } from './components/machine-selector';
 import { toast } from '@/components/ui/use-toast';
 import { RefreshCw, LayoutDashboard } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  RadioGroup,
+  RadioGroupItem,
+} from '@/components/ui/radio-group';
 
 interface Estagio {
   id: string;
@@ -48,14 +62,31 @@ interface OP {
   eficienciaEsperada?: number;
 }
 
+interface Maquina {
+  id: string;
+  nome: string;
+  codigo: string;
+  status: string;
+}
+
+interface Movimento {
+  op: OP;
+  estagioDestino: Estagio;
+  etapa: 'finalizar' | 'iniciar';
+  metragem?: number;
+  maquinaId?: string;
+  isReprocesso?: boolean;
+}
+
 export default function KanbanPage() {
   const [estagios, setEstagios] = useState<Estagio[]>([]);
   const [ops, setOps] = useState<OP[]>([]);
+  const [maquinasDisponiveis, setMaquinasDisponiveis] = useState<Maquina[]>([]);
   const [colunas, setColunas] = useState<any[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
-  const [movendoOP, setMovendoOP] = useState<{ op: OP; estagioDestino: Estagio } | null>(null);
-  const [machineSelectorOpen, setMachineSelectorOpen] = useState(false);
+  const [movimento, setMovimento] = useState<Movimento | null>(null);
+  const [metragemTemp, setMetragemTemp] = useState<number>(0);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -133,6 +164,16 @@ export default function KanbanPage() {
     }
   }
 
+  async function carregarMaquinasDisponiveis(estagioId: string) {
+    try {
+      const response = await fetch(`/api/maquinas/disponiveis?estagioId=${estagioId}`);
+      const data = await response.json();
+      setMaquinasDisponiveis(data);
+    } catch (error) {
+      console.error('Erro ao carregar máquinas:', error);
+    }
+  }
+
   function handleDragStart(event: DragStartEvent) {
     setActiveId(event.active.id as string);
   }
@@ -175,8 +216,8 @@ export default function KanbanPage() {
       return;
     }
 
-    // Se for coluna finalizadas e OP não está finalizada
-    if (colunaDestino.id === 'finalizadas' && op.status !== 'FINALIZADA' && op.status !== 'CANCELADA') {
+    // Se for coluna finalizadas
+    if (colunaDestino.id === 'finalizadas') {
       try {
         await fetch(`/api/ops/${op.op}/finalizar`, { method: 'POST' });
         toast({
@@ -197,7 +238,10 @@ export default function KanbanPage() {
     // Se for coluna paradas
     if (colunaDestino.id === 'paradas') {
       try {
-        await fetch(`/api/ops/${op.op}/parada`, { method: 'POST' });
+        await fetch(`/api/ops/${op.op}/parada`, { 
+          method: 'POST',
+          body: JSON.stringify({ opId: op.op }) // Vincula a OP!
+        });
         toast({
           title: 'Sucesso',
           description: `OP ${op.op} movida para paradas`,
@@ -216,34 +260,75 @@ export default function KanbanPage() {
     // Se for um estágio normal
     const estagioDestino = estagios.find(e => e.id === colunaDestino.id);
     if (estagioDestino) {
-      setMovendoOP({ op, estagioDestino });
-      setMachineSelectorOpen(true);
+      // PASSO 1: Abrir modal para finalizar
+      setMetragemTemp(op.qtdeCarregado || 0);
+      setMovimento({
+        op,
+        estagioDestino,
+        etapa: 'finalizar'
+      });
     }
   }
 
-  async function handleMachineSelected(maquinaId: string) {
-    if (!movendoOP) return;
+  async function handleConfirmarFinalizacao() {
+    if (!movimento) return;
 
     try {
-      const response = await fetch(`/api/ops/${movendoOP.op.op}/mover`, {
+      // Aqui você chamaria a API para finalizar o apontamento atual
+      // Por enquanto, vamos apenas avançar para o próximo passo
+      
+      // Carregar máquinas disponíveis para o próximo estágio
+      await carregarMaquinasDisponiveis(movimento.estagioDestino.id);
+      
+      // PASSO 2: Avançar para modal de iniciar
+      setMovimento({
+        ...movimento,
+        etapa: 'iniciar',
+        metragem: metragemTemp
+      });
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: 'Erro ao finalizar estágio',
+        variant: 'destructive',
+      });
+    }
+  }
+
+  async function handleConfirmarInicio() {
+    if (!movimento || !movimento.maquinaId) {
+      toast({
+        title: 'Erro',
+        description: 'Selecione uma máquina',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      // Chamar API para mover a OP (finaliza atual e inicia nova)
+      const response = await fetch(`/api/ops/${movimento.op.op}/mover`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          estagioId: movendoOP.estagioDestino.id,
-          maquinaId,
+          estagioId: movimento.estagioDestino.id,
+          maquinaId: movimento.maquinaId,
+          isReprocesso: movimento.isReprocesso || false,
+          metragemFinalizada: movimento.metragem
         }),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error);
+        throw new Error(error.error || 'Erro ao mover OP');
       }
 
       toast({
         title: 'Sucesso',
-        description: `OP ${movendoOP.op.op} movida para ${movendoOP.estagioDestino.nome}`,
+        description: `OP ${movimento.op.op} movida para ${movimento.estagioDestino.nome}`,
       });
 
+      setMovimento(null);
       await carregarDados();
     } catch (error) {
       toast({
@@ -251,76 +336,7 @@ export default function KanbanPage() {
         description: error instanceof Error ? error.message : 'Erro ao mover OP',
         variant: 'destructive',
       });
-    } finally {
-      setMachineSelectorOpen(false);
-      setMovendoOP(null);
     }
-  }
-
-  async function handleUndo(op: OP) {
-    try {
-      await fetch(`/api/ops/${op.op}/desfazer`, { method: 'POST' });
-      toast({
-        title: 'Sucesso',
-        description: 'Processo desfeito com sucesso',
-      });
-      await carregarDados();
-    } catch (error) {
-      toast({
-        title: 'Erro',
-        description: 'Erro ao desfazer processo',
-        variant: 'destructive',
-      });
-    }
-  }
-
-  async function handleCancel(op: OP) {
-    if (!confirm(`Tem certeza que deseja cancelar a OP ${op.op}?`)) return;
-    
-    try {
-      await fetch(`/api/ops/${op.op}/cancelar`, { method: 'POST' });
-      toast({
-        title: 'Sucesso',
-        description: 'OP cancelada com sucesso',
-      });
-      await carregarDados();
-    } catch (error) {
-      toast({
-        title: 'Erro',
-        description: 'Erro ao cancelar OP',
-        variant: 'destructive',
-      });
-    }
-  }
-
-  function handleLimparFinalizadas() {
-    toast({
-      title: 'Limpar Finalizadas',
-      description: 'Tem certeza? Esta ação não pode ser desfeita.',
-      action: (
-        <Button 
-          variant="destructive" 
-          onClick={async () => {
-            try {
-              await fetch('/api/ops/limpar-finalizadas', { method: 'POST' });
-              await carregarDados();
-              toast({
-                title: 'Sucesso',
-                description: 'Coluna finalizadas limpa com sucesso',
-              });
-            } catch (error) {
-              toast({
-                title: 'Erro',
-                description: 'Erro ao limpar finalizadas',
-                variant: 'destructive',
-              });
-            }
-          }}
-        >
-          Confirmar
-        </Button>
-      ),
-    });
   }
 
   if (carregando) {
@@ -358,15 +374,12 @@ export default function KanbanPage() {
               titulo={coluna.titulo}
               cor={coluna.cor}
               cards={coluna.cards}
-              onLimpar={coluna.id === 'finalizadas' ? handleLimparFinalizadas : undefined}
             >
               {coluna.cards.map((op: OP) => (
                 <KanbanCard
                   key={op.op}
                   op={op}
                   isDragging={activeId === op.op.toString()}
-                  onUndo={() => handleUndo(op)}
-                  onCancel={() => handleCancel(op)}
                 />
               ))}
             </KanbanColumn>
@@ -384,16 +397,116 @@ export default function KanbanPage() {
         </DragOverlay>
       </DndContext>
 
-      <MachineSelector
-        open={machineSelectorOpen}
-        onClose={() => {
-          setMachineSelectorOpen(false);
-          setMovendoOP(null);
-        }}
-        onConfirm={handleMachineSelected}
-        estagioId={movendoOP?.estagioDestino.id || ''}
-        estagioNome={movendoOP?.estagioDestino.nome || ''}
-      />
+      {/* MODAL 1: Finalizar estágio atual */}
+      <Dialog open={movimento?.etapa === 'finalizar'} onOpenChange={() => setMovimento(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Finalizar {movimento?.op.estagioAtual}</DialogTitle>
+            <DialogDescription>
+              Informe a metragem processada neste estágio
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <p className="text-sm font-medium">OP {movimento?.op.op}</p>
+              <p className="text-xs text-gray-500 mt-1">{movimento?.op.produto}</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="metragem">Metragem Processada (m) *</Label>
+              <Input
+                id="metragem"
+                type="number"
+                step="0.01"
+                min="0"
+                value={metragemTemp}
+                onChange={(e) => setMetragemTemp(Number(e.target.value))}
+                placeholder="0,00"
+              />
+              <p className="text-xs text-gray-500">
+                Carregado na OP: {movimento?.op.qtdeCarregado} m
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setMovimento(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmarFinalizacao}>
+              Confirmar Finalização
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL 2: Iniciar novo estágio */}
+      <Dialog open={movimento?.etapa === 'iniciar'} onOpenChange={() => setMovimento(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Iniciar {movimento?.estagioDestino.nome}</DialogTitle>
+            <DialogDescription>
+              Selecione a máquina e informe se é reprocesso
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <p className="text-sm font-medium">OP {movimento?.op.op}</p>
+              <p className="text-xs text-gray-500">{movimento?.op.produto}</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Máquina *</Label>
+              <RadioGroup 
+                value={movimento?.maquinaId} 
+                onValueChange={(value) => setMovimento(prev => prev ? {...prev, maquinaId: value} : null)}
+              >
+                <div className="space-y-2">
+                  {maquinasDisponiveis.map((maquina) => (
+                    <div key={maquina.id} className="flex items-center space-x-2 border rounded-lg p-3">
+                      <RadioGroupItem value={maquina.id} id={maquina.id} />
+                      <Label htmlFor={maquina.id} className="flex-1 cursor-pointer">
+                        <div className="font-medium">{maquina.nome}</div>
+                        <div className="text-xs text-gray-500">Código: {maquina.codigo}</div>
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </RadioGroup>
+            </div>
+
+            <div className="flex items-start space-x-2 pt-2">
+              <Checkbox
+                id="reprocesso"
+                checked={movimento?.isReprocesso || false}
+                onCheckedChange={(checked) => 
+                  setMovimento(prev => prev ? {...prev, isReprocesso: checked as boolean} : null)
+                }
+                className="mt-1"
+              />
+              <div className="space-y-1">
+                <Label htmlFor="reprocesso" className="text-sm font-medium">
+                  🔄 É reprocesso?
+                </Label>
+                <p className="text-xs text-gray-500">
+                  Marque se este produto já passou por este estágio
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setMovimento(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmarInicio}>
+              Iniciar Produção
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

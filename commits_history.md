@@ -118,7 +118,7 @@
 ✅ Validações	Campos obrigatórios e tipos
 
 
-## 📋 Commit: Tela de Apontamentos --> feat(apontamentos): adicionar tela completa de gerenciamento de apontamentos 
+## 📋 Commit 13: Tela de Apontamentos --> feat(apontamentos): adicionar tela completa de gerenciamento de apontamentos 
 
 ✅ Lista completa:	Todos os apontamentos com paginação
 ✅ Filtros	Por: OP, máquina, operador, data, status
@@ -128,3 +128,6 @@
 ✅ Visualizar:	Detalhes completos do apontamento
 ✅ Relações:	Mostra OP, máquina, operadores
 ✅ Paradas:	Registro de motivos de parada
+
+## 📋 COMMIT 14: Adicionar flag isReprocesso e vincular OP nas paradas
+
