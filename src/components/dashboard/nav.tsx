@@ -89,6 +89,11 @@ const navItems = [
     href: '/dashboard/kanban',
     icon: LayoutDashboard, // ou um ícone específico
   },
+  {
+    title: 'Teste API',
+    href: '/teste-api',
+    icon: FileText,
+  },
 ];
 
 export function DashboardNav() {
