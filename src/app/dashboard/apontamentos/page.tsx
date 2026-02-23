@@ -122,6 +122,23 @@ interface Filtros {
   status?: string;
 }
 
+// Tipo para o formulário (sem id)
+interface FormData {
+  tipo: string;
+  maquinaId: string;
+  operadorInicioId: string;
+  operadorFimId: string;
+  dataInicio: string;
+  dataFim: string;
+  status: string;
+  observacoes: string;
+  opId: string;
+  estagioId: string;
+  metragemProcessada: string;
+  isReprocesso: string;
+  motivoParadaId: string;
+}
+
 // Colunas da tabela
 const columns = [
   { 
@@ -228,8 +245,8 @@ export default function ApontamentosPage() {
   const [selectedApontamento, setSelectedApontamento] = useState<Apontamento | null>(null);
   const [editMode, setEditMode] = useState(false);
   
-  // Form state - INICIALIZADO COM OS DADOS QUE FUNCIONAM
-  const [formData, setFormData] = useState({
+  // Form state
+  const [formData, setFormData] = useState<FormData>({
     tipo: 'PRODUCAO',
     maquinaId: '',
     operadorInicioId: '',
@@ -305,7 +322,7 @@ export default function ApontamentosPage() {
     }
   }
 
-  // FUNÇÃO DE SALVAR - USANDO EXATAMENTE O FORMATO QUE FUNCIONA
+  // FUNÇÃO DE SALVAR
   async function handleSubmit() {
     try {
       // Construir objeto no formato que funcionou na API
@@ -409,7 +426,6 @@ export default function ApontamentosPage() {
   const openEditModal = (apontamento: Apontamento) => {
     setSelectedApontamento(apontamento);
     setFormData({
-      id: apontamento.id,
       tipo: apontamento.tipo,
       maquinaId: apontamento.maquinaId,
       operadorInicioId: apontamento.operadorInicioId,
@@ -559,7 +575,7 @@ export default function ApontamentosPage() {
           </DialogHeader>
           
           <div className="space-y-4 py-4">
-            {/* Tipo - Primeiro campo */}
+            {/* Tipo */}
             <div className="space-y-2">
               <Label>Tipo</Label>
               <Select value={formData.tipo} onValueChange={(v) => setFormData({...formData, tipo: v})}>
@@ -573,7 +589,7 @@ export default function ApontamentosPage() {
               </Select>
             </div>
 
-            {/* Campos de PRODUÇÃO - no topo */}
+            {/* Campos de PRODUÇÃO */}
             {formData.tipo === 'PRODUCAO' && (
               <div className="grid grid-cols-2 gap-4 border-b pb-4">
                 <div className="space-y-2">
