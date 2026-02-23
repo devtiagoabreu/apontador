@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -17,52 +17,91 @@ import {
 export default function TesteApiPage() {
   const [endpoint, setEndpoint] = useState('/api/apontamentos');
   const [method, setMethod] = useState('POST');
-  const [requestBody, setRequestBody] = useState(`{
-  "tipo": "PRODUCAO",
-  "maquinaId": "7bf3e488-9960-4fb7-8e5f-d9ca5e22a2fc",
-  "operadorInicioId": "5ee971b6-be6b-4b1e-9313-f0abf755ba94",
-  "dataInicio": "${new Date().toISOString()}",
-  "dataFim": "${new Date().toISOString()}",
-  "status": "EM_ANDAMENTO",
-  "opId": 8209,
-  "estagioId": "id-do-estagio-aqui"
-}`);
+  const [requestBody, setRequestBody] = useState('');
   const [response, setResponse] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<number | null>(null);
+  const [estagios, setEstagios] = useState<any[]>([]);
+  const [maquinas, setMaquinas] = useState<any[]>([]);
+  const [operadores, setOperadores] = useState<any[]>([]);
 
-  const idsDisponiveis = {
-    maquinas: [
-      { id: '7bf3e488-9960-4fb7-8e5f-d9ca5e22a2fc', nome: 'JIGGER 02' },
-      { id: 'd7bcee03-4558-4274-8a13-d15f5a9f1e00', nome: 'JIGGER 01' },
-    ],
-    operadores: [
-      { id: '5ee971b6-be6b-4b1e-9313-f0abf755ba94', nome: 'DOUGLAS' },
-    ],
-    ops: [8209, 8185],
-  };
+  // IDs fixos que você forneceu
+  const estagiosFixos = [
+    { id: 'd2867968-e990-45ba-98b6-90cc160a3ad9', nome: 'PREPARAÇÃO BENEFICIAMENTO', codigo: '10' },
+    { id: '698350b5-83d0-40dc-a099-4e52f45666d8', nome: 'TINGIMENTO', codigo: '18' },
+    { id: 'c61c94c3-6362-4670-bf0f-f75fc150947b', nome: 'ALVEJAMENTO', codigo: '15' },
+    { id: 'ac2d47d0-6c3a-4318-b999-afb57f025f67', nome: 'URDIMENTO', codigo: '05' },
+    { id: '52d42555-b3af-47dd-9d26-92a05d582664', nome: 'TECELAGEM', codigo: '08' },
+  ];
 
-  const exemplos = {
-    producao: `{
-  "tipo": "PRODUCAO",
-  "maquinaId": "7bf3e488-9960-4fb7-8e5f-d9ca5e22a2fc",
-  "operadorInicioId": "5ee971b6-be6b-4b1e-9313-f0abf755ba94",
-  "dataInicio": "${new Date().toISOString()}",
-  "dataFim": "${new Date().toISOString()}",
-  "status": "EM_ANDAMENTO",
-  "opId": 8209,
-  "estagioId": "id-do-estagio-aqui"
-}`,
-    parada: `{
-  "tipo": "PARADA",
-  "maquinaId": "7bf3e488-9960-4fb7-8e5f-d9ca5e22a2fc",
-  "operadorInicioId": "5ee971b6-be6b-4b1e-9313-f0abf755ba94",
-  "dataInicio": "${new Date().toISOString()}",
-  "dataFim": "${new Date().toISOString()}",
-  "status": "EM_ANDAMENTO",
-  "motivoParadaId": "id-do-motivo-aqui"
-}`,
-  };
+  // IDs que já temos do banco
+  const maquinasFixas = [
+    { id: 'd7bcee03-4558-4274-8a13-d15f5a9f1e00', nome: 'JIGGER 01', codigo: 'JGR001' },
+    { id: '7bf3e488-9960-4fb7-8e5f-d9ca5e22a2fc', nome: 'JIGGER 02', codigo: 'JGR002' },
+  ];
+
+  const operadoresFixos = [
+    { id: '5ee971b6-be6b-4b1e-9313-f0abf755ba94', nome: 'DOUGLAS', matricula: 'OPERA001' },
+  ];
+
+  useEffect(() => {
+    carregarDados();
+  }, []);
+
+  async function carregarDados() {
+    try {
+      // Tenta carregar do banco, mas usa os fixos como fallback
+      const [estagiosRes, maquinasRes, operadoresRes] = await Promise.all([
+        fetch('/api/estagios?ativos=true').catch(() => ({ json: () => [] })),
+        fetch('/api/maquinas').catch(() => ({ json: () => [] })),
+        fetch('/api/usuarios?nivel=OPERADOR').catch(() => ({ json: () => [] })),
+      ]);
+
+      const estagiosData = await estagiosRes.json().catch(() => []);
+      const maquinasData = await maquinasRes.json().catch(() => []);
+      const operadoresData = await operadoresRes.json().catch(() => []);
+
+      // Usa dados da API se existirem, senão usa os fixos
+      setEstagios(estagiosData.length > 0 ? estagiosData : estagiosFixos);
+      setMaquinas(maquinasData.length > 0 ? maquinasData : maquinasFixas);
+      setOperadores(operadoresData.length > 0 ? operadoresData : operadoresFixos);
+
+      // Criar exemplo com dados reais
+      const estagio = estagiosData[0] || estagiosFixos[0];
+      const maquina = maquinasData[0] || maquinasFixas[0];
+      const operador = operadoresData[0] || operadoresFixos[0];
+
+      const exemplo = {
+        tipo: "PRODUCAO",
+        maquinaId: maquina.id,
+        operadorInicioId: operador.id,
+        dataInicio: new Date().toISOString(),
+        dataFim: new Date().toISOString(),
+        status: "EM_ANDAMENTO",
+        opId: 8209,
+        estagioId: estagio.id,
+      };
+      setRequestBody(JSON.stringify(exemplo, null, 2));
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+      // Fallback para dados fixos
+      setEstagios(estagiosFixos);
+      setMaquinas(maquinasFixas);
+      setOperadores(operadoresFixos);
+      
+      const exemplo = {
+        tipo: "PRODUCAO",
+        maquinaId: maquinasFixas[0].id,
+        operadorInicioId: operadoresFixos[0].id,
+        dataInicio: new Date().toISOString(),
+        dataFim: new Date().toISOString(),
+        status: "EM_ANDAMENTO",
+        opId: 8209,
+        estagioId: estagiosFixos[0].id,
+      };
+      setRequestBody(JSON.stringify(exemplo, null, 2));
+    }
+  }
 
   async function handleSubmit() {
     setLoading(true);
@@ -72,7 +111,6 @@ export default function TesteApiPage() {
     try {
       let body = requestBody;
       try {
-        // Tentar parsear para validar JSON
         JSON.parse(body);
       } catch (e) {
         setResponse({ error: 'JSON inválido', details: String(e) });
@@ -104,12 +142,43 @@ export default function TesteApiPage() {
     }
   }
 
+  const getExemploProducao = () => {
+    const estagio = estagios[0] || estagiosFixos[0];
+    const maquina = maquinas[0] || maquinasFixas[0];
+    const operador = operadores[0] || operadoresFixos[0];
+    
+    return JSON.stringify({
+      tipo: "PRODUCAO",
+      maquinaId: maquina.id,
+      operadorInicioId: operador.id,
+      dataInicio: new Date().toISOString(),
+      dataFim: new Date().toISOString(),
+      status: "EM_ANDAMENTO",
+      opId: 8209,
+      estagioId: estagio.id,
+    }, null, 2);
+  };
+
+  const getExemploParada = () => {
+    const maquina = maquinas[0] || maquinasFixas[0];
+    const operador = operadores[0] || operadoresFixos[0];
+    
+    return JSON.stringify({
+      tipo: "PARADA",
+      maquinaId: maquina.id,
+      operadorInicioId: operador.id,
+      dataInicio: new Date().toISOString(),
+      dataFim: new Date().toISOString(),
+      status: "EM_ANDAMENTO",
+      motivoParadaId: "id-do-motivo-aqui", // Você precisa adicionar motivos de parada
+    }, null, 2);
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <h1 className="text-3xl font-bold">Teste de API</h1>
 
       <div className="grid grid-cols-2 gap-6">
-        {/* Painel de controle */}
         <Card>
           <CardHeader>
             <CardTitle>Requisição</CardTitle>
@@ -121,7 +190,6 @@ export default function TesteApiPage() {
                 id="endpoint"
                 value={endpoint}
                 onChange={(e) => setEndpoint(e.target.value)}
-                placeholder="/api/apontamentos"
               />
             </div>
 
@@ -146,14 +214,14 @@ export default function TesteApiPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setRequestBody(exemplos.producao)}
+                  onClick={() => setRequestBody(getExemploProducao())}
                 >
                   Produção
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setRequestBody(exemplos.parada)}
+                  onClick={() => setRequestBody(getExemploParada())}
                 >
                   Parada
                 </Button>
@@ -177,7 +245,6 @@ export default function TesteApiPage() {
           </CardContent>
         </Card>
 
-        {/* Painel de resposta */}
         <Card>
           <CardHeader>
             <CardTitle>
@@ -203,19 +270,31 @@ export default function TesteApiPage() {
         </Card>
       </div>
 
-      {/* Informações úteis */}
+      {/* Dados do sistema */}
       <Card>
         <CardHeader>
-          <CardTitle>IDs Disponíveis</CardTitle>
+          <CardTitle>Dados do Sistema (UUIDs válidos)</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-3 gap-4">
             <div>
+              <h3 className="font-medium mb-2">Estágios</h3>
+              <ul className="space-y-1 text-sm">
+                {estagios.map((e: any) => (
+                  <li key={e.id} className="font-mono text-xs border-b pb-1">
+                    <span className="font-bold">{e.nome}</span><br />
+                    {e.id}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
               <h3 className="font-medium mb-2">Máquinas</h3>
               <ul className="space-y-1 text-sm">
-                {idsDisponiveis.maquinas.map(m => (
-                  <li key={m.id}>
-                    <span className="font-mono text-xs">{m.id}</span> - {m.nome}
+                {maquinas.map((m: any) => (
+                  <li key={m.id} className="font-mono text-xs border-b pb-1">
+                    <span className="font-bold">{m.nome} ({m.codigo})</span><br />
+                    {m.id}
                   </li>
                 ))}
               </ul>
@@ -223,18 +302,11 @@ export default function TesteApiPage() {
             <div>
               <h3 className="font-medium mb-2">Operadores</h3>
               <ul className="space-y-1 text-sm">
-                {idsDisponiveis.operadores.map(o => (
-                  <li key={o.id}>
-                    <span className="font-mono text-xs">{o.id}</span> - {o.nome}
+                {operadores.map((o: any) => (
+                  <li key={o.id} className="font-mono text-xs border-b pb-1">
+                    <span className="font-bold">{o.nome} ({o.matricula})</span><br />
+                    {o.id}
                   </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-medium mb-2">OPs</h3>
-              <ul className="space-y-1 text-sm">
-                {idsDisponiveis.ops.map(op => (
-                  <li key={op}>OP {op}</li>
                 ))}
               </ul>
             </div>
