@@ -348,21 +348,22 @@ export default function ApontamentosPage() {
   const openEditModal = (apontamento: Apontamento) => {
     console.log('Editando:', apontamento);
     
+    // CORREÇÃO: converter null para string vazia
     const dados = {
       id: apontamento.id,
       tipo: apontamento.tipo,
       maquinaId: apontamento.maquinaId,
       operadorInicioId: apontamento.operadorInicioId,
-      operadorFimId: apontamento.operadorFimId,
+      operadorFimId: apontamento.operadorFimId || '', // <- null vira string vazia
       dataInicio: apontamento.dataInicio.slice(0, 16),
       dataFim: apontamento.dataFim.slice(0, 16),
       status: apontamento.status,
-      observacoes: apontamento.observacoes,
+      observacoes: apontamento.observacoes || '',
       opId: apontamento.opId,
       estagioId: apontamento.estagioId,
       metragemProcessada: apontamento.metragemProcessada,
-      isReprocesso: apontamento.isReprocesso,
-      motivoParadaId: apontamento.motivoParadaId,
+      isReprocesso: apontamento.isReprocesso || false,
+      motivoParadaId: apontamento.motivoParadaId || '', // <- null vira string vazia
     };
     
     setSelectedApontamento(apontamento);
@@ -516,13 +517,29 @@ export default function ApontamentosPage() {
         }}
         onEdit={openEditModal}
         onDelete={async (apontamento) => {
-          if (confirm('Excluir apontamento?')) {
+          if (confirm('Tem certeza que deseja excluir este apontamento?')) {
             try {
-              await fetch(`/api/apontamentos/${apontamento.id}`, { method: 'DELETE' });
-              toast({ title: 'Sucesso', description: 'Apontamento excluído' });
+              const response = await fetch(`/api/apontamentos/${apontamento.id}`, { 
+                method: 'DELETE' 
+              });
+              
+              if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Erro ao excluir');
+              }
+              
+              toast({ 
+                title: 'Sucesso', 
+                description: 'Apontamento excluído com sucesso' 
+              });
+              
               carregarApontamentos(pagination.page);
             } catch (error) {
-              toast({ title: 'Erro', description: 'Erro ao excluir', variant: 'destructive' });
+              toast({ 
+                title: 'Erro', 
+                description: error instanceof Error ? error.message : 'Erro ao excluir', 
+                variant: 'destructive' 
+              });
             }
           }
         }}
@@ -530,13 +547,25 @@ export default function ApontamentosPage() {
 
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>Detalhes</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Detalhes do Apontamento</DialogTitle>
+          </DialogHeader>
           {selectedApontamento && (
             <div className="grid grid-cols-2 gap-4">
-              <div><p className="text-sm font-medium">Tipo</p><p>{selectedApontamento.tipo}</p></div>
-              <div><p className="text-sm font-medium">OP</p><p>{selectedApontamento.op?.op || '-'}</p></div>
-              <div><p className="text-sm font-medium">Máquina</p><p>{selectedApontamento.maquina?.nome}</p></div>
-              <div><p className="text-sm font-medium">Estágio</p>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Tipo</p>
+                <p className="text-sm">{selectedApontamento.tipo === 'PRODUCAO' ? '🔨 Produção' : '⏸️ Parada'}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">OP</p>
+                <p className="text-sm">{selectedApontamento.op?.op || '-'}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Máquina</p>
+                <p className="text-sm">{selectedApontamento.maquina?.nome} ({selectedApontamento.maquina?.codigo})</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Estágio</p>
                 {selectedApontamento.estagio ? (
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: selectedApontamento.estagio.cor }} />
@@ -544,10 +573,46 @@ export default function ApontamentosPage() {
                   </div>
                 ) : '-'}
               </div>
-              <div><p className="text-sm font-medium">Início</p><p>{formatDate(selectedApontamento.dataInicio)}</p></div>
-              <div><p className="text-sm font-medium">Fim</p><p>{formatDate(selectedApontamento.dataFim)}</p></div>
-              <div><p className="text-sm font-medium">Metragem</p><p>{selectedApontamento.metragemProcessada ? `${selectedApontamento.metragemProcessada}m` : '-'}</p></div>
-              <div><p className="text-sm font-medium">Status</p><p>{selectedApontamento.status}</p></div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Operador (Início)</p>
+                <p className="text-sm">{selectedApontamento.operadorInicio?.nome} - {selectedApontamento.operadorInicio?.matricula}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Operador (Fim)</p>
+                <p className="text-sm">{selectedApontamento.operadorFim?.nome || '-'}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Data Início</p>
+                <p className="text-sm">{formatDate(selectedApontamento.dataInicio)}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Data Fim</p>
+                <p className="text-sm">{formatDate(selectedApontamento.dataFim)}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Metragem</p>
+                <p className="text-sm">{selectedApontamento.metragemProcessada ? `${formatNumber(selectedApontamento.metragemProcessada)} m` : '-'}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Reprocesso</p>
+                <p className="text-sm">{selectedApontamento.isReprocesso ? '🔄 Sim' : '✅ Não'}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Status</p>
+                <p className="text-sm">{selectedApontamento.status}</p>
+              </div>
+              {selectedApontamento.motivoParada && (
+                <div className="col-span-2 bg-yellow-50 p-3 rounded-lg">
+                  <p className="text-sm font-medium text-yellow-700">Motivo da Parada</p>
+                  <p className="text-sm text-yellow-600">{selectedApontamento.motivoParada.descricao}</p>
+                </div>
+              )}
+              {selectedApontamento.observacoes && (
+                <div className="col-span-2">
+                  <p className="text-sm font-medium text-gray-500">Observações</p>
+                  <p className="text-sm">{selectedApontamento.observacoes}</p>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>
@@ -555,11 +620,19 @@ export default function ApontamentosPage() {
 
       <Dialog open={filtrosOpen} onOpenChange={setFiltrosOpen}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>Filtros</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Filtros</DialogTitle>
+          </DialogHeader>
           <div className="space-y-4 py-4">
-            <div><Label>Tipo</Label>
-              <Select value={filtros.tipo || ''} onValueChange={(v) => setFiltros(p => ({...p, tipo: v}))}>
-                <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+            <div className="space-y-2">
+              <Label htmlFor="filtroTipo">Tipo</Label>
+              <Select 
+                value={filtros.tipo || ''} 
+                onValueChange={(value) => setFiltros(prev => ({ ...prev, tipo: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os tipos" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Todos</SelectItem>
                   <SelectItem value="PRODUCAO">Produção</SelectItem>
@@ -567,37 +640,137 @@ export default function ApontamentosPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>OP</Label>
-              <Select value={filtros.opId || ''} onValueChange={(v) => setFiltros(p => ({...p, opId: v}))}>
-                <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
+
+            <div className="space-y-2">
+              <Label htmlFor="filtroOp">OP</Label>
+              <Select 
+                value={filtros.opId || ''} 
+                onValueChange={(value) => setFiltros(prev => ({ ...prev, opId: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todas as OPs" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Todas</SelectItem>
-                  {ops.map(op => <SelectItem key={op.op} value={op.op.toString()}>OP {op.op}</SelectItem>)}
+                  {ops.map(op => (
+                    <SelectItem key={op.op} value={op.op.toString()}>
+                      OP {op.op}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Máquina</Label>
-              <Select value={filtros.maquinaId || ''} onValueChange={(v) => setFiltros(p => ({...p, maquinaId: v}))}>
-                <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
+
+            <div className="space-y-2">
+              <Label htmlFor="filtroMaquina">Máquina</Label>
+              <Select 
+                value={filtros.maquinaId || ''} 
+                onValueChange={(value) => setFiltros(prev => ({ ...prev, maquinaId: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todas as máquinas" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Todas</SelectItem>
-                  {maquinas.map(m => <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>)}
+                  {maquinas.map(m => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.nome}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Estágio</Label>
-              <Select value={filtros.estagioId || ''} onValueChange={(v) => setFiltros(p => ({...p, estagioId: v}))}>
-                <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+
+            <div className="space-y-2">
+              <Label htmlFor="filtroEstagio">Estágio</Label>
+              <Select 
+                value={filtros.estagioId || ''} 
+                onValueChange={(value) => setFiltros(prev => ({ ...prev, estagioId: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os estágios" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Todos</SelectItem>
-                  {estagios.map(e => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}
+                  {estagios.map(e => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {e.nome}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="filtroOperador">Operador</Label>
+              <Select 
+                value={filtros.operadorId || ''} 
+                onValueChange={(value) => setFiltros(prev => ({ ...prev, operadorId: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os operadores" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Todos</SelectItem>
+                  {operadores.map(op => (
+                    <SelectItem key={op.id} value={op.id}>
+                      {op.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="filtroStatus">Status</Label>
+              <Select 
+                value={filtros.status || ''} 
+                onValueChange={(value) => setFiltros(prev => ({ ...prev, status: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="EM_ANDAMENTO">Em Andamento</SelectItem>
+                  <SelectItem value="CONCLUIDO">Concluído</SelectItem>
+                  <SelectItem value="CANCELADO">Cancelado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
+                <Label htmlFor="dataInicio">Data Início</Label>
+                <Input
+                  id="dataInicio"
+                  type="date"
+                  value={filtros.dataInicio || ''}
+                  onChange={(e) => setFiltros(prev => ({ ...prev, dataInicio: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dataFim">Data Fim</Label>
+                <Input
+                  id="dataFim"
+                  type="date"
+                  value={filtros.dataFim || ''}
+                  onChange={(e) => setFiltros(prev => ({ ...prev, dataFim: e.target.value }))}
+                />
+              </div>
+            </div>
           </div>
+
           <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => { setFiltros({}); setFiltrosOpen(false); }}>Limpar</Button>
-            <Button onClick={() => setFiltrosOpen(false)}>Aplicar</Button>
+            <Button variant="outline" onClick={() => {
+              setFiltros({});
+              setFiltrosOpen(false);
+            }}>
+              Limpar
+            </Button>
+            <Button onClick={() => setFiltrosOpen(false)}>
+              Aplicar
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
