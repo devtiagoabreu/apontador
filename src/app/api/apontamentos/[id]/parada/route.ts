@@ -8,8 +8,9 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 const paradaSchema = z.object({
-  motivoId: z.string(),
+  motivoParadaId: z.string(),
   observacoes: z.string().optional(),
+  opId: z.number().int().positive().optional(), // Para vincular OP se houver
 });
 
 export async function POST(
@@ -25,8 +26,9 @@ export async function POST(
 
     const body = await request.json();
     const validated = paradaSchema.parse(body);
+    const agora = new Date();
 
-    // Buscar apontamento
+    // Buscar apontamento atual (deve ser do tipo PRODUCAO)
     const apontamento = await db.query.apontamentos.findFirst({
       where: eq(apontamentos.id, params.id),
     });
@@ -38,6 +40,13 @@ export async function POST(
       );
     }
 
+    if (apontamento.tipo !== 'PRODUCAO') {
+      return NextResponse.json(
+        { error: 'Este apontamento não é do tipo produção' },
+        { status: 400 }
+      );
+    }
+
     if (apontamento.status !== 'EM_ANDAMENTO') {
       return NextResponse.json(
         { error: 'Apontamento não está em andamento' },
@@ -45,59 +54,44 @@ export async function POST(
       );
     }
 
-    const agora = new Date();
+    // Verificar se já existe uma parada ativa para esta máquina
+    const paradaAtiva = await db.query.apontamentos.findFirst({
+      where: eq(apontamentos.maquinaId, apontamento.maquinaId),
+      // Não podemos ter outra parada ativa na mesma máquina
+    });
 
-    // Se já tem uma parada em andamento, finalizar
-    if (apontamento.inicioParada && !apontamento.fimParada) {
-      // Finalizar parada
-      await db
-        .update(apontamentos)
-        .set({
-          fimParada: agora,
-          updatedAt: agora,
-        })
-        .where(eq(apontamentos.id, params.id));
+    // Criar um NOVO apontamento do tipo PARADA
+    const [novaParada] = await db
+      .insert(apontamentos)
+      .values({
+        tipo: 'PARADA',
+        maquinaId: apontamento.maquinaId,
+        opId: validated.opId || apontamento.opId, // Mantém a OP se houver
+        motivoParadaId: validated.motivoParadaId,
+        observacoes: validated.observacoes,
+        operadorInicioId: session.user.id,
+        dataInicio: agora,
+        dataFim: agora, // Começa e termina no mesmo momento (parada em andamento)
+        status: 'EM_ANDAMENTO',
+        createdAt: agora,
+        updatedAt: agora,
+      })
+      .returning();
 
-      // Voltar máquina para EM_PROCESSO
-      await db
-        .update(maquinas)
-        .set({
-          status: 'EM_PROCESSO',
-          updatedAt: agora,
-        })
-        .where(eq(maquinas.id, apontamento.maquinaId));
+    // Atualizar status da máquina para PARADA
+    await db
+      .update(maquinas)
+      .set({
+        status: 'PARADA',
+        updatedAt: agora,
+      })
+      .where(eq(maquinas.id, apontamento.maquinaId));
 
-      return NextResponse.json({ 
-        success: true, 
-        message: 'Parada finalizada com sucesso' 
-      });
-    } 
-    // Iniciar nova parada
-    else {
-      await db
-        .update(apontamentos)
-        .set({
-          motivoParadaId: validated.motivoId,
-          inicioParada: agora,
-          observacoes: validated.observacoes,
-          updatedAt: agora,
-        })
-        .where(eq(apontamentos.id, params.id));
-
-      // Colocar máquina em PARADA
-      await db
-        .update(maquinas)
-        .set({
-          status: 'PARADA',
-          updatedAt: agora,
-        })
-        .where(eq(maquinas.id, apontamento.maquinaId));
-
-      return NextResponse.json({ 
-        success: true, 
-        message: 'Parada registrada com sucesso' 
-      });
-    }
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Parada registrada com sucesso',
+      parada: novaParada 
+    });
 
   } catch (error) {
     console.error('Erro ao registrar parada:', error);
