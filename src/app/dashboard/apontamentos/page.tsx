@@ -31,7 +31,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 
-// Interfaces (manter iguais)
+// Interfaces
 interface Apontamento {
   id: string;
   tipo: 'PRODUCAO' | 'PARADA';
@@ -126,18 +126,16 @@ interface Filtros {
   status?: string;
 }
 
-// Schema MAIS SIMPLES e FLEXÍVEL
+// Schema simples
 const apontamentoBaseSchema = z.object({
-  tipo: z.enum(['PRODUCAO', 'PARADA']),
-  maquinaId: z.string().min(1, 'Máquina é obrigatória'),
-  operadorInicioId: z.string().min(1, 'Operador é obrigatório'),
+  tipo: z.enum(['PRODUCAO', 'PARADA']).optional(),
+  maquinaId: z.string().optional(),
+  operadorInicioId: z.string().optional(),
   operadorFimId: z.string().optional(),
-  dataInicio: z.string().min(1, 'Data início é obrigatória'),
-  dataFim: z.string().min(1, 'Data fim é obrigatória'),
-  status: z.enum(['EM_ANDAMENTO', 'CONCLUIDO', 'CANCELADO']),
+  dataInicio: z.string().optional(),
+  dataFim: z.string().optional(),
+  status: z.enum(['EM_ANDAMENTO', 'CONCLUIDO', 'CANCELADO']).optional(),
   observacoes: z.string().optional(),
-  
-  // Campos opcionais que podem ou não estar presentes
   opId: z.any().optional(),
   estagioId: z.any().optional(),
   metragemProcessada: z.any().optional(),
@@ -229,6 +227,7 @@ const columns = [
 ];
 
 export default function ApontamentosPage() {
+  // REMOVIDA a declaração duplicada - agora só tem UMA
   const [apontamentos, setApontamentos] = useState<Apontamento[]>([]);
   const [ops, setOps] = useState<OP[]>([]);
   const [maquinas, setMaquinas] = useState<Maquina[]>([]);
@@ -248,7 +247,7 @@ export default function ApontamentosPage() {
   const [filtrosOpen, setFiltrosOpen] = useState(false);
   const [selectedApontamento, setSelectedApontamento] = useState<Apontamento | null>(null);
   const [editMode, setEditMode] = useState(false);
-  const [formData, setFormData] = useState<Partial<Apontamento>>({});
+  const [formData, setFormData] = useState<any>({});
 
   useEffect(() => {
     carregarDadosIniciais();
@@ -309,73 +308,36 @@ export default function ApontamentosPage() {
     }
   }
 
-  async function handleCreateApontamento(data: any) {
+  async function handleSubmit(data: any) {
     try {
-      // Remover campos undefined
-      const cleanData = Object.fromEntries(
-        Object.entries(data).filter(([_, v]) => v !== undefined)
-      );
+      // Limpar dados undefined
+      const cleanData = JSON.parse(JSON.stringify(data));
       
-      console.log('Criando apontamento:', cleanData);
+      console.log('Enviando dados:', cleanData);
+
+      const url = editMode && selectedApontamento 
+        ? `/api/apontamentos/${selectedApontamento.id}` 
+        : '/api/apontamentos';
       
-      const response = await fetch('/api/apontamentos', {
-        method: 'POST',
+      const method = editMode ? 'PUT' : 'POST';
+      
+      const response = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cleanData),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Erro ao criar apontamento');
+        throw new Error(error.error || 'Erro ao salvar');
       }
 
       toast({
         title: 'Sucesso',
-        description: 'Apontamento criado com sucesso',
+        description: `Apontamento ${editMode ? 'atualizado' : 'criado'} com sucesso`,
       });
 
       setModalOpen(false);
-      setFormData({});
-      await carregarApontamentos(1);
-    } catch (error) {
-      console.error('Erro:', error);
-      toast({
-        title: 'Erro',
-        description: error instanceof Error ? error.message : 'Erro ao criar apontamento',
-        variant: 'destructive',
-      });
-    }
-  }
-
-  async function handleUpdateApontamento(data: any) {
-    if (!selectedApontamento) return;
-
-    try {
-      // Remover campos undefined
-      const cleanData = Object.fromEntries(
-        Object.entries(data).filter(([_, v]) => v !== undefined)
-      );
-      
-      console.log('Atualizando apontamento:', cleanData);
-      
-      const response = await fetch(`/api/apontamentos/${selectedApontamento.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(cleanData),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Erro ao atualizar apontamento');
-      }
-
-      toast({
-        title: 'Sucesso',
-        description: 'Apontamento atualizado com sucesso',
-      });
-
-      setModalOpen(false);
-      setEditMode(false);
       setSelectedApontamento(null);
       setFormData({});
       await carregarApontamentos(pagination.page);
@@ -383,71 +345,35 @@ export default function ApontamentosPage() {
       console.error('Erro:', error);
       toast({
         title: 'Erro',
-        description: error instanceof Error ? error.message : 'Erro ao atualizar apontamento',
-        variant: 'destructive',
-      });
-    }
-  }
-
-  async function handleDeleteApontamento(apontamento: Apontamento) {
-    if (!confirm(`Tem certeza que deseja excluir este apontamento?`)) return;
-
-    try {
-      const response = await fetch(`/api/apontamentos/${apontamento.id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Erro ao excluir apontamento');
-      }
-
-      toast({
-        title: 'Sucesso',
-        description: 'Apontamento excluído com sucesso',
-      });
-
-      await carregarApontamentos(pagination.page);
-    } catch (error) {
-      toast({
-        title: 'Erro',
-        description: error instanceof Error ? error.message : 'Erro ao excluir apontamento',
+        description: error instanceof Error ? error.message : 'Erro ao salvar',
         variant: 'destructive',
       });
     }
   }
 
   const openEditModal = (apontamento: Apontamento) => {
-    console.log('Editando apontamento:', apontamento);
+    console.log('Editando:', apontamento);
     
-    const formDataPreparado: any = {
+    // Copiar dados diretamente
+    const dados = {
+      id: apontamento.id,
       tipo: apontamento.tipo,
       maquinaId: apontamento.maquinaId,
       operadorInicioId: apontamento.operadorInicioId,
+      operadorFimId: apontamento.operadorFimId,
       dataInicio: apontamento.dataInicio.slice(0, 16),
       dataFim: apontamento.dataFim.slice(0, 16),
       status: apontamento.status,
-      observacoes: apontamento.observacoes || '',
+      observacoes: apontamento.observacoes,
+      opId: apontamento.opId,
+      estagioId: apontamento.estagioId,
+      metragemProcessada: apontamento.metragemProcessada,
+      isReprocesso: apontamento.isReprocesso,
+      motivoParadaId: apontamento.motivoParadaId,
     };
-
-    if (apontamento.operadorFimId) {
-      formDataPreparado.operadorFimId = apontamento.operadorFimId;
-    }
-
-    if (apontamento.tipo === 'PRODUCAO') {
-      if (apontamento.opId) formDataPreparado.opId = apontamento.opId;
-      if (apontamento.estagioId) formDataPreparado.estagioId = apontamento.estagioId;
-      if (apontamento.metragemProcessada) formDataPreparado.metragemProcessada = apontamento.metragemProcessada;
-      formDataPreparado.isReprocesso = apontamento.isReprocesso || false;
-    } else if (apontamento.tipo === 'PARADA') {
-      if (apontamento.motivoParadaId) formDataPreparado.motivoParadaId = apontamento.motivoParadaId;
-      if (apontamento.opId) formDataPreparado.opId = apontamento.opId;
-    }
-
-    console.log('Dados preparados:', formDataPreparado);
     
     setSelectedApontamento(apontamento);
-    setFormData(formDataPreparado);
+    setFormData(dados);
     setEditMode(true);
     setModalOpen(true);
   };
@@ -455,26 +381,21 @@ export default function ApontamentosPage() {
   const handleNovoApontamento = () => {
     setEditMode(false);
     setSelectedApontamento(null);
-    setFormData({ 
-      tipo: 'PRODUCAO',
-      status: 'EM_ANDAMENTO',
-      isReprocesso: false 
-    });
+    setFormData({ tipo: 'PRODUCAO' });
     setModalOpen(true);
   };
 
-  // Construir campos do formulário
+  // Construir campos baseado no tipo
   const getFormFields = () => {
-    const tipoAtual = formData.tipo;
-    console.log('Renderizando campos para tipo:', tipoAtual);
-
+    const tipo = formData?.tipo;
+    
     // Campos base
-    const baseFields = [
+    const fields = [
       { 
         name: 'tipo', 
         label: 'Tipo', 
         type: 'select' as const, 
-        required: true,
+        required: false,
         options: [
           { value: 'PRODUCAO', label: 'Produção' },
           { value: 'PARADA', label: 'Parada' },
@@ -484,85 +405,85 @@ export default function ApontamentosPage() {
         name: 'maquinaId', 
         label: 'Máquina', 
         type: 'select' as const, 
-        required: true,
+        required: false,
         options: maquinas.map(m => ({ value: m.id, label: `${m.codigo} - ${m.nome}` }))
       },
       { 
         name: 'operadorInicioId', 
         label: 'Operador (Início)', 
         type: 'select' as const, 
-        required: true,
+        required: false,
         options: operadores.map(op => ({ value: op.id, label: `${op.matricula} - ${op.nome}` }))
       },
       { 
         name: 'operadorFimId', 
         label: 'Operador (Fim)', 
         type: 'select' as const, 
+        required: false,
         options: operadores.map(op => ({ value: op.id, label: `${op.matricula} - ${op.nome}` }))
       },
-      { name: 'dataInicio', label: 'Data Início', type: 'datetime-local' as const, required: true },
-      { name: 'dataFim', label: 'Data Fim', type: 'datetime-local' as const, required: true },
+      { name: 'dataInicio', label: 'Data Início', type: 'datetime-local' as const, required: false },
+      { name: 'dataFim', label: 'Data Fim', type: 'datetime-local' as const, required: false },
       { 
         name: 'status', 
         label: 'Status', 
         type: 'select' as const,
+        required: false,
         options: [
           { value: 'EM_ANDAMENTO', label: 'Em Andamento' },
           { value: 'CONCLUIDO', label: 'Concluído' },
           { value: 'CANCELADO', label: 'Cancelado' },
         ]
       },
-      { name: 'observacoes', label: 'Observações', type: 'textarea' as const },
+      { name: 'observacoes', label: 'Observações', type: 'textarea' as const, required: false },
     ];
 
     // Se for produção, adiciona campos específicos
-    if (tipoAtual === 'PRODUCAO') {
-      return [
-        ...baseFields,
+    if (tipo === 'PRODUCAO') {
+      fields.push(
         { 
           name: 'opId', 
           label: 'OP', 
           type: 'select' as const, 
-          required: true,
+          required: false,
           options: ops.map(op => ({ value: op.op.toString(), label: `OP ${op.op} - ${op.produto.substring(0, 30)}` }))
         },
         { 
           name: 'estagioId', 
           label: 'Estágio', 
           type: 'select' as const, 
-          required: true,
+          required: false,
           options: estagios.map(e => ({ value: e.id, label: e.nome }))
         },
-        { name: 'metragemProcessada', label: 'Metragem Processada', type: 'number' as const },
-        { name: 'isReprocesso', label: 'É Reprocesso?', type: 'switch' as const },
-      ];
+        { name: 'metragemProcessada', label: 'Metragem Processada', type: 'number' as const, required: false },
+        { name: 'isReprocesso', label: 'É Reprocesso?', type: 'switch' as const, required: false }
+      );
     }
 
     // Se for parada, adiciona campos específicos
-    if (tipoAtual === 'PARADA') {
-      return [
-        ...baseFields,
+    if (tipo === 'PARADA') {
+      fields.push(
         { 
           name: 'motivoParadaId', 
           label: 'Motivo de Parada', 
           type: 'select' as const, 
-          required: true,
+          required: false,
           options: motivosParada.map(m => ({ value: m.id, label: `${m.codigo} - ${m.descricao}` }))
         },
         { 
           name: 'opId', 
           label: 'OP Vinculada (opcional)', 
           type: 'select' as const, 
+          required: false,
           options: [
             { value: '', label: 'Nenhuma' },
             ...ops.map(op => ({ value: op.op.toString(), label: `OP ${op.op} - ${op.produto.substring(0, 30)}` }))
           ]
-        },
-      ];
+        }
+      );
     }
 
-    // Se não tiver tipo definido, retorna só os campos base
-    return baseFields;
+    return fields;
   };
 
   return (
@@ -570,27 +491,14 @@ export default function ApontamentosPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Apontamentos</h1>
         <div className="flex gap-2">
-          <Button 
-            variant="outline"
-            onClick={() => setFiltrosOpen(true)}
-          >
-            <Filter className="mr-2 h-4 w-4" />
-            Filtros
+          <Button variant="outline" onClick={() => setFiltrosOpen(true)}>
+            <Filter className="mr-2 h-4 w-4" /> Filtros
           </Button>
-          <Button 
-            variant="outline"
-            onClick={handleNovoApontamento}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Apontamento
+          <Button variant="outline" onClick={handleNovoApontamento}>
+            <Plus className="mr-2 h-4 w-4" /> Novo Apontamento
           </Button>
-          <Button 
-            variant="outline"
-            onClick={() => carregarApontamentos(1)} 
-            disabled={loading}
-          >
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Atualizar
+          <Button variant="outline" onClick={() => carregarApontamentos(1)} disabled={loading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Atualizar
           </Button>
         </div>
       </div>
@@ -599,27 +507,12 @@ export default function ApontamentosPage() {
         <div className="text-sm text-gray-500">
           Mostrando {apontamentos.length} de {pagination.total} apontamentos
         </div>
-        
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => carregarApontamentos(pagination.page - 1)}
-            disabled={pagination.page <= 1 || loading}
-          >
+          <Button variant="outline" size="sm" onClick={() => carregarApontamentos(pagination.page - 1)} disabled={pagination.page <= 1 || loading}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          
-          <span className="text-sm">
-            Página {pagination.page} de {pagination.totalPages}
-          </span>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => carregarApontamentos(pagination.page + 1)}
-            disabled={pagination.page >= pagination.totalPages || loading}
-          >
+          <span className="text-sm">Página {pagination.page} de {pagination.totalPages}</span>
+          <Button variant="outline" size="sm" onClick={() => carregarApontamentos(pagination.page + 1)} disabled={pagination.page >= pagination.totalPages || loading}>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
@@ -633,85 +526,40 @@ export default function ApontamentosPage() {
           setDetailsOpen(true);
         }}
         onEdit={openEditModal}
-        onDelete={handleDeleteApontamento}
+        onDelete={async (apontamento) => {
+          if (confirm('Excluir apontamento?')) {
+            try {
+              await fetch(`/api/apontamentos/${apontamento.id}`, { method: 'DELETE' });
+              toast({ title: 'Sucesso', description: 'Apontamento excluído' });
+              carregarApontamentos(pagination.page);
+            } catch (error) {
+              toast({ title: 'Erro', description: 'Erro ao excluir', variant: 'destructive' });
+            }
+          }
+        }}
       />
 
       {/* Modal de Detalhes */}
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Detalhes do Apontamento</DialogTitle>
-          </DialogHeader>
-          
+          <DialogHeader><DialogTitle>Detalhes</DialogTitle></DialogHeader>
           {selectedApontamento && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Tipo</p>
-                  <p className="text-sm">{selectedApontamento.tipo === 'PRODUCAO' ? '🔨 Produção' : '⏸️ Parada'}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">OP</p>
-                  <p className="text-sm">{selectedApontamento.op ? `OP ${selectedApontamento.op.op}` : '-'}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Máquina</p>
-                  <p className="text-sm">{selectedApontamento.maquina?.nome} ({selectedApontamento.maquina?.codigo})</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Estágio</p>
-                  {selectedApontamento.estagio ? (
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: selectedApontamento.estagio.cor }} />
-                      <p className="text-sm">{selectedApontamento.estagio.nome}</p>
-                    </div>
-                  ) : (
-                    <p className="text-sm">-</p>
-                  )}
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Operador (Início)</p>
-                  <p className="text-sm">{selectedApontamento.operadorInicio?.nome} - {selectedApontamento.operadorInicio?.matricula}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Operador (Fim)</p>
-                  <p className="text-sm">{selectedApontamento.operadorFim?.nome || '-'}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Data Início</p>
-                  <p className="text-sm">{formatDate(selectedApontamento.dataInicio)}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Data Fim</p>
-                  <p className="text-sm">{formatDate(selectedApontamento.dataFim)}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Metragem</p>
-                  <p className="text-sm">{selectedApontamento.metragemProcessada ? `${formatNumber(selectedApontamento.metragemProcessada)} m` : '-'}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Reprocesso</p>
-                  <p className="text-sm">{selectedApontamento.isReprocesso ? '🔄 Sim' : '✅ Não'}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Status</p>
-                  <p className="text-sm">{selectedApontamento.status}</p>
-                </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div><p className="text-sm font-medium">Tipo</p><p>{selectedApontamento.tipo}</p></div>
+              <div><p className="text-sm font-medium">OP</p><p>{selectedApontamento.op?.op || '-'}</p></div>
+              <div><p className="text-sm font-medium">Máquina</p><p>{selectedApontamento.maquina?.nome}</p></div>
+              <div><p className="text-sm font-medium">Estágio</p>
+                {selectedApontamento.estagio ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: selectedApontamento.estagio.cor }} />
+                    <span>{selectedApontamento.estagio.nome}</span>
+                  </div>
+                ) : '-'}
               </div>
-
-              {selectedApontamento.motivoParada && (
-                <div className="bg-yellow-50 p-3 rounded-lg">
-                  <p className="text-sm font-medium text-yellow-700">Motivo da Parada</p>
-                  <p className="text-sm text-yellow-600">{selectedApontamento.motivoParada.descricao}</p>
-                </div>
-              )}
-
-              {selectedApontamento.observacoes && (
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Observações</p>
-                  <p className="text-sm">{selectedApontamento.observacoes}</p>
-                </div>
-              )}
+              <div><p className="text-sm font-medium">Início</p><p>{formatDate(selectedApontamento.dataInicio)}</p></div>
+              <div><p className="text-sm font-medium">Fim</p><p>{formatDate(selectedApontamento.dataFim)}</p></div>
+              <div><p className="text-sm font-medium">Metragem</p><p>{selectedApontamento.metragemProcessada ? `${selectedApontamento.metragemProcessada}m` : '-'}</p></div>
+              <div><p className="text-sm font-medium">Status</p><p>{selectedApontamento.status}</p></div>
             </div>
           )}
         </DialogContent>
@@ -720,20 +568,11 @@ export default function ApontamentosPage() {
       {/* Modal de Filtros */}
       <Dialog open={filtrosOpen} onOpenChange={setFiltrosOpen}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Filtros</DialogTitle>
-          </DialogHeader>
-
+          <DialogHeader><DialogTitle>Filtros</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="filtroTipo">Tipo</Label>
-              <Select 
-                value={filtros.tipo || ''} 
-                onValueChange={(value) => setFiltros(prev => ({ ...prev, tipo: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos os tipos" />
-                </SelectTrigger>
+            <div><Label>Tipo</Label>
+              <Select value={filtros.tipo || ''} onValueChange={(v) => setFiltros(p => ({...p, tipo: v}))}>
+                <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Todos</SelectItem>
                   <SelectItem value="PRODUCAO">Produção</SelectItem>
@@ -741,137 +580,37 @@ export default function ApontamentosPage() {
                 </SelectContent>
               </Select>
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="filtroOp">OP</Label>
-              <Select 
-                value={filtros.opId || ''} 
-                onValueChange={(value) => setFiltros(prev => ({ ...prev, opId: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas as OPs" />
-                </SelectTrigger>
+            <div><Label>OP</Label>
+              <Select value={filtros.opId || ''} onValueChange={(v) => setFiltros(p => ({...p, opId: v}))}>
+                <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Todas</SelectItem>
-                  {ops.map(op => (
-                    <SelectItem key={op.op} value={op.op.toString()}>
-                      OP {op.op}
-                    </SelectItem>
-                  ))}
+                  {ops.map(op => <SelectItem key={op.op} value={op.op.toString()}>OP {op.op}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="filtroMaquina">Máquina</Label>
-              <Select 
-                value={filtros.maquinaId || ''} 
-                onValueChange={(value) => setFiltros(prev => ({ ...prev, maquinaId: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas as máquinas" />
-                </SelectTrigger>
+            <div><Label>Máquina</Label>
+              <Select value={filtros.maquinaId || ''} onValueChange={(v) => setFiltros(p => ({...p, maquinaId: v}))}>
+                <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Todas</SelectItem>
-                  {maquinas.map(m => (
-                    <SelectItem key={m.id} value={m.id}>
-                      {m.nome}
-                    </SelectItem>
-                  ))}
+                  {maquinas.map(m => <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="filtroEstagio">Estágio</Label>
-              <Select 
-                value={filtros.estagioId || ''} 
-                onValueChange={(value) => setFiltros(prev => ({ ...prev, estagioId: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos os estágios" />
-                </SelectTrigger>
+            <div><Label>Estágio</Label>
+              <Select value={filtros.estagioId || ''} onValueChange={(v) => setFiltros(p => ({...p, estagioId: v}))}>
+                <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Todos</SelectItem>
-                  {estagios.map(e => (
-                    <SelectItem key={e.id} value={e.id}>
-                      {e.nome}
-                    </SelectItem>
-                  ))}
+                  {estagios.map(e => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="filtroOperador">Operador</Label>
-              <Select 
-                value={filtros.operadorId || ''} 
-                onValueChange={(value) => setFiltros(prev => ({ ...prev, operadorId: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos os operadores" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
-                  {operadores.map(op => (
-                    <SelectItem key={op.id} value={op.id}>
-                      {op.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="filtroStatus">Status</Label>
-              <Select 
-                value={filtros.status || ''} 
-                onValueChange={(value) => setFiltros(prev => ({ ...prev, status: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos os status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
-                  <SelectItem value="EM_ANDAMENTO">Em Andamento</SelectItem>
-                  <SelectItem value="CONCLUIDO">Concluído</SelectItem>
-                  <SelectItem value="CANCELADO">Cancelado</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-2">
-                <Label htmlFor="dataInicio">Data Início</Label>
-                <Input
-                  id="dataInicio"
-                  type="date"
-                  value={filtros.dataInicio || ''}
-                  onChange={(e) => setFiltros(prev => ({ ...prev, dataInicio: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dataFim">Data Fim</Label>
-                <Input
-                  id="dataFim"
-                  type="date"
-                  value={filtros.dataFim || ''}
-                  onChange={(e) => setFiltros(prev => ({ ...prev, dataFim: e.target.value }))}
-                />
-              </div>
             </div>
           </div>
-
           <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => {
-              setFiltros({});
-              setFiltrosOpen(false);
-            }}>
-              Limpar
-            </Button>
-            <Button onClick={() => setFiltrosOpen(false)}>
-              Aplicar
-            </Button>
+            <Button variant="outline" onClick={() => { setFiltros({}); setFiltrosOpen(false); }}>Limpar</Button>
+            <Button onClick={() => setFiltrosOpen(false)}>Aplicar</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -881,11 +620,10 @@ export default function ApontamentosPage() {
         open={modalOpen}
         onClose={() => {
           setModalOpen(false);
-          setEditMode(false);
           setSelectedApontamento(null);
           setFormData({});
         }}
-        onSubmit={editMode ? handleUpdateApontamento : handleCreateApontamento}
+        onSubmit={handleSubmit}
         title={editMode ? 'Editar Apontamento' : 'Novo Apontamento'}
         fields={getFormFields()}
         initialData={formData}
