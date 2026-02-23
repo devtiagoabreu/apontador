@@ -12,7 +12,7 @@ import {
   ChevronLeft, 
   ChevronRight
 } from 'lucide-react';
-import { formatDate, formatNumber } from '@/lib/utils';
+import { formatDate, formatNumber, formatDateForInput, fromInputToISO } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -306,13 +306,30 @@ export default function ApontamentosPage() {
 
   async function handleSubmit(data: any) {
     try {
-      // Garantir que todos os campos obrigatórios estão presentes
+      // Padronizar datas: sempre sem segundos
+      const agora = fromInputToISO('');
+      
+      // Processar datas do formulário
+      let dataInicio = data.dataInicio 
+        ? fromInputToISO(data.dataInicio)
+        : agora;
+        
+      let dataFim = data.dataFim 
+        ? fromInputToISO(data.dataFim)
+        : dataInicio; // Se não tiver data fim, usa a mesma data início
+
+      // Garantir que dataFim não seja menor que dataInicio
+      if (new Date(dataFim) < new Date(dataInicio)) {
+        dataFim = dataInicio;
+      }
+
+      // Construir objeto com datas padronizadas
       const dadosCompletos: any = {
         tipo: data.tipo || 'PRODUCAO',
         maquinaId: data.maquinaId,
         operadorInicioId: data.operadorInicioId,
-        dataInicio: data.dataInicio || new Date().toISOString(),
-        dataFim: data.dataFim || new Date().toISOString(),
+        dataInicio,
+        dataFim,
         status: data.status || 'EM_ANDAMENTO',
         observacoes: data.observacoes || null,
       };
@@ -323,20 +340,26 @@ export default function ApontamentosPage() {
       }
 
       if (data.tipo === 'PRODUCAO') {
-        dadosCompletos.opId = data.opId;
-        dadosCompletos.estagioId = data.estagioId;
+        if (data.opId) {
+          dadosCompletos.opId = parseInt(data.opId);
+        }
+        if (data.estagioId) {
+          dadosCompletos.estagioId = data.estagioId;
+        }
         if (data.metragemProcessada) {
-          dadosCompletos.metragemProcessada = data.metragemProcessada;
+          dadosCompletos.metragemProcessada = parseFloat(data.metragemProcessada);
         }
         if (data.isReprocesso !== undefined) {
-          dadosCompletos.isReprocesso = data.isReprocesso;
+          dadosCompletos.isReprocesso = data.isReprocesso === 'true' || data.isReprocesso === true;
         }
       }
 
       if (data.tipo === 'PARADA') {
-        dadosCompletos.motivoParadaId = data.motivoParadaId;
+        if (data.motivoParadaId) {
+          dadosCompletos.motivoParadaId = data.motivoParadaId;
+        }
         if (data.opId) {
-          dadosCompletos.opId = data.opId; // OP opcional na parada
+          dadosCompletos.opId = parseInt(data.opId);
         }
       }
 
@@ -389,14 +412,14 @@ export default function ApontamentosPage() {
       maquinaId: apontamento.maquinaId,
       operadorInicioId: apontamento.operadorInicioId,
       operadorFimId: apontamento.operadorFimId || '',
-      dataInicio: apontamento.dataInicio.slice(0, 16),
-      dataFim: apontamento.dataFim.slice(0, 16),
+      dataInicio: formatDateForInput(apontamento.dataInicio),
+      dataFim: formatDateForInput(apontamento.dataFim),
       status: apontamento.status,
       observacoes: apontamento.observacoes || '',
-      opId: apontamento.opId,
-      estagioId: apontamento.estagioId,
-      metragemProcessada: apontamento.metragemProcessada,
-      isReprocesso: apontamento.isReprocesso || false,
+      opId: apontamento.opId ? apontamento.opId.toString() : '',
+      estagioId: apontamento.estagioId || '',
+      metragemProcessada: apontamento.metragemProcessada?.toString() || '',
+      isReprocesso: apontamento.isReprocesso ? 'true' : 'false',
       motivoParadaId: apontamento.motivoParadaId || '',
     };
     
@@ -409,12 +432,16 @@ export default function ApontamentosPage() {
   };
 
   const handleNovoApontamento = () => {
+    const agora = formatDateForInput(new Date());
+    
     setEditMode(false);
     setSelectedApontamento(null);
     setFormData({ 
       tipo: 'PRODUCAO',
+      dataInicio: agora,
+      dataFim: agora,
       status: 'EM_ANDAMENTO',
-      isReprocesso: false 
+      isReprocesso: 'false'
     });
     setModalOpen(true);
   };
