@@ -256,6 +256,24 @@ export default function ApontamentosPage() {
     carregarApontamentos(1);
   }, [filtros]);
 
+  useEffect(() => {
+    // Quando o tipo muda, resetar campos específicos
+    if (formData.tipo === 'PRODUCAO') {
+      setFormData(prev => ({
+        ...prev,
+        motivoParadaId: undefined,
+      }));
+    } else if (formData.tipo === 'PARADA') {
+      setFormData(prev => ({
+        ...prev,
+        opId: undefined,
+        estagioId: undefined,
+        metragemProcessada: undefined,
+        isReprocesso: false,
+      }));
+    }
+  }, [formData.tipo]);
+
   async function carregarDadosIniciais() {
     try {
       const [opsRes, maquinasRes, operadoresRes, motivosRes, estagiosRes] = await Promise.all([
@@ -400,28 +418,59 @@ export default function ApontamentosPage() {
   }
 
   const openEditModal = (apontamento: Apontamento) => {
-    setSelectedApontamento(apontamento);
-    setFormData({
+    console.log('Editando apontamento:', apontamento);
+    
+    // Garantir que todos os campos estejam no formato correto
+    const formDataPreparado: any = {
       tipo: apontamento.tipo,
-      opId: apontamento.opId || undefined,
       maquinaId: apontamento.maquinaId,
       operadorInicioId: apontamento.operadorInicioId,
-      operadorFimId: apontamento.operadorFimId || undefined,
-      metragemProcessada: apontamento.metragemProcessada || undefined,
       dataInicio: apontamento.dataInicio.slice(0, 16),
       dataFim: apontamento.dataFim.slice(0, 16),
       status: apontamento.status,
-      motivoParadaId: apontamento.motivoParadaId || undefined,
-      observacoes: apontamento.observacoes || undefined,
-      estagioId: apontamento.estagioId || undefined,
-      isReprocesso: apontamento.isReprocesso || false,
-    });
+      observacoes: apontamento.observacoes || '',
+    };
+
+    // Campos opcionais
+    if (apontamento.operadorFimId) {
+      formDataPreparado.operadorFimId = apontamento.operadorFimId;
+    }
+
+    // Campos específicos por tipo
+    if (apontamento.tipo === 'PRODUCAO') {
+      formDataPreparado.opId = apontamento.opId;
+      formDataPreparado.estagioId = apontamento.estagioId;
+      formDataPreparado.metragemProcessada = apontamento.metragemProcessada;
+      formDataPreparado.isReprocesso = apontamento.isReprocesso;
+    } else if (apontamento.tipo === 'PARADA') {
+      formDataPreparado.motivoParadaId = apontamento.motivoParadaId;
+      if (apontamento.opId) {
+        formDataPreparado.opId = apontamento.opId;
+      }
+    }
+
+    console.log('Dados preparados:', formDataPreparado);
+    
+    setSelectedApontamento(apontamento);
+    setFormData(formDataPreparado);
     setEditMode(true);
+    setModalOpen(true);
+  };
+
+  const handleNovoApontamento = () => {
+    setEditMode(false);
+    setSelectedApontamento(null);
+    setFormData({ 
+      tipo: 'PRODUCAO',
+      status: 'EM_ANDAMENTO',
+      isReprocesso: false 
+    });
     setModalOpen(true);
   };
 
   // Construir campos do formulário dinamicamente baseado no tipo
   const getFormFields = () => {
+    // Campos base (comuns a todos)
     const baseFields = [
       { 
         name: 'tipo', 
@@ -468,6 +517,11 @@ export default function ApontamentosPage() {
       { name: 'observacoes', label: 'Observações', type: 'textarea' as const },
     ];
 
+    // Se não tiver tipo selecionado, retorna só os campos base
+    if (!formData.tipo) {
+      return baseFields;
+    }
+
     // Campos específicos para PRODUÇÃO
     if (formData.tipo === 'PRODUCAO') {
       return [
@@ -506,7 +560,10 @@ export default function ApontamentosPage() {
           name: 'opId', 
           label: 'OP Vinculada (opcional)', 
           type: 'select' as const, 
-          options: ops.map(op => ({ value: op.op.toString(), label: `OP ${op.op} - ${op.produto.substring(0, 30)}` }))
+          options: [
+            { value: '', label: 'Nenhuma' },
+            ...ops.map(op => ({ value: op.op.toString(), label: `OP ${op.op} - ${op.produto.substring(0, 30)}` }))
+          ]
         },
       ];
     }
@@ -528,12 +585,7 @@ export default function ApontamentosPage() {
           </Button>
           <Button 
             variant="outline"
-            onClick={() => {
-              setEditMode(false);
-              setSelectedApontamento(null);
-              setFormData({ tipo: 'PRODUCAO' });
-              setModalOpen(true);
-            }}
+            onClick={handleNovoApontamento}
           >
             <Plus className="mr-2 h-4 w-4" />
             Novo Apontamento
