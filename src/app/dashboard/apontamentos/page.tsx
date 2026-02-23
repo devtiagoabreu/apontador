@@ -31,6 +31,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 
+// Interfaces (manter iguais)
 interface Apontamento {
   id: string;
   tipo: 'PRODUCAO' | 'PARADA';
@@ -125,7 +126,7 @@ interface Filtros {
   status?: string;
 }
 
-// Schema MAIS FLEXÍVEL para o FormModal
+// Schema MAIS SIMPLES e FLEXÍVEL
 const apontamentoBaseSchema = z.object({
   tipo: z.enum(['PRODUCAO', 'PARADA']),
   maquinaId: z.string().min(1, 'Máquina é obrigatória'),
@@ -136,14 +137,12 @@ const apontamentoBaseSchema = z.object({
   status: z.enum(['EM_ANDAMENTO', 'CONCLUIDO', 'CANCELADO']),
   observacoes: z.string().optional(),
   
-  // Campos opcionais para produção
-  opId: z.number().int().positive().optional(),
-  estagioId: z.string().optional(),
-  metragemProcessada: z.number().optional(),
-  isReprocesso: z.boolean().optional(),
-  
-  // Campos opcionais para parada
-  motivoParadaId: z.string().optional(),
+  // Campos opcionais que podem ou não estar presentes
+  opId: z.any().optional(),
+  estagioId: z.any().optional(),
+  metragemProcessada: z.any().optional(),
+  isReprocesso: z.any().optional(),
+  motivoParadaId: z.any().optional(),
 });
 
 const columns = [
@@ -259,12 +258,6 @@ export default function ApontamentosPage() {
     carregarApontamentos(1);
   }, [filtros]);
 
-  // Monitorar mudanças no tipo para debug
-  useEffect(() => {
-    console.log('Tipo atual:', formData.tipo);
-    console.log('FormData completo:', formData);
-  }, [formData]);
-
   async function carregarDadosIniciais() {
     try {
       const [opsRes, maquinasRes, operadoresRes, motivosRes, estagiosRes] = await Promise.all([
@@ -318,12 +311,17 @@ export default function ApontamentosPage() {
 
   async function handleCreateApontamento(data: any) {
     try {
-      console.log('Criando apontamento:', data);
+      // Remover campos undefined
+      const cleanData = Object.fromEntries(
+        Object.entries(data).filter(([_, v]) => v !== undefined)
+      );
+      
+      console.log('Criando apontamento:', cleanData);
       
       const response = await fetch('/api/apontamentos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(cleanData),
       });
 
       if (!response.ok) {
@@ -353,12 +351,17 @@ export default function ApontamentosPage() {
     if (!selectedApontamento) return;
 
     try {
-      console.log('Atualizando apontamento:', data);
+      // Remover campos undefined
+      const cleanData = Object.fromEntries(
+        Object.entries(data).filter(([_, v]) => v !== undefined)
+      );
+      
+      console.log('Atualizando apontamento:', cleanData);
       
       const response = await fetch(`/api/apontamentos/${selectedApontamento.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(cleanData),
       });
 
       if (!response.ok) {
@@ -431,17 +434,14 @@ export default function ApontamentosPage() {
       formDataPreparado.operadorFimId = apontamento.operadorFimId;
     }
 
-    // Campos específicos por tipo
     if (apontamento.tipo === 'PRODUCAO') {
-      formDataPreparado.opId = apontamento.opId;
-      formDataPreparado.estagioId = apontamento.estagioId;
-      formDataPreparado.metragemProcessada = apontamento.metragemProcessada;
-      formDataPreparado.isReprocesso = apontamento.isReprocesso;
+      if (apontamento.opId) formDataPreparado.opId = apontamento.opId;
+      if (apontamento.estagioId) formDataPreparado.estagioId = apontamento.estagioId;
+      if (apontamento.metragemProcessada) formDataPreparado.metragemProcessada = apontamento.metragemProcessada;
+      formDataPreparado.isReprocesso = apontamento.isReprocesso || false;
     } else if (apontamento.tipo === 'PARADA') {
-      formDataPreparado.motivoParadaId = apontamento.motivoParadaId;
-      if (apontamento.opId) {
-        formDataPreparado.opId = apontamento.opId;
-      }
+      if (apontamento.motivoParadaId) formDataPreparado.motivoParadaId = apontamento.motivoParadaId;
+      if (apontamento.opId) formDataPreparado.opId = apontamento.opId;
     }
 
     console.log('Dados preparados:', formDataPreparado);
@@ -463,9 +463,12 @@ export default function ApontamentosPage() {
     setModalOpen(true);
   };
 
-  // Construir campos do formulário dinamicamente baseado no tipo
+  // Construir campos do formulário
   const getFormFields = () => {
-    // Campos base (comuns a todos)
+    const tipoAtual = formData.tipo;
+    console.log('Renderizando campos para tipo:', tipoAtual);
+
+    // Campos base
     const baseFields = [
       { 
         name: 'tipo', 
@@ -512,9 +515,8 @@ export default function ApontamentosPage() {
       { name: 'observacoes', label: 'Observações', type: 'textarea' as const },
     ];
 
-    // FORÇAR atualização baseado no formData.tipo
-    if (formData.tipo === 'PRODUCAO') {
-      console.log('📦 Renderizando campos de PRODUÇÃO');
+    // Se for produção, adiciona campos específicos
+    if (tipoAtual === 'PRODUCAO') {
       return [
         ...baseFields,
         { 
@@ -536,8 +538,8 @@ export default function ApontamentosPage() {
       ];
     }
 
-    if (formData.tipo === 'PARADA') {
-      console.log('⏸️ Renderizando campos de PARADA');
+    // Se for parada, adiciona campos específicos
+    if (tipoAtual === 'PARADA') {
       return [
         ...baseFields,
         { 
