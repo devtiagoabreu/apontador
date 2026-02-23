@@ -29,9 +29,7 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
 
-// Interfaces
 interface Apontamento {
   id: string;
   tipo: 'PRODUCAO' | 'PARADA';
@@ -48,7 +46,6 @@ interface Apontamento {
   estagioId: string | null;
   isReprocesso: boolean;
   
-  // Relacionamentos
   op?: {
     op: number;
     produto: string;
@@ -126,7 +123,6 @@ interface Filtros {
   status?: string;
 }
 
-// Schema simples
 const apontamentoBaseSchema = z.object({
   tipo: z.enum(['PRODUCAO', 'PARADA']).optional(),
   maquinaId: z.string().optional(),
@@ -227,7 +223,6 @@ const columns = [
 ];
 
 export default function ApontamentosPage() {
-  // REMOVIDA a declaração duplicada - agora só tem UMA
   const [apontamentos, setApontamentos] = useState<Apontamento[]>([]);
   const [ops, setOps] = useState<OP[]>([]);
   const [maquinas, setMaquinas] = useState<Maquina[]>([]);
@@ -310,7 +305,6 @@ export default function ApontamentosPage() {
 
   async function handleSubmit(data: any) {
     try {
-      // Limpar dados undefined
       const cleanData = JSON.parse(JSON.stringify(data));
       
       console.log('Enviando dados:', cleanData);
@@ -354,7 +348,6 @@ export default function ApontamentosPage() {
   const openEditModal = (apontamento: Apontamento) => {
     console.log('Editando:', apontamento);
     
-    // Copiar dados diretamente
     const dados = {
       id: apontamento.id,
       tipo: apontamento.tipo,
@@ -385,16 +378,14 @@ export default function ApontamentosPage() {
     setModalOpen(true);
   };
 
-  // Construir campos baseado no tipo
   const getFormFields = () => {
     const tipo = formData?.tipo;
     
-    // Campos base
-    const fields = [
+    const fields: any[] = [
       { 
         name: 'tipo', 
         label: 'Tipo', 
-        type: 'select' as const, 
+        type: 'select', 
         required: false,
         options: [
           { value: 'PRODUCAO', label: 'Produção' },
@@ -404,30 +395,30 @@ export default function ApontamentosPage() {
       { 
         name: 'maquinaId', 
         label: 'Máquina', 
-        type: 'select' as const, 
+        type: 'select', 
         required: false,
         options: maquinas.map(m => ({ value: m.id, label: `${m.codigo} - ${m.nome}` }))
       },
       { 
         name: 'operadorInicioId', 
         label: 'Operador (Início)', 
-        type: 'select' as const, 
+        type: 'select', 
         required: false,
         options: operadores.map(op => ({ value: op.id, label: `${op.matricula} - ${op.nome}` }))
       },
       { 
         name: 'operadorFimId', 
         label: 'Operador (Fim)', 
-        type: 'select' as const, 
+        type: 'select', 
         required: false,
         options: operadores.map(op => ({ value: op.id, label: `${op.matricula} - ${op.nome}` }))
       },
-      { name: 'dataInicio', label: 'Data Início', type: 'datetime-local' as const, required: false },
-      { name: 'dataFim', label: 'Data Fim', type: 'datetime-local' as const, required: false },
+      { name: 'dataInicio', label: 'Data Início', type: 'datetime-local', required: false },
+      { name: 'dataFim', label: 'Data Fim', type: 'datetime-local', required: false },
       { 
         name: 'status', 
         label: 'Status', 
-        type: 'select' as const,
+        type: 'select',
         required: false,
         options: [
           { value: 'EM_ANDAMENTO', label: 'Em Andamento' },
@@ -435,45 +426,43 @@ export default function ApontamentosPage() {
           { value: 'CANCELADO', label: 'Cancelado' },
         ]
       },
-      { name: 'observacoes', label: 'Observações', type: 'textarea' as const, required: false },
+      { name: 'observacoes', label: 'Observações', type: 'textarea', required: false },
     ];
 
-    // Se for produção, adiciona campos específicos
     if (tipo === 'PRODUCAO') {
       fields.push(
         { 
           name: 'opId', 
           label: 'OP', 
-          type: 'select' as const, 
+          type: 'select', 
           required: false,
           options: ops.map(op => ({ value: op.op.toString(), label: `OP ${op.op} - ${op.produto.substring(0, 30)}` }))
         },
         { 
           name: 'estagioId', 
           label: 'Estágio', 
-          type: 'select' as const, 
+          type: 'select', 
           required: false,
           options: estagios.map(e => ({ value: e.id, label: e.nome }))
         },
-        { name: 'metragemProcessada', label: 'Metragem Processada', type: 'number' as const, required: false },
-        { name: 'isReprocesso', label: 'É Reprocesso?', type: 'switch' as const, required: false }
+        { name: 'metragemProcessada', label: 'Metragem Processada', type: 'number', required: false },
+        { name: 'isReprocesso', label: 'É Reprocesso?', type: 'switch', required: false }
       );
     }
 
-    // Se for parada, adiciona campos específicos
     if (tipo === 'PARADA') {
       fields.push(
         { 
           name: 'motivoParadaId', 
           label: 'Motivo de Parada', 
-          type: 'select' as const, 
+          type: 'select', 
           required: false,
           options: motivosParada.map(m => ({ value: m.id, label: `${m.codigo} - ${m.descricao}` }))
         },
         { 
           name: 'opId', 
           label: 'OP Vinculada (opcional)', 
-          type: 'select' as const, 
+          type: 'select', 
           required: false,
           options: [
             { value: '', label: 'Nenhuma' },
@@ -539,7 +528,6 @@ export default function ApontamentosPage() {
         }}
       />
 
-      {/* Modal de Detalhes */}
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>Detalhes</DialogTitle></DialogHeader>
@@ -565,7 +553,6 @@ export default function ApontamentosPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Filtros */}
       <Dialog open={filtrosOpen} onOpenChange={setFiltrosOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader><DialogTitle>Filtros</DialogTitle></DialogHeader>
@@ -615,7 +602,6 @@ export default function ApontamentosPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Criação/Edição */}
       <FormModal
         open={modalOpen}
         onClose={() => {

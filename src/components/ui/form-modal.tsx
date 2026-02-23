@@ -18,7 +18,7 @@ import { Switch } from '@/components/ui/switch';
 interface Field {
   name: string;
   label: string;
-  type: 'text' | 'number' | 'switch' | 'textarea' | 'select' | 'password' | 'color' | 'datetime-local'; // ADICIONAR AQUI
+  type: 'text' | 'number' | 'switch' | 'textarea' | 'select' | 'password' | 'color' | 'datetime-local';
   required?: boolean;
   options?: { value: string; label: string }[];
 }
@@ -134,7 +134,7 @@ export function FormModal({
                   ) : (
                     <Input
                       id={field.name}
-                      type={field.type}
+                      type={field.type === 'number' ? 'number' : field.type}
                       {...register(field.name)}
                     />
                   )}
