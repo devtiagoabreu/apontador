@@ -38,26 +38,26 @@ interface Parada {
 }
 
 interface Maquina {
-  id: string;        // ← UUID
+  id: string;
   nome: string;
   codigo: string;
   status: string;
 }
 
 interface Usuario {
-  id: string;        // ← UUID
+  id: string;
   nome: string;
   matricula: string;
 }
 
 interface MotivoParada {
-  id: string;        // ← UUID
+  id: string;
   codigo: string;
   descricao: string;
 }
 
 interface OP {
-  op: number;        // ← Número da OP (não é UUID)
+  op: number;
   produto: string;
 }
 
@@ -134,7 +134,7 @@ export default function ParadasMaquinaPage() {
   const [selectedParada, setSelectedParada] = useState<Parada | null>(null);
   const [formData, setFormData] = useState({});
 
-  // Carregar dados iniciais (TODOS OS UUIDs)
+  // Carregar dados iniciais
   useEffect(() => {
     carregarDados();
   }, []);
@@ -159,10 +159,18 @@ export default function ParadasMaquinaPage() {
       const motivosData = await motivosRes.json();
       const opsData = await opsRes.json();
 
-      console.log('✅ Máquinas carregadas:', maquinasData.length, 'itens');
-      console.log('✅ Operadores carregados:', operadoresData.length, 'itens');
-      console.log('✅ Motivos carregados:', motivosData.length, 'itens');
-      console.log('✅ OPs carregadas:', opsData.data?.length || opsData.length, 'itens');
+      console.log('✅ Máquinas carregadas:', maquinasData.length);
+      console.log('✅ Operadores carregados:', operadoresData.length);
+      console.log('✅ Motivos carregados:', motivosData.length);
+      
+      // Log dos primeiros motivos para verificar UUIDs
+      if (motivosData.length > 0) {
+        console.log('📋 Exemplo de motivo:', {
+          id: motivosData[0].id,
+          codigo: motivosData[0].codigo,
+          descricao: motivosData[0].descricao
+        });
+      }
 
       setMaquinas(maquinasData);
       setOperadores(operadoresData);
@@ -189,7 +197,6 @@ export default function ParadasMaquinaPage() {
       const response = await fetch(`/api/paradas-maquina?${params}`);
       const result = await response.json();
       
-      // Transformar os dados para o formato esperado pelo componente
       const dadosFormatados = result.data.map((item: any) => ({
         id: item.id,
         maquinaId: item.maquinaId,
@@ -199,7 +206,6 @@ export default function ParadasMaquinaPage() {
         dataInicio: item.dataInicio,
         dataFim: item.dataFim,
         opId: item.opId,
-        // Campos do join
         maquinaNome: item.maquina?.nome,
         maquinaCodigo: item.maquina?.codigo,
         operadorNome: item.operador?.nome,
@@ -225,22 +231,48 @@ export default function ParadasMaquinaPage() {
 
   async function handleSubmit(data: any) {
     try {
-      console.log('📦 Enviando dados do formulário:', data);
-
+      console.log('📦 Dados CRUS do formulário:', data);
+      console.log('🔍 maquinaId:', data.maquinaId, 'tipo:', typeof data.maquinaId);
+      console.log('🔍 operadorId:', data.operadorId, 'tipo:', typeof data.operadorId);
+      console.log('🔍 motivoParadaId:', data.motivoParadaId, 'tipo:', typeof data.motivoParadaId);
+      
       // Validar se os UUIDs são válidos
-      if (!data.maquinaId || !data.operadorId || !data.motivoParadaId) {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      
+      if (!uuidRegex.test(data.maquinaId)) {
+        console.error('❌ maquinaId não é UUID válido:', data.maquinaId);
         toast({
           title: 'Erro',
-          description: 'Todos os campos obrigatórios devem ser preenchidos',
+          description: 'ID da máquina inválido',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      if (!uuidRegex.test(data.operadorId)) {
+        console.error('❌ operadorId não é UUID válido:', data.operadorId);
+        toast({
+          title: 'Erro',
+          description: 'ID do operador inválido',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      if (!uuidRegex.test(data.motivoParadaId)) {
+        console.error('❌ motivoParadaId não é UUID válido:', data.motivoParadaId);
+        toast({
+          title: 'Erro',
+          description: 'ID do motivo inválido - Selecione um motivo da lista',
           variant: 'destructive',
         });
         return;
       }
 
       const dadosParaEnviar = {
-        maquinaId: data.maquinaId,        // ← UUID real
-        operadorId: data.operadorId,      // ← UUID real
-        motivoParadaId: data.motivoParadaId, // ← UUID real
+        maquinaId: data.maquinaId,
+        operadorId: data.operadorId,
+        motivoParadaId: data.motivoParadaId,
         dataInicio: new Date(data.dataInicio).toISOString(),
         observacoes: data.observacoes || null,
         opId: data.opId ? parseInt(data.opId) : null,
@@ -306,7 +338,7 @@ export default function ParadasMaquinaPage() {
     }
   }
 
-  // CAMPOS DO FORMULÁRIO COM TODOS OS UUIDs
+  // Campos do formulário com UUIDs reais
   const formFields = [
     {
       name: 'maquinaId',
@@ -314,7 +346,7 @@ export default function ParadasMaquinaPage() {
       type: 'select' as const,
       required: true,
       options: maquinas.map(m => ({ 
-        value: m.id,        // ← UUID real da máquina
+        value: m.id,
         label: `${m.codigo} - ${m.nome}` 
       }))
     },
@@ -324,7 +356,7 @@ export default function ParadasMaquinaPage() {
       type: 'select' as const,
       required: true,
       options: operadores.map(o => ({ 
-        value: o.id,         // ← UUID real do operador
+        value: o.id,
         label: `${o.matricula} - ${o.nome}` 
       }))
     },
@@ -334,7 +366,7 @@ export default function ParadasMaquinaPage() {
       type: 'select' as const,
       required: true,
       options: motivos.map(m => ({ 
-        value: m.id,         // ← UUID real do motivo
+        value: m.id,
         label: `${m.codigo} - ${m.descricao}` 
       }))
     },
@@ -352,7 +384,7 @@ export default function ParadasMaquinaPage() {
       options: [
         { value: '', label: 'Nenhuma' },
         ...ops.map(op => ({ 
-          value: op.op.toString(),  // ← Número da OP (não é UUID)
+          value: op.op.toString(),
           label: `OP ${op.op} - ${op.produto.substring(0, 30)}` 
         }))
       ]
@@ -367,7 +399,6 @@ export default function ParadasMaquinaPage() {
 
   return (
     <div className="space-y-6 p-6">
-      {/* Cabeçalho */}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Paradas de Máquina</h1>
         <div className="flex gap-2">
@@ -380,7 +411,6 @@ export default function ParadasMaquinaPage() {
         </div>
       </div>
 
-      {/* Paginação */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-gray-500">
           Mostrando {paradas.length} de {pagination.total} paradas
@@ -408,7 +438,6 @@ export default function ParadasMaquinaPage() {
         </div>
       </div>
 
-      {/* Tabela */}
       <DataTable
         data={paradas}
         columns={columns}
@@ -428,7 +457,6 @@ export default function ParadasMaquinaPage() {
         ) : null}
       />
 
-      {/* Modal com formulário */}
       <FormModal
         open={modalOpen}
         onClose={() => {
