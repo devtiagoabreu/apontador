@@ -7,7 +7,7 @@ import { maquinas } from '@/lib/db/schema/maquinas';
 import { usuarios } from '@/lib/db/schema/usuarios';
 import { motivosParada } from '@/lib/db/schema/motivos-parada';
 import { ops } from '@/lib/db/schema/ops';
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, desc, sql, and } from 'drizzle-orm';
 import { z } from 'zod';
 
 const paradaSchema = z.object({
@@ -116,7 +116,7 @@ export async function GET(request: Request) {
   }
 }
 
-// POST - Criar nova parada (COM LOGS DETALHADOS)
+// POST - Criar nova parada (COM VALIDAÇÃO DE PARADA ATIVA)
 export async function POST(request: Request) {
   console.log('='.repeat(50));
   console.log('📦 POST /api/paradas-maquina - INICIANDO');
@@ -253,7 +253,29 @@ export async function POST(request: Request) {
     }
     console.log('✅ Máquina encontrada:', maquina.nome);
 
-    // 9. Preparar dados para inserção
+    // 9. VERIFICAR SE JÁ EXISTE PARADA ATIVA (NOVA VALIDAÇÃO)
+    console.log('🔍 Verificando se já existe parada ativa para esta máquina...');
+    const paradaAtiva = await db.query.paradasMaquina.findFirst({
+      where: and(
+        eq(paradasMaquina.maquinaId, body.maquinaId),
+        sql`${paradasMaquina.dataFim} IS NULL`
+      ),
+    });
+
+    if (paradaAtiva) {
+      console.log('❌ Máquina já possui parada ativa:', paradaAtiva.id);
+      return NextResponse.json(
+        { 
+          error: 'Máquina já possui uma parada em andamento', 
+          message: 'Finalize a parada atual antes de registrar uma nova.',
+          paradaAtivaId: paradaAtiva.id 
+        },
+        { status: 400 }
+      );
+    }
+    console.log('✅ Nenhuma parada ativa encontrada');
+
+    // 10. Preparar dados para inserção
     const dadosInserir: any = {
       maquinaId: body.maquinaId,
       operadorId: body.operadorId || session.user.id,
@@ -270,7 +292,7 @@ export async function POST(request: Request) {
 
     console.log('💾 Dados preparados para inserção:', JSON.stringify(dadosInserir, null, 2));
 
-    // 10. Inserir no banco
+    // 11. Inserir no banco
     console.log('📥 Inserindo no banco...');
     const [novaParada] = await db
       .insert(paradasMaquina)
@@ -279,7 +301,7 @@ export async function POST(request: Request) {
 
     console.log('✅ Parada criada com sucesso! ID:', novaParada.id);
 
-    // 11. Atualizar status da máquina
+    // 12. Atualizar status da máquina
     console.log('🔄 Atualizando status da máquina para PARADA...');
     await db
       .update(maquinas)

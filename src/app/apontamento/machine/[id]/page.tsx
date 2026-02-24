@@ -5,12 +5,13 @@ import { db } from '@/lib/db';
 import { maquinas } from '@/lib/db/schema/maquinas';
 import { ops } from '@/lib/db/schema/ops';
 import { apontamentos } from '@/lib/db/schema/apontamentos';
+import { paradasMaquina } from '@/lib/db/schema/paradas-maquina';
 import { motivosParada } from '@/lib/db/schema/motivos-parada';
 import { eq, and, sql } from 'drizzle-orm';
 import { MobileCard } from '@/components/mobile/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowLeft, Play, Pause, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Play, Pause, CheckCircle, PlayCircle } from 'lucide-react';
 
 export default async function MachinePage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -28,7 +29,7 @@ export default async function MachinePage({ params }: { params: { id: string } }
     redirect('/apontamento');
   }
 
-  // Buscar apontamento ativo nesta máquina
+  // Buscar apontamento ativo nesta máquina (produção)
   const apontamentoAtivo = await db
     .select({
       id: apontamentos.id,
@@ -49,6 +50,26 @@ export default async function MachinePage({ params }: { params: { id: string } }
     )
     .then(rows => rows[0] || null);
 
+  // Buscar parada ativa nesta máquina
+  const paradaAtiva = await db
+    .select({
+      id: paradasMaquina.id,
+      dataInicio: paradasMaquina.dataInicio,
+      opId: paradasMaquina.opId,
+      observacoes: paradasMaquina.observacoes,
+      motivoDescricao: motivosParada.descricao,
+      motivoCodigo: motivosParada.codigo,
+    })
+    .from(paradasMaquina)
+    .leftJoin(motivosParada, eq(paradasMaquina.motivoParadaId, motivosParada.id))
+    .where(
+      and(
+        eq(paradasMaquina.maquinaId, params.id),
+        sql`${paradasMaquina.dataFim} IS NULL`
+      )
+    )
+    .then(rows => rows[0] || null);
+
   // Buscar OPs disponíveis
   const opsDisponiveis = await db
     .select()
@@ -60,12 +81,6 @@ export default async function MachinePage({ params }: { params: { id: string } }
       )
     )
     .limit(20);
-
-  // Buscar motivos de parada
-  const motivosParadaList = await db
-    .select()
-    .from(motivosParada)
-    .where(eq(motivosParada.ativo, true));
 
   return (
     <div className="p-4 space-y-4">
@@ -97,8 +112,43 @@ export default async function MachinePage({ params }: { params: { id: string } }
         </div>
       </MobileCard>
 
-      {/* Se tem apontamento ativo, mostra detalhes e ações */}
-      {apontamentoAtivo && (
+      {/* SE TEM PARADA ATIVA */}
+      {paradaAtiva && (
+        <MobileCard>
+          <h2 className="font-medium mb-3 text-yellow-600 flex items-center gap-2">
+            <Pause className="h-5 w-5" /> Máquina em Parada
+          </h2>
+          <div className="space-y-2">
+            <p className="text-sm">
+              <span className="font-medium">Motivo:</span> {paradaAtiva.motivoDescricao}
+            </p>
+            {paradaAtiva.observacoes && (
+              <p className="text-sm text-gray-600">{paradaAtiva.observacoes}</p>
+            )}
+            <p className="text-xs text-gray-400">
+              Iniciado: {new Date(paradaAtiva.dataInicio).toLocaleString('pt-BR')}
+            </p>
+            {paradaAtiva.opId && (
+              <p className="text-xs text-gray-500">
+                OP {paradaAtiva.opId} estava em produção quando parou
+              </p>
+            )}
+          </div>
+          
+          {/* Botão para finalizar parada */}
+          <div className="mt-4">
+            <Link href={`/apontamento/finalizar-parada?paradaId=${paradaAtiva.id}&maquinaId=${params.id}`}>
+              <Button className="w-full bg-green-600 hover:bg-green-700">
+                <PlayCircle className="mr-2 h-4 w-4" />
+                Finalizar Parada
+              </Button>
+            </Link>
+          </div>
+        </MobileCard>
+      )}
+
+      {/* SE TEM PRODUÇÃO ATIVA (só mostra se não tiver parada) */}
+      {!paradaAtiva && apontamentoAtivo && (
         <MobileCard>
           <h2 className="font-medium mb-3">Produção em andamento</h2>
           <div className="space-y-2">
@@ -127,8 +177,8 @@ export default async function MachinePage({ params }: { params: { id: string } }
         </MobileCard>
       )}
 
-      {/* Se não tem apontamento ativo, mostra OPs disponíveis e botão de parada */}
-      {!apontamentoAtivo && (
+      {/* SE NÃO TEM NADA (disponível) */}
+      {!paradaAtiva && !apontamentoAtivo && (
         <>
           {/* Botão de Parada Rápida (sem OP) */}
           <Link href={`/apontamento/parada?maquinaId=${params.id}`}>
