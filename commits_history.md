@@ -147,3 +147,11 @@ https://chat.deepseek.com/share/i76mazgjla0gb74ric
 ✅ Mostra estágio nos detalhes do apontamento
 ✅ Permite editar estágio no modal de edição
 ✅ Campos dinâmicos (produção vs parada)
+
+## 🚀 Commit 16: Criar tabela paradas_maquina (Backend + Frontend) --> feat: criar módulo de paradas de máquina em tabela separada
+
+Schema:	paradas-maquina.ts com campos específicos
+Migration:	Cria tabela com índices
+API:	CRUD completo com GET, POST e finalizar
+Desktop:	Lista com ações e modal
+Mobile:	Interface simplificada para operadores
