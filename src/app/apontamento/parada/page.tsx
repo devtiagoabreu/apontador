@@ -5,9 +5,18 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { MobileCard } from '@/components/mobile/card';
-import { ArrowLeft, Pause, Play } from 'lucide-react';
+import { ArrowLeft, Pause } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { Suspense } from 'react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
 interface MotivoParada {
   id: string;
@@ -18,54 +27,54 @@ interface MotivoParada {
 function ParadaContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const apontamentoId = searchParams.get('apontamento');
+  const maquinaId = searchParams.get('maquinaId');
+  const opId = searchParams.get('opId'); // Pode vir ou não
   
   const [loading, setLoading] = useState(false);
   const [motivos, setMotivos] = useState<MotivoParada[]>([]);
   const [motivoSelecionado, setMotivoSelecionado] = useState<string>('');
   const [observacoes, setObservacoes] = useState<string>('');
-  const [apontamento, setApontamento] = useState<any>(null);
-  const [emParada, setEmParada] = useState(false);
+  const [maquina, setMaquina] = useState<any>(null);
+  const [op, setOp] = useState<any>(null);
   const [carregandoDados, setCarregandoDados] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      carregarMotivos(),
-      apontamentoId && carregarApontamento()
-    ]).finally(() => setCarregandoDados(false));
-  }, [apontamentoId]);
+    carregarDados();
+  }, [maquinaId, opId]);
 
-  async function carregarMotivos() {
+  async function carregarDados() {
     try {
-      const response = await fetch('/api/motivos-parada');
-      const data = await response.json();
-      setMotivos(data);
+      const [motivosRes, maquinaRes, opRes] = await Promise.all([
+        fetch('/api/motivos-parada'),
+        maquinaId ? fetch(`/api/maquinas/${maquinaId}`) : Promise.resolve(null),
+        opId ? fetch(`/api/ops/${opId}`) : Promise.resolve(null),
+      ]);
+
+      const motivosData = await motivosRes.json();
+      setMotivos(motivosData);
+
+      if (maquinaRes && maquinaRes.ok) {
+        const maquinaData = await maquinaRes.json();
+        setMaquina(maquinaData);
+      }
+
+      if (opRes && opRes.ok) {
+        const opData = await opRes.json();
+        setOp(opData);
+      }
     } catch (error) {
       toast({
         title: 'Erro',
-        description: 'Não foi possível carregar os motivos',
+        description: 'Não foi possível carregar os dados',
         variant: 'destructive',
       });
-    }
-  }
-
-  async function carregarApontamento() {
-    try {
-      const response = await fetch(`/api/apontamentos/${apontamentoId}`);
-      const data = await response.json();
-      setApontamento(data);
-      setEmParada(!!data.inicioParada && !data.fimParada);
-    } catch (error) {
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível carregar o apontamento',
-        variant: 'destructive',
-      });
+    } finally {
+      setCarregandoDados(false);
     }
   }
 
   async function handleRegistrarParada() {
-    if (!motivoSelecionado && !emParada) {
+    if (!motivoSelecionado) {
       toast({
         title: 'Erro',
         description: 'Selecione um motivo para a parada',
@@ -76,13 +85,22 @@ function ParadaContent() {
 
     setLoading(true);
     try {
-      const response = await fetch(`/api/apontamentos/${apontamentoId}/parada`, {
+      const dados: any = {
+        maquinaId,
+        motivoParadaId: motivoSelecionado,
+        dataInicio: new Date().toISOString(),
+        observacoes,
+      };
+
+      // Se veio de uma OP em produção, vincula a OP
+      if (opId) {
+        dados.opId = parseInt(opId);
+      }
+
+      const response = await fetch('/api/paradas-maquina', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          motivoId: motivoSelecionado,
-          observacoes,
-        }),
+        body: JSON.stringify(dados),
       });
 
       const data = await response.json();
@@ -93,10 +111,11 @@ function ParadaContent() {
 
       toast({
         title: 'Sucesso',
-        description: data.message,
+        description: 'Parada registrada com sucesso',
       });
 
-      router.push(`/apontamento/machine/${apontamento?.maquinaId}`);
+      // Voltar para a página da máquina
+      router.push(`/apontamento/machine/${maquinaId}`);
       
     } catch (error) {
       toast({
@@ -113,7 +132,7 @@ function ParadaContent() {
     return (
       <div className="p-4">
         <div className="flex items-center gap-3">
-          <Link href="/apontamento">
+          <Link href={maquinaId ? `/apontamento/machine/${maquinaId}` : '/apontamento'}>
             <Button variant="ghost" size="icon" className="h-10 w-10">
               <ArrowLeft className="h-6 w-6" />
             </Button>
@@ -128,82 +147,72 @@ function ParadaContent() {
     <div className="p-4 space-y-4">
       {/* Cabeçalho */}
       <div className="flex items-center gap-3">
-        <Link href={apontamento ? `/apontamento/machine/${apontamento.maquinaId}` : '/apontamento'}>
+        <Link href={maquinaId ? `/apontamento/machine/${maquinaId}` : '/apontamento'}>
           <Button variant="ghost" size="icon" className="h-10 w-10">
             <ArrowLeft className="h-6 w-6" />
           </Button>
         </Link>
-        <h1 className="text-xl font-semibold">
-          {emParada ? 'Finalizar Parada' : 'Registrar Parada'}
-        </h1>
+        <h1 className="text-xl font-semibold">Registrar Parada</h1>
       </div>
 
       <MobileCard>
         <div className="space-y-4">
-          {emParada ? (
-            // Modo: Finalizar parada
-            <>
-              <div className="bg-yellow-50 p-3 rounded-lg">
-                <p className="text-sm text-yellow-700">
-                  Máquina em parada. Clique no botão abaixo para retomar a produção.
-                </p>
-              </div>
-
-              <Button 
-                className="w-full" 
-                onClick={handleRegistrarParada}
-                disabled={loading}
-              >
-                <Play className="mr-2 h-4 w-4" />
-                {loading ? 'Processando...' : 'Retomar Produção'}
-              </Button>
-            </>
-          ) : (
-            // Modo: Iniciar parada
-            <>
-              <div className="space-y-3">
-                <label className="block text-sm font-medium text-gray-700">
-                  Motivo da Parada
-                </label>
-                <select
-                  value={motivoSelecionado}
-                  onChange={(e) => setMotivoSelecionado(e.target.value)}
-                  className="w-full rounded-md border border-gray-300 p-3 text-base"
-                  disabled={loading}
-                >
-                  <option value="">Selecione um motivo...</option>
-                  {motivos.map((motivo) => (
-                    <option key={motivo.id} value={motivo.id}>
-                      {motivo.codigo} - {motivo.descricao}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-3">
-                <label className="block text-sm font-medium text-gray-700">
-                  Observações (opcional)
-                </label>
-                <textarea
-                  value={observacoes}
-                  onChange={(e) => setObservacoes(e.target.value)}
-                  rows={3}
-                  className="w-full rounded-md border border-gray-300 p-3 text-base"
-                  placeholder="Descreva o motivo da parada..."
-                  disabled={loading}
-                />
-              </div>
-
-              <Button 
-                className="w-full bg-yellow-600 hover:bg-yellow-700" 
-                onClick={handleRegistrarParada}
-                disabled={loading}
-              >
-                <Pause className="mr-2 h-4 w-4" />
-                {loading ? 'Registrando...' : 'Registrar Parada'}
-              </Button>
-            </>
+          {/* Informações da máquina */}
+          {maquina && (
+            <div className="bg-blue-50 p-3 rounded-lg">
+              <p className="text-sm font-medium">Máquina</p>
+              <p className="text-sm">{maquina.nome}</p>
+              <p className="text-xs text-gray-500">Código: {maquina.codigo}</p>
+            </div>
           )}
+
+          {/* Informações da OP (se veio de uma produção) */}
+          {op && (
+            <div className="bg-yellow-50 p-3 rounded-lg">
+              <p className="text-sm font-medium">OP em produção</p>
+              <p className="text-sm">OP {op.op}</p>
+              <p className="text-xs text-gray-500">{op.produto}</p>
+            </div>
+          )}
+
+          {/* Seleção de motivo */}
+          <div className="space-y-2">
+            <Label htmlFor="motivo">Motivo da Parada *</Label>
+            <Select value={motivoSelecionado} onValueChange={setMotivoSelecionado}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um motivo" />
+              </SelectTrigger>
+              <SelectContent>
+                {motivos.map((motivo) => (
+                  <SelectItem key={motivo.id} value={motivo.id}>
+                    {motivo.codigo} - {motivo.descricao}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Observações */}
+          <div className="space-y-2">
+            <Label htmlFor="observacoes">Observações (opcional)</Label>
+            <Textarea
+              id="observacoes"
+              value={observacoes}
+              onChange={(e) => setObservacoes(e.target.value)}
+              placeholder="Descreva o motivo da parada..."
+              rows={3}
+            />
+          </div>
+
+          {/* Botão */}
+          <Button 
+            className="w-full bg-yellow-600 hover:bg-yellow-700" 
+            onClick={handleRegistrarParada}
+            disabled={loading}
+          >
+            <Pause className="mr-2 h-4 w-4" />
+            {loading ? 'Registrando...' : 'Registrar Parada'}
+          </Button>
         </div>
       </MobileCard>
     </div>

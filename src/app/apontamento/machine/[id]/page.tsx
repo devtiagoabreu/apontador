@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { maquinas } from '@/lib/db/schema/maquinas';
 import { ops } from '@/lib/db/schema/ops';
 import { apontamentos } from '@/lib/db/schema/apontamentos';
+import { motivosParada } from '@/lib/db/schema/motivos-parada';
 import { eq, and, sql } from 'drizzle-orm';
 import { MobileCard } from '@/components/mobile/card';
 import { Button } from '@/components/ui/button';
@@ -48,7 +49,7 @@ export default async function MachinePage({ params }: { params: { id: string } }
     )
     .then(rows => rows[0] || null);
 
-  // Buscar OPs disponíveis (que não estão finalizadas ou canceladas)
+  // Buscar OPs disponíveis
   const opsDisponiveis = await db
     .select()
     .from(ops)
@@ -59,6 +60,12 @@ export default async function MachinePage({ params }: { params: { id: string } }
       )
     )
     .limit(20);
+
+  // Buscar motivos de parada
+  const motivosParadaList = await db
+    .select()
+    .from(motivosParada)
+    .where(eq(motivosParada.ativo, true));
 
   return (
     <div className="p-4 space-y-4">
@@ -110,7 +117,7 @@ export default async function MachinePage({ params }: { params: { id: string } }
                 Finalizar
               </Button>
             </Link>
-            <Link href={`/apontamento/parada?apontamento=${apontamentoAtivo.id}`} className="flex-1">
+            <Link href={`/apontamento/parada?maquinaId=${params.id}&opId=${apontamentoAtivo.opId}`} className="flex-1">
               <Button className="w-full text-yellow-600" variant="outline">
                 <Pause className="mr-2 h-4 w-4" />
                 Parada
@@ -120,39 +127,49 @@ export default async function MachinePage({ params }: { params: { id: string } }
         </MobileCard>
       )}
 
-      {/* Se não tem apontamento ativo, mostra OPs disponíveis */}
+      {/* Se não tem apontamento ativo, mostra OPs disponíveis e botão de parada */}
       {!apontamentoAtivo && (
-        <div className="space-y-3">
-          <h2 className="font-medium">OPs disponíveis</h2>
-          
-          {opsDisponiveis.length === 0 ? (
-            <MobileCard>
-              <p className="text-center text-gray-500 py-4">
-                Nenhuma OP disponível no momento
-              </p>
-            </MobileCard>
-          ) : (
-            opsDisponiveis.map((op) => (
-              <MobileCard key={op.op}>
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <p className="font-medium">OP {op.op}</p>
-                    <p className="text-sm text-gray-500 line-clamp-2">{op.produto}</p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Programado: {Number(op.qtdeProgramado).toLocaleString('pt-BR')} {op.um}
-                    </p>
-                  </div>
-                  <Link href={`/apontamento/iniciar?machine=${params.id}&op=${op.op}`}>
-                    <Button size="sm" className="ml-2">
-                      <Play className="mr-1 h-4 w-4" />
-                      Iniciar
-                    </Button>
-                  </Link>
-                </div>
+        <>
+          {/* Botão de Parada Rápida (sem OP) */}
+          <Link href={`/apontamento/parada?maquinaId=${params.id}`}>
+            <Button className="w-full bg-yellow-600 hover:bg-yellow-700 text-white mb-4">
+              <Pause className="mr-2 h-4 w-4" />
+              Registrar Parada (sem OP)
+            </Button>
+          </Link>
+
+          <div className="space-y-3">
+            <h2 className="font-medium">OPs disponíveis</h2>
+            
+            {opsDisponiveis.length === 0 ? (
+              <MobileCard>
+                <p className="text-center text-gray-500 py-4">
+                  Nenhuma OP disponível no momento
+                </p>
               </MobileCard>
-            ))
-          )}
-        </div>
+            ) : (
+              opsDisponiveis.map((op) => (
+                <MobileCard key={op.op}>
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <p className="font-medium">OP {op.op}</p>
+                      <p className="text-sm text-gray-500 line-clamp-2">{op.produto}</p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Programado: {Number(op.qtdeProgramado).toLocaleString('pt-BR')} {op.um}
+                      </p>
+                    </div>
+                    <Link href={`/apontamento/iniciar?machine=${params.id}&op=${op.op}`}>
+                      <Button size="sm" className="ml-2">
+                        <Play className="mr-1 h-4 w-4" />
+                        Iniciar
+                      </Button>
+                    </Link>
+                  </div>
+                </MobileCard>
+              ))
+            )}
+          </div>
+        </>
       )}
     </div>
   );
