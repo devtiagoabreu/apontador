@@ -28,7 +28,7 @@ function ParadaContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const maquinaId = searchParams.get('maquinaId');
-  const opId = searchParams.get('opId'); // Pode vir ou não
+  const opId = searchParams.get('opId');
   
   const [loading, setLoading] = useState(false);
   const [motivos, setMotivos] = useState<MotivoParada[]>([]);
@@ -37,10 +37,38 @@ function ParadaContent() {
   const [maquina, setMaquina] = useState<any>(null);
   const [op, setOp] = useState<any>(null);
   const [carregandoDados, setCarregandoDados] = useState(true);
+  const [sessao, setSessao] = useState<any>(null);
+
+  // Verificar sessão ao carregar
+  useEffect(() => {
+    verificarSessao();
+  }, []);
+
+  async function verificarSessao() {
+    try {
+      const res = await fetch('/api/auth/session');
+      const session = await res.json();
+      console.log('🔐 Sessão atual:', session);
+      setSessao(session);
+      
+      if (!session?.user) {
+        toast({
+          title: 'Erro de sessão',
+          description: 'Faça login novamente',
+          variant: 'destructive',
+        });
+        router.push('/login');
+      }
+    } catch (error) {
+      console.error('Erro ao verificar sessão:', error);
+    }
+  }
 
   useEffect(() => {
-    carregarDados();
-  }, [maquinaId, opId]);
+    if (sessao?.user) {
+      carregarDados();
+    }
+  }, [sessao, maquinaId, opId]);
 
   async function carregarDados() {
     try {
@@ -56,9 +84,6 @@ function ParadaContent() {
 
       const motivosData = await motivosRes.json();
       console.log('✅ Motivos carregados:', motivosData.length);
-      if (motivosData.length > 0) {
-        console.log('📋 Exemplo de motivo:', motivosData[0]);
-      }
       setMotivos(motivosData);
 
       if (maquinaRes && maquinaRes.ok) {
@@ -124,7 +149,6 @@ function ParadaContent() {
         observacoes: observacoes || null,
       };
 
-      // Se veio de uma OP em produção, vincula a OP
       if (opId) {
         dados.opId = parseInt(opId);
         console.log('➕ Vinculando OP:', opId);
@@ -134,10 +158,15 @@ function ParadaContent() {
 
       const response = await fetch('/api/paradas-maquina', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // ESSENCIAL para enviar o cookie de sessão
         body: JSON.stringify(dados),
       });
 
+      console.log('📊 Status da resposta:', response.status);
+      
       const data = await response.json();
       console.log('📦 Resposta da API:', data);
 
@@ -152,7 +181,6 @@ function ParadaContent() {
         description: 'Parada registrada com sucesso',
       });
 
-      // Voltar para a página da máquina
       router.push(`/apontamento/machine/${maquinaId}`);
       
     } catch (error) {
