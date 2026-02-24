@@ -30,6 +30,11 @@ const navItems = [
     icon: Calendar,
   },
   {
+    title: 'Paradas de Máquina',
+    href: '/dashboard/paradas-maquina',
+    icon: AlertTriangle, // ou o ícone que preferir
+  },
+  {
     title: 'Áreas',
     href: '/dashboard/areas',
     icon: Factory,
