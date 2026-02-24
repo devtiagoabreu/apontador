@@ -15,6 +15,7 @@ import {
 import { formatDate } from '@/lib/utils';
 import { z } from 'zod';
 
+// Interfaces
 interface Parada {
   id: string;
   maquinaId: string;
@@ -24,7 +25,8 @@ interface Parada {
   dataInicio: string;
   dataFim: string | null;
   opId: number | null;
-  // Relacionamentos (vêm do join)
+  
+  // Relacionamentos (opcionais)
   maquinaNome?: string;
   maquinaCodigo?: string;
   operadorNome?: string;
@@ -35,10 +37,44 @@ interface Parada {
   opProduto?: string;
 }
 
-// Colunas usando CAMPOS REAIS
+interface Maquina {
+  id: string;
+  nome: string;
+  codigo: string;
+  status: string;
+}
+
+interface Usuario {
+  id: string;
+  nome: string;
+  matricula: string;
+}
+
+interface MotivoParada {
+  id: string;
+  codigo: string;
+  descricao: string;
+}
+
+interface OP {
+  op: number;
+  produto: string;
+}
+
+// Schema para o formulário
+const paradaSchema = z.object({
+  maquinaId: z.string().min(1, 'Máquina é obrigatória'),
+  operadorId: z.string().min(1, 'Operador é obrigatório'),
+  motivoParadaId: z.string().min(1, 'Motivo é obrigatório'),
+  dataInicio: z.string().min(1, 'Data início é obrigatória'),
+  observacoes: z.string().optional(),
+  opId: z.string().optional(),
+});
+
+// Colunas usando APENAS campos reais
 const columns = [
   {
-    key: 'dataFim' as const, // Campo real da tabela
+    key: 'dataFim' as const,
     title: 'Status',
     format: (value: string | null) => (
       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -49,38 +85,36 @@ const columns = [
     )
   },
   {
-    key: 'maquinaNome' as const, // Campo real (vindo do join)
+    key: 'maquinaNome' as const,
     title: 'Máquina',
     format: (value: string) => value || '-'
   },
   {
-    key: 'motivoDescricao' as const, // Campo real (vindo do join)
+    key: 'motivoDescricao' as const,
     title: 'Motivo',
     format: (value: string) => value || '-'
   },
   {
-    key: 'operadorNome' as const, // Campo real (vindo do join)
+    key: 'operadorNome' as const,
     title: 'Operador',
     format: (value: string) => value || '-'
   },
   {
-    key: 'dataInicio' as const, // Campo real da tabela
+    key: 'dataInicio' as const,
     title: 'Início',
     format: (value: string) => formatDate(value)
   },
   {
-    key: 'dataFim' as const, // Campo real da tabela
+    key: 'dataFim' as const,
     title: 'Fim',
     format: (value: string | null) => value ? formatDate(value) : 'Em andamento'
   },
   {
-    key: 'opNumero' as const, // Campo real (vindo do join)
+    key: 'opNumero' as const,
     title: 'OP Vinculada',
     format: (value: number) => value ? `OP ${value}` : '-'
   },
 ];
-
-// ... (resto do código)
 
 export default function ParadasMaquinaPage() {
   const [paradas, setParadas] = useState<Parada[]>([]);
