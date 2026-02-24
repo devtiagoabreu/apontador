@@ -25,7 +25,7 @@ export async function POST(
     const validated = finalizarSchema.parse(body);
     const agora = new Date();
 
-    // Buscar parada
+    // Buscar parada - CORRIGIDO
     const parada = await db.query.paradasMaquina.findFirst({
       where: eq(paradasMaquina.id, params.id),
     });
