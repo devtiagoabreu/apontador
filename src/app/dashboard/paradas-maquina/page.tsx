@@ -230,40 +230,69 @@ export default function ParadasMaquinaPage() {
   }
 
   async function handleSubmit(data: any) {
+    console.log('='.repeat(50));
+    console.log('🔍 DEBUG DO FORMULÁRIO - PARADAS MÁQUINA');
+    console.log('='.repeat(50));
+    
+    console.log('📦 Dados recebidos do FormModal:', data);
+    console.log('📦 Tipo do dado:', typeof data);
+    console.log('📦 É objeto?', typeof data === 'object' && data !== null);
+    
+    if (data && typeof data === 'object') {
+      console.log('🔍 Chaves disponíveis:', Object.keys(data));
+      
+      // Verificar cada campo individualmente
+      console.log('🔍 maquinaId:', {
+        valor: data.maquinaId,
+        tipo: typeof data.maquinaId,
+        length: data.maquinaId?.length,
+        isUUID: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.maquinaId || '')
+      });
+      
+      console.log('🔍 operadorId:', {
+        valor: data.operadorId,
+        tipo: typeof data.operadorId,
+        length: data.operadorId?.length,
+        isUUID: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.operadorId || '')
+      });
+      
+      console.log('🔍 motivoParadaId:', {
+        valor: data.motivoParadaId,
+        tipo: typeof data.motivoParadaId,
+        length: data.motivoParadaId?.length,
+        isUUID: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.motivoParadaId || '')
+      });
+      
+      console.log('🔍 dataInicio:', {
+        valor: data.dataInicio,
+        tipo: typeof data.dataInicio,
+        length: data.dataInicio?.length
+      });
+      
+      console.log('🔍 observacoes:', {
+        valor: data.observacoes,
+        tipo: typeof data.observacoes
+      });
+      
+      console.log('🔍 opId:', {
+        valor: data.opId,
+        tipo: typeof data.opId
+      });
+    }
+    
     try {
-      console.log('📦 Dados CRUS do formulário:', data);
-      console.log('🔍 maquinaId:', data.maquinaId, 'tipo:', typeof data.maquinaId);
-      console.log('🔍 operadorId:', data.operadorId, 'tipo:', typeof data.operadorId);
-      console.log('🔍 motivoParadaId:', data.motivoParadaId, 'tipo:', typeof data.motivoParadaId);
-      
-      // Validar se os UUIDs são válidos
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      
-      if (!uuidRegex.test(data.maquinaId)) {
-        console.error('❌ maquinaId não é UUID válido:', data.maquinaId);
-        toast({
-          title: 'Erro',
-          description: 'ID da máquina inválido',
-          variant: 'destructive',
+      // Validar campos obrigatórios
+      if (!data.maquinaId || !data.operadorId || !data.motivoParadaId || !data.dataInicio) {
+        console.error('❌ Campos obrigatórios faltando:', {
+          maquinaId: !!data.maquinaId,
+          operadorId: !!data.operadorId,
+          motivoParadaId: !!data.motivoParadaId,
+          dataInicio: !!data.dataInicio
         });
-        return;
-      }
-      
-      if (!uuidRegex.test(data.operadorId)) {
-        console.error('❌ operadorId não é UUID válido:', data.operadorId);
+        
         toast({
           title: 'Erro',
-          description: 'ID do operador inválido',
-          variant: 'destructive',
-        });
-        return;
-      }
-      
-      if (!uuidRegex.test(data.motivoParadaId)) {
-        console.error('❌ motivoParadaId não é UUID válido:', data.motivoParadaId);
-        toast({
-          title: 'Erro',
-          description: 'ID do motivo inválido - Selecione um motivo da lista',
+          description: 'Todos os campos obrigatórios devem ser preenchidos',
           variant: 'destructive',
         });
         return;
@@ -277,9 +306,9 @@ export default function ParadasMaquinaPage() {
         observacoes: data.observacoes || null,
         opId: data.opId ? parseInt(data.opId) : null,
       };
-
+      
       console.log('📦 Dados preparados para API:', dadosParaEnviar);
-
+      
       const response = await fetch('/api/paradas-maquina', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
