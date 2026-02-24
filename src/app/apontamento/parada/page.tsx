@@ -44,6 +44,10 @@ function ParadaContent() {
 
   async function carregarDados() {
     try {
+      console.log('🔄 Carregando dados para parada...');
+      console.log('🔍 maquinaId:', maquinaId);
+      console.log('🔍 opId:', opId);
+
       const [motivosRes, maquinaRes, opRes] = await Promise.all([
         fetch('/api/motivos-parada'),
         maquinaId ? fetch(`/api/maquinas/${maquinaId}`) : Promise.resolve(null),
@@ -51,18 +55,25 @@ function ParadaContent() {
       ]);
 
       const motivosData = await motivosRes.json();
+      console.log('✅ Motivos carregados:', motivosData.length);
+      if (motivosData.length > 0) {
+        console.log('📋 Exemplo de motivo:', motivosData[0]);
+      }
       setMotivos(motivosData);
 
       if (maquinaRes && maquinaRes.ok) {
         const maquinaData = await maquinaRes.json();
+        console.log('✅ Máquina carregada:', maquinaData);
         setMaquina(maquinaData);
       }
 
       if (opRes && opRes.ok) {
         const opData = await opRes.json();
+        console.log('✅ OP carregada:', opData);
         setOp(opData);
       }
     } catch (error) {
+      console.error('❌ Erro ao carregar dados:', error);
       toast({
         title: 'Erro',
         description: 'Não foi possível carregar os dados',
@@ -74,10 +85,31 @@ function ParadaContent() {
   }
 
   async function handleRegistrarParada() {
+    console.log('='.repeat(50));
+    console.log('🔍 DEBUG - Registrar Parada');
+    console.log('='.repeat(50));
+    
+    console.log('📦 Dados do formulário:');
+    console.log('  - maquinaId:', maquinaId);
+    console.log('  - opId:', opId);
+    console.log('  - motivoSelecionado:', motivoSelecionado);
+    console.log('  - observacoes:', observacoes);
+
     if (!motivoSelecionado) {
+      console.log('❌ Motivo não selecionado');
       toast({
         title: 'Erro',
         description: 'Selecione um motivo para a parada',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!maquinaId) {
+      console.log('❌ maquinaId não informado');
+      toast({
+        title: 'Erro',
+        description: 'Máquina não identificada',
         variant: 'destructive',
       });
       return;
@@ -89,13 +121,16 @@ function ParadaContent() {
         maquinaId,
         motivoParadaId: motivoSelecionado,
         dataInicio: new Date().toISOString(),
-        observacoes,
+        observacoes: observacoes || null,
       };
 
       // Se veio de uma OP em produção, vincula a OP
       if (opId) {
         dados.opId = parseInt(opId);
+        console.log('➕ Vinculando OP:', opId);
       }
+
+      console.log('📦 Enviando para API:', JSON.stringify(dados, null, 2));
 
       const response = await fetch('/api/paradas-maquina', {
         method: 'POST',
@@ -104,11 +139,14 @@ function ParadaContent() {
       });
 
       const data = await response.json();
+      console.log('📦 Resposta da API:', data);
 
       if (!response.ok) {
+        console.error('❌ Erro na API:', data);
         throw new Error(data.error || 'Erro ao registrar parada');
       }
 
+      console.log('✅ Parada registrada com sucesso:', data);
       toast({
         title: 'Sucesso',
         description: 'Parada registrada com sucesso',
@@ -118,6 +156,7 @@ function ParadaContent() {
       router.push(`/apontamento/machine/${maquinaId}`);
       
     } catch (error) {
+      console.error('❌ Erro:', error);
       toast({
         title: 'Erro',
         description: error instanceof Error ? error.message : 'Erro ao registrar',
