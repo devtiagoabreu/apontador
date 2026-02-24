@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { MobileCard } from '@/components/mobile/card';
 import { MobileHeader } from '@/components/mobile/header';
@@ -71,16 +70,16 @@ export default function ParadasMaquinaMobilePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <MobileHeader 
-        title="Paradas" 
-        rightAction={
-          <Button variant="ghost" size="icon" onClick={() => setShowForm(true)}>
-            <Plus className="h-5 w-5" />
-          </Button>
-        }
-      />
+      <MobileHeader user={{ nome: 'Operador', matricula: '123' }} />
 
       <main className="p-4 pb-20">
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-xl font-semibold">Paradas</h1>
+          <Button variant="outline" size="sm" onClick={() => setShowForm(true)}>
+            <Plus className="h-4 w-4 mr-2" /> Nova Parada
+          </Button>
+        </div>
+
         {loading ? (
           <div className="text-center py-8">Carregando...</div>
         ) : paradas.length === 0 ? (
@@ -141,7 +140,6 @@ export default function ParadasMaquinaMobilePage() {
 
       <MobileNav />
 
-      {/* Modal de Nova Parada (simplificado) */}
       <Sheet open={showForm} onOpenChange={setShowForm}>
         <SheetContent side="bottom" className="h-[90vh]">
           <SheetHeader>
