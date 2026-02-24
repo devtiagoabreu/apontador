@@ -2,12 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { paradasMaquina } from '@/lib/db/schema/paradas-maquina';
-import { maquinas } from '@/lib/db/schema/maquinas';
-import { motivosParada } from '@/lib/db/schema/motivos-parada';
-import { usuarios } from '@/lib/db/schema/usuarios';
-import { ops } from '@/lib/db/schema/ops';
-import { eq } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 
 export async function GET(
   request: Request,
@@ -22,43 +17,27 @@ export async function GET(
 
     console.log('🔍 Buscando parada por ID:', params.id);
 
-    // Buscar parada com joins
-    const result = await db
-      .select({
-        id: paradasMaquina.id,
-        maquinaId: paradasMaquina.maquinaId,
-        operadorId: paradasMaquina.operadorId,
-        motivoParadaId: paradasMaquina.motivoParadaId,
-        observacoes: paradasMaquina.observacoes,
-        dataInicio: paradasMaquina.dataInicio,
-        dataFim: paradasMaquina.dataFim,
-        opId: paradasMaquina.opId,
-        maquina: {
-          nome: maquinas.nome,
-          codigo: maquinas.codigo,
-        },
-        operador: {
-          nome: usuarios.nome,
-          matricula: usuarios.matricula,
-        },
-        motivo: {
-          descricao: motivosParada.descricao,
-          codigo: motivosParada.codigo,
-        },
-        op: paradasMaquina.opId ? {
-          op: ops.op,
-          produto: ops.produto,
-        } : null,
-      })
-      .from(paradasMaquina)
-      .leftJoin(maquinas, eq(paradasMaquina.maquinaId, maquinas.id))
-      .leftJoin(usuarios, eq(paradasMaquina.operadorId, usuarios.id))
-      .leftJoin(motivosParada, eq(paradasMaquina.motivoParadaId, motivosParada.id))
-      .leftJoin(ops, eq(paradasMaquina.opId, ops.op))
-      .where(eq(paradasMaquina.id, params.id))
-      .then(rows => rows[0]);
+    // Usar SQL raw para evitar problemas de tipo
+    const result = await db.execute(sql`
+      SELECT 
+        p.*,
+        m.nome as maquina_nome,
+        m.codigo as maquina_codigo,
+        u.nome as operador_nome,
+        u.matricula as operador_matricula,
+        mp.descricao as motivo_descricao,
+        mp.codigo as motivo_codigo,
+        o.op as op_numero,
+        o.produto as op_produto
+      FROM paradas_maquina p
+      LEFT JOIN maquinas m ON p.maquina_id = m.id
+      LEFT JOIN usuarios u ON p.operador_id = u.id
+      LEFT JOIN motivos_parada mp ON p.motivo_parada_id = mp.id
+      LEFT JOIN ops o ON p.op_id = o.op
+      WHERE p.id = ${params.id}
+    `);
 
-    if (!result) {
+    if (result.rows.length === 0) {
       console.log('❌ Parada não encontrada:', params.id);
       return NextResponse.json(
         { error: 'Parada não encontrada' },
@@ -66,9 +45,39 @@ export async function GET(
       );
     }
 
-    console.log('✅ Parada encontrada:', result.id);
+    const row = result.rows[0];
+    
+    // Formatar resposta
+    const parada = {
+      id: row.id,
+      maquinaId: row.maquina_id,
+      operadorId: row.operador_id,
+      motivoParadaId: row.motivo_parada_id,
+      observacoes: row.observacoes,
+      dataInicio: row.data_inicio,
+      dataFim: row.data_fim,
+      opId: row.op_id,
+      maquina: {
+        nome: row.maquina_nome,
+        codigo: row.maquina_codigo,
+      },
+      operador: {
+        nome: row.operador_nome,
+        matricula: row.operador_matricula,
+      },
+      motivo: {
+        descricao: row.motivo_descricao,
+        codigo: row.motivo_codigo,
+      },
+      op: row.op_numero ? {
+        op: row.op_numero,
+        produto: row.op_produto,
+      } : null,
+    };
 
-    return NextResponse.json(result);
+    console.log('✅ Parada encontrada:', parada.id);
+
+    return NextResponse.json(parada);
 
   } catch (error) {
     console.error('❌ Erro ao buscar parada:', error);
