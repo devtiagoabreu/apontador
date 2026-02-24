@@ -14,12 +14,6 @@ import {
 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { z } from 'zod';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 
 interface Parada {
   id: string;
@@ -30,101 +24,63 @@ interface Parada {
   dataInicio: string;
   dataFim: string | null;
   opId: number | null;
-  maquina?: {
-    nome: string;
-    codigo: string;
-  };
-  operador?: {
-    nome: string;
-    matricula: string;
-  };
-  motivo?: {
-    descricao: string;
-    codigo: string;
-  };
-  op?: {
-    op: number;
-    produto: string;
-  } | null;
+  // Relacionamentos (vêm do join)
+  maquinaNome?: string;
+  maquinaCodigo?: string;
+  operadorNome?: string;
+  operadorMatricula?: string;
+  motivoDescricao?: string;
+  motivoCodigo?: string;
+  opNumero?: number;
+  opProduto?: string;
 }
 
-interface Maquina {
-  id: string;
-  nome: string;
-  codigo: string;
-  status: string;
-}
-
-interface Usuario {
-  id: string;
-  nome: string;
-  matricula: string;
-}
-
-interface MotivoParada {
-  id: string;
-  codigo: string;
-  descricao: string;
-}
-
-interface OP {
-  op: number;
-  produto: string;
-}
-
-// Schema para o formulário
-const paradaSchema = z.object({
-  maquinaId: z.string().min(1, 'Máquina é obrigatória'),
-  operadorId: z.string().min(1, 'Operador é obrigatório'),
-  motivoParadaId: z.string().min(1, 'Motivo é obrigatório'),
-  dataInicio: z.string().min(1, 'Data início é obrigatória'),
-  observacoes: z.string().optional(),
-  opId: z.string().optional(),
-});
-
+// Colunas usando CAMPOS REAIS
 const columns = [
   {
-    key: 'status' as const,
+    key: 'dataFim' as const, // Campo real da tabela
     title: 'Status',
-    format: (value: any, row: Parada) => (
+    format: (value: string | null) => (
       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-        !row.dataFim ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+        !value ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
       }`}>
-        {!row.dataFim ? '⏸️ Em Parada' : '✅ Finalizada'}
+        {!value ? '⏸️ Em Parada' : '✅ Finalizada'}
       </span>
     )
   },
   {
-    key: 'maquina' as const,
+    key: 'maquinaNome' as const, // Campo real (vindo do join)
     title: 'Máquina',
-    format: (value: any) => value?.nome || '-'
+    format: (value: string) => value || '-'
   },
   {
-    key: 'motivo' as const,
+    key: 'motivoDescricao' as const, // Campo real (vindo do join)
     title: 'Motivo',
-    format: (value: any) => value?.descricao || '-'
+    format: (value: string) => value || '-'
   },
   {
-    key: 'operador' as const,
+    key: 'operadorNome' as const, // Campo real (vindo do join)
     title: 'Operador',
-    format: (value: any) => value?.nome || '-'
+    format: (value: string) => value || '-'
   },
   {
-    key: 'dataInicio' as const,
+    key: 'dataInicio' as const, // Campo real da tabela
     title: 'Início',
     format: (value: string) => formatDate(value)
   },
   {
-    key: 'dataFim' as const,
+    key: 'dataFim' as const, // Campo real da tabela
     title: 'Fim',
     format: (value: string | null) => value ? formatDate(value) : 'Em andamento'
   },
   {
-    key: 'op' as const,
+    key: 'opNumero' as const, // Campo real (vindo do join)
     title: 'OP Vinculada',
-    format: (value: any) => value ? `OP ${value.op}` : '-'
+    format: (value: number) => value ? `OP ${value}` : '-'
   },
 ];
+
+// ... (resto do código)
 
 export default function ParadasMaquinaPage() {
   const [paradas, setParadas] = useState<Parada[]>([]);
@@ -182,7 +138,28 @@ export default function ParadasMaquinaPage() {
       const response = await fetch(`/api/paradas-maquina?${params}`);
       const result = await response.json();
       
-      setParadas(result.data);
+      // Transformar os dados para o formato esperado pelo componente
+      const dadosFormatados = result.data.map((item: any) => ({
+        id: item.id,
+        maquinaId: item.maquinaId,
+        operadorId: item.operadorId,
+        motivoParadaId: item.motivoParadaId,
+        observacoes: item.observacoes,
+        dataInicio: item.dataInicio,
+        dataFim: item.dataFim,
+        opId: item.opId,
+        // Campos do join
+        maquinaNome: item.maquina?.nome,
+        maquinaCodigo: item.maquina?.codigo,
+        operadorNome: item.operador?.nome,
+        operadorMatricula: item.operador?.matricula,
+        motivoDescricao: item.motivo?.descricao,
+        motivoCodigo: item.motivo?.codigo,
+        opNumero: item.op?.op,
+        opProduto: item.op?.produto,
+      }));
+      
+      setParadas(dadosFormatados);
       setPagination(result.pagination);
     } catch (error) {
       toast({
@@ -197,35 +174,65 @@ export default function ParadasMaquinaPage() {
 
   async function handleSubmit(data: any) {
     try {
-      const url = selectedParada 
-        ? `/api/paradas-maquina/${selectedParada.id}/finalizar`
-        : '/api/paradas-maquina';
-      
-      const method = selectedParada ? 'POST' : 'POST';
-      
-      const response = await fetch(url, {
-        method,
+      const dadosParaEnviar = {
+        maquinaId: data.maquinaId,
+        operadorId: data.operadorId,
+        motivoParadaId: data.motivoParadaId,
+        dataInicio: new Date(data.dataInicio).toISOString(),
+        observacoes: data.observacoes || null,
+        opId: data.opId ? parseInt(data.opId) : null,
+      };
+
+      const response = await fetch('/api/paradas-maquina', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(dadosParaEnviar),
       });
 
-      if (!response.ok) throw new Error('Erro ao salvar');
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Erro ao salvar');
+      }
 
       toast({
         title: 'Sucesso',
-        description: selectedParada 
-          ? 'Parada finalizada com sucesso' 
-          : 'Parada registrada com sucesso',
+        description: 'Parada registrada com sucesso',
       });
 
       setModalOpen(false);
-      setSelectedParada(null);
       setFormData({});
       await carregarParadas(1);
     } catch (error) {
       toast({
         title: 'Erro',
-        description: 'Erro ao salvar',
+        description: error instanceof Error ? error.message : 'Erro ao salvar',
+        variant: 'destructive',
+      });
+    }
+  }
+
+  async function handleFinalizarParada(parada: Parada) {
+    try {
+      const response = await fetch(`/api/paradas-maquina/${parada.id}/finalizar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dataFim: new Date().toISOString(),
+        }),
+      });
+
+      if (!response.ok) throw new Error('Erro ao finalizar');
+
+      toast({
+        title: 'Sucesso',
+        description: 'Parada finalizada com sucesso',
+      });
+
+      await carregarParadas(pagination.page);
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: 'Erro ao finalizar parada',
         variant: 'destructive',
       });
     }
@@ -323,16 +330,12 @@ export default function ParadasMaquinaPage() {
         columns={columns}
         onRowClick={(parada) => {
           setSelectedParada(parada);
-          // Abrir modal de detalhes (opcional)
         }}
         extraActions={(parada) => !parada.dataFim ? (
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => {
-              setSelectedParada(parada);
-              setModalOpen(true);
-            }}
+            onClick={() => handleFinalizarParada(parada)}
             className="h-8 w-8 text-green-600"
             title="Finalizar Parada"
           >
@@ -349,12 +352,9 @@ export default function ParadasMaquinaPage() {
           setFormData({});
         }}
         onSubmit={handleSubmit}
-        title={selectedParada ? 'Finalizar Parada' : 'Nova Parada'}
+        title="Nova Parada"
         fields={formFields}
-        initialData={selectedParada ? { 
-          ...selectedParada,
-          dataFim: new Date().toISOString().slice(0, 16)
-        } : {}}
+        initialData={{}}
         schema={paradaSchema}
       />
     </div>
