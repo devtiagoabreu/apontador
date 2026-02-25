@@ -39,13 +39,45 @@ function ParadaContent() {
   const [maquina, setMaquina] = useState<any>(null);
   const [op, setOp] = useState<any>(null);
   const [carregandoDados, setCarregandoDados] = useState(true);
+  const [sessao, setSessao] = useState<any>(null);
+
+  // Verificar sessão ao carregar
+  useEffect(() => {
+    verificarSessao();
+  }, []);
+
+  async function verificarSessao() {
+    try {
+      const res = await fetch('/api/auth/session');
+      const session = await res.json();
+      console.log('🔐 Sessão atual:', session);
+      setSessao(session);
+      
+      if (!session?.user) {
+        toast({
+          title: 'Erro de sessão',
+          description: 'Faça login novamente',
+          variant: 'destructive',
+        });
+        router.push('/login');
+      }
+    } catch (error) {
+      console.error('Erro ao verificar sessão:', error);
+    }
+  }
 
   useEffect(() => {
-    carregarDados();
-  }, [maquinaId, opId]);
+    if (sessao?.user) {
+      carregarDados();
+    }
+  }, [sessao, maquinaId, opId]);
 
   async function carregarDados() {
     try {
+      console.log('🔄 Carregando dados para parada...');
+      console.log('🔍 maquinaId:', maquinaId);
+      console.log('🔍 opId:', opId);
+
       const [motivosRes, maquinaRes, opRes] = await Promise.all([
         fetch('/api/motivos-parada'),
         maquinaId ? fetch(`/api/maquinas/${maquinaId}`) : Promise.resolve(null),
@@ -53,18 +85,22 @@ function ParadaContent() {
       ]);
 
       const motivosData = await motivosRes.json();
+      console.log('✅ Motivos carregados:', motivosData.length);
       setMotivos(motivosData);
 
       if (maquinaRes && maquinaRes.ok) {
         const maquinaData = await maquinaRes.json();
+        console.log('✅ Máquina carregada:', maquinaData);
         setMaquina(maquinaData);
       }
 
       if (opRes && opRes.ok) {
         const opData = await opRes.json();
+        console.log('✅ OP carregada:', opData);
         setOp(opData);
       }
     } catch (error) {
+      console.error('❌ Erro ao carregar dados:', error);
       toast({
         title: 'Erro',
         description: 'Não foi possível carregar os dados',
@@ -76,7 +112,18 @@ function ParadaContent() {
   }
 
   async function handleRegistrarParada() {
+    console.log('='.repeat(50));
+    console.log('🔍 DEBUG - Registrar Parada');
+    console.log('='.repeat(50));
+    
+    console.log('📦 Dados do formulário:');
+    console.log('  - maquinaId:', maquinaId);
+    console.log('  - opId:', opId);
+    console.log('  - motivoSelecionado:', motivoSelecionado);
+    console.log('  - observacoes:', observacoes);
+
     if (!motivoSelecionado) {
+      console.log('❌ Motivo não selecionado');
       toast({
         title: 'Erro',
         description: 'Selecione um motivo para a parada',
@@ -86,6 +133,7 @@ function ParadaContent() {
     }
 
     if (!maquinaId) {
+      console.log('❌ maquinaId não informado');
       toast({
         title: 'Erro',
         description: 'Máquina não identificada',
@@ -105,21 +153,31 @@ function ParadaContent() {
 
       if (opId) {
         dados.opId = parseInt(opId);
+        console.log('➕ Vinculando OP:', opId);
       }
+
+      console.log('📦 Enviando para API:', JSON.stringify(dados, null, 2));
 
       const response = await fetch('/api/paradas-maquina', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+        },
         credentials: 'include',
         body: JSON.stringify(dados),
       });
 
+      console.log('📊 Status da resposta:', response.status);
+      
       const data = await response.json();
+      console.log('📦 Resposta da API:', data);
 
       if (!response.ok) {
+        console.error('❌ Erro na API:', data);
         throw new Error(data.error || 'Erro ao registrar parada');
       }
 
+      console.log('✅ Parada registrada com sucesso:', data);
       toast({
         title: 'Sucesso',
         description: 'Parada registrada com sucesso',
@@ -128,6 +186,7 @@ function ParadaContent() {
       router.push(`/apontamento/machine/${maquinaId}`);
       
     } catch (error) {
+      console.error('❌ Erro:', error);
       toast({
         title: 'Erro',
         description: error instanceof Error ? error.message : 'Erro ao registrar',
@@ -141,7 +200,7 @@ function ParadaContent() {
   if (carregandoDados) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <MobileHeader user={{ nome: 'Operador', matricula: '123' }} title="Registrar Parada" showMenu={false} />
+        <MobileHeader user={sessao?.user || { nome: 'Operador', matricula: '123' }} title="Registrar Parada" />
         <main className="p-4">
           <div className="flex items-center gap-3">
             <Link href={maquinaId ? `/apontamento/machine/${maquinaId}` : '/apontamento'}>
@@ -159,7 +218,7 @@ function ParadaContent() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <MobileHeader user={{ nome: 'Operador', matricula: '123' }} title="Registrar Parada" showMenu={false} />
+      <MobileHeader user={sessao?.user || { nome: 'Operador', matricula: '123' }} title="Registrar Parada" />
       
       <main className="p-4 pb-20">
         <div className="flex items-center gap-3 mb-4">
@@ -242,7 +301,7 @@ export default function ParadaPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-gray-50">
-        <MobileHeader user={{ nome: 'Operador', matricula: '123' }} title="Registrar Parada" showMenu={false} />
+        <MobileHeader user={{ nome: 'Operador', matricula: '123' }} title="Registrar Parada" />
         <main className="p-4">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" className="h-10 w-10">
