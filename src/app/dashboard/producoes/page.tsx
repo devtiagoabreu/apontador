@@ -53,8 +53,8 @@ interface Producao {
   op?: {
     op: number;
     produto: string;
-    programado: number | null;  // qtdeProgramado da OP
-    carregado: number | null;    // qtdeCarregado da OP
+    programado: number | null;
+    carregado: number | null;
     um: string;
   };
   maquina?: {
@@ -313,11 +313,17 @@ export default function ProducoesPage() {
         body: JSON.stringify(data),
       });
 
-      const responseData = await response.json();
-      console.log('📦 Resposta:', responseData);
+      let responseData;
+      try {
+        responseData = await response.json();
+      } catch (e) {
+        responseData = { error: 'Resposta inválida do servidor' };
+      }
+      
+      console.log('📦 Resposta:', { status: response.status, data: responseData });
 
-      if (!response.ok) {
-        throw new Error(responseData.error || 'Erro ao iniciar produção');
+      if (!response.ok && response.status !== 201) {
+        throw new Error(responseData.error || `Erro ${response.status}`);
       }
 
       toast({
@@ -328,6 +334,7 @@ export default function ProducoesPage() {
       setModalIniciarOpen(false);
       setFormData({});
       await carregarProducoes(1);
+      
     } catch (error) {
       console.error('❌ Erro:', error);
       toast({
@@ -442,7 +449,7 @@ export default function ProducoesPage() {
     }
   }
 
-  // Campos para iniciar produção
+  // Campos para iniciar produção - COM FILTRO CORRETO
   const camposIniciar = [
     {
       name: 'opId',
@@ -450,7 +457,30 @@ export default function ProducoesPage() {
       type: 'select' as const,
       required: true,
       options: ops
-        .filter(op => op.status === 'ABERTA')
+        .filter(op => {
+          // Excluir canceladas e finalizadas
+          if (op.status === 'CANCELADA' || op.status === 'FINALIZADA') {
+            return false;
+          }
+          
+          // Abertas podem sempre iniciar
+          if (op.status === 'ABERTA') {
+            return true;
+          }
+          
+          // Em andamento: verificar se o último estágio foi finalizado
+          if (op.status === 'EM_ANDAMENTO') {
+            const ultimoApontamento = producoes
+              .filter(p => p.opId === op.op)
+              .sort((a, b) => new Date(b.dataFim || 0).getTime() - new Date(a.dataFim || 0).getTime())[0];
+            
+            // Se o último apontamento tem dataFim, o estágio foi finalizado
+            // Então a OP pode ser iniciada novamente no próximo estágio
+            return ultimoApontamento?.dataFim !== null;
+          }
+          
+          return false;
+        })
         .map(op => ({ 
           value: op.op.toString(), 
           label: `OP ${op.op} - ${op.produto.substring(0, 30)} (Carregado: ${op.qtdeCarregado || 0} ${op.um})` 
@@ -668,7 +698,7 @@ export default function ProducoesPage() {
         schema={iniciarProducaoSchema}
       />
 
-      {/* Modal de Finalizar Produção - COM SUGESTÃO DO CARREGADO */}
+      {/* Modal de Finalizar Produção */}
       <FormModal
         open={modalFinalizarOpen}
         onClose={() => {
@@ -680,7 +710,7 @@ export default function ProducoesPage() {
         title="Finalizar Produção"
         fields={camposFinalizar}
         initialData={selectedProducao ? {
-          metragemProcessada: selectedProducao.op?.carregado, // ← USA O CARREGADO, NÃO O PROGRAMADO
+          metragemProcessada: selectedProducao.op?.carregado,
         } : {}}
         schema={finalizarProducaoSchema}
       />
@@ -749,15 +779,15 @@ export default function ProducoesPage() {
                   <p className="text-sm">{selectedProducao.dataFim ? formatDate(selectedProducao.dataFim) : '-'}</p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Programado (meta PCP)</p>
+                  <p className="text-sm font-medium text-gray-500">Programado</p>
                   <p className="text-sm">{selectedProducao.metragemProgramada} {selectedProducao.op?.um}</p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Carregado (tecido real)</p>
+                  <p className="text-sm font-medium text-gray-500">Carregado</p>
                   <p className="text-sm">{selectedProducao.op?.carregado} {selectedProducao.op?.um}</p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Processado neste estágio</p>
+                  <p className="text-sm font-medium text-gray-500">Processado</p>
                   <p className="text-sm">{selectedProducao.metragemProcessada || '-'} {selectedProducao.op?.um}</p>
                 </div>
                 <div>

@@ -82,6 +82,7 @@ export async function GET(request: Request) {
         o.op as op_numero,
         o.produto as op_produto,
         o.qtde_programado as op_programado,
+        o.qtde_carregado as op_carregado,
         o.um as op_um,
         m.nome as maquina_nome,
         m.codigo as maquina_codigo,
@@ -158,6 +159,7 @@ export async function GET(request: Request) {
         op: safeParseInt(row.op_numero),
         produto: safeParseString(row.op_produto),
         programado: safeParseFloat(row.op_programado),
+        carregado: safeParseFloat(row.op_carregado),
         um: safeParseString(row.op_um),
       },
       maquina: {
@@ -336,7 +338,7 @@ export async function POST(request: Request) {
       })
       .where(eq(maquinas.id, validated.maquinaId));
 
-    // 13. Atualizar status da OP
+    // 13. Atualizar status da OP para EM_ANDAMENTO
     await db
       .update(ops)
       .set({ 
@@ -352,7 +354,7 @@ export async function POST(request: Request) {
     console.log('🎉 PRODUÇÃO INICIADA COM SUCESSO!');
     console.log('='.repeat(50));
 
-    // ✅ RETORNAR COM STATUS 201 (CREATED)
+    // ✅ RETORNAR COM STATUS 201 E O OBJETO COMPLETO
     return NextResponse.json(novaProducao, { status: 201 });
 
   } catch (error) {
