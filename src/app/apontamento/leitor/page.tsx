@@ -30,7 +30,6 @@ export default function LeitorPage() {
         scanner.clear();
         setScanning(false);
         
-        // Extrair informações do QR Code
         if (decodedText.includes('/machine/')) {
           const machineId = decodedText.split('/machine/').pop();
           router.push(`/apontamento/machine/${machineId}`);

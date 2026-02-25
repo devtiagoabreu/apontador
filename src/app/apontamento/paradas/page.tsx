@@ -79,6 +79,8 @@ export default function ParadasListPage() {
       <MobileHeader user={{ nome: 'Operador', matricula: '123' }} title="Paradas Ativas" />
       
       <main className="p-4 pb-20">
+        {/* REMOVIDO O H1 DUPLICADO */}
+
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-semibold">Paradas Ativas</h1>
           <Link href="/apontamento/parada">
