@@ -98,16 +98,17 @@ export async function POST(
         throw new Error('Estágio não encontrado');
       }
 
-      // 4. Verificar se é o último estágio (REVISÃO)
+      // 4. Buscar último estágio (REVISÃO)
       const ultimoEstagio = await tx.query.estagios.findFirst({
+        where: eq(estagios.nome, 'REVISÃO'), // ou pelo código
         orderBy: (estagios, { desc }) => [desc(estagios.ordem)],
       });
 
       const isUltimoEstagio = estagioAtual.codigo === ultimoEstagio?.codigo;
 
       if (isUltimoEstagio) {
-        // É REVISÃO - atualizar qtdeProduzida da OP
-        console.log('🏁 REVISÃO - atualizando OP.qtdeProduzida para:', validated.metragemProcessada);
+        // É REVISÃO - finalizar OP
+        console.log('🏁 REVISÃO - FINALIZANDO OP');
         await tx
           .update(ops)
           .set({
@@ -119,10 +120,10 @@ export async function POST(
           })
           .where(eq(ops.op, producao.opId));
         
-        console.log('✅ OP finalizada com produção:', validated.metragemProcessada);
+        console.log('✅ OP FINALIZADA');
       } else {
-        // NÃO É REVISÃO - apenas avança estágio, NÃO atualiza qtdeProduzida
-        console.log('➡️ Avançando para próximo estágio - mantendo qtdeProduzida da OP');
+        // NÃO É REVISÃO - apenas avança estágio
+        console.log('➡️ Avançando para próximo estágio');
         
         const proximoEstagio = await tx.query.estagios.findFirst({
           where: sql`${estagios.ordem} > ${estagioAtual.ordem}`,
@@ -133,14 +134,14 @@ export async function POST(
           await tx
             .update(ops)
             .set({
+              status: 'EM_ANDAMENTO', // Garante que está em andamento
               codEstagioAtual: proximoEstagio.codigo,
               estagioAtual: proximoEstagio.nome,
               dataUltimoApontamento: agora,
-              // NÃO MEXE EM qtdeProduzida!
             })
             .where(eq(ops.op, producao.opId));
           
-          console.log('✅ OP avançada para estágio:', proximoEstagio.nome);
+          console.log('✅ OP agora está em:', proximoEstagio.nome);
         }
       }
 
