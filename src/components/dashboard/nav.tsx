@@ -15,7 +15,8 @@ import {
   AlertTriangle,
   Layers,
   XCircle,
-  Calendar, 
+  Calendar,
+  Play, 
 } from 'lucide-react';
 
 const navItems = [
@@ -24,15 +25,20 @@ const navItems = [
     href: '/dashboard',
     icon: LayoutDashboard,
   },
-  {
+  /*{
     title: 'Apontamentos',
     href: '/dashboard/apontamentos',
     icon: Calendar,
+  },*/
+  {
+    title: 'Produções',
+    href: '/dashboard/producoes',
+    icon: Play, 
   },
   {
     title: 'Paradas de Máquina',
     href: '/dashboard/paradas-maquina',
-    icon: AlertTriangle, // ou o ícone que preferir
+    icon: AlertTriangle, 
   },
   {
     title: 'Áreas',
