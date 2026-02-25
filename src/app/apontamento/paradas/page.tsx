@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { MobileCard } from '@/components/mobile/card';
@@ -27,7 +26,6 @@ interface Parada {
 }
 
 export default function ParadasListPage() {
-  const router = useRouter();
   const [paradas, setParadas] = useState<Parada[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -66,11 +64,7 @@ export default function ParadasListPage() {
         description: 'Parada finalizada',
       });
 
-      // Recarregar a lista
       carregarParadas();
-      
-      // Opcional: redirecionar para a máquina
-      // router.push(`/apontamento/machine/${maquinaId}`);
     } catch (error) {
       toast({
         title: 'Erro',
@@ -82,7 +76,7 @@ export default function ParadasListPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <MobileHeader user={{ nome: 'Operador', matricula: '123' }} />
+      <MobileHeader user={{ nome: 'Operador', matricula: '123' }} title="Paradas Ativas" />
       
       <main className="p-4 pb-20">
         <div className="flex items-center justify-between mb-4">

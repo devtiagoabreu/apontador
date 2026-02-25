@@ -11,7 +11,7 @@ export function MobileNav() {
   const items = [
     { href: '/apontamento', icon: Home, label: 'Início' },
     { href: '/apontamento/leitor', icon: QrCode, label: 'Ler QR' },
-    { href: '/apontamento/paradas', icon: Clock, label: 'Paradas' }, // PLURAL!
+    { href: '/apontamento/paradas', icon: Clock, label: 'Paradas' },
     { href: '/apontamento/historico', icon: History, label: 'Histórico' },
   ];
 
