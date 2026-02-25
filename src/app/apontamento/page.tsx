@@ -19,20 +19,21 @@ import { formatDate, formatNumber } from '@/lib/utils';
 function getEstagioStyle(estagio: any) {
   // Cores padrão (cinza)
   const defaultBg = '#6b7280'; // gray-500
-  const defaultText = '#ffffff';
+  const defaultText = '#374151'; // gray-700
   
   if (!estagio?.cor) {
     return {
-      backgroundColor: `${defaultBg}20`, // 20 = 12% de opacidade
+      backgroundColor: '#f3f4f6', // gray-100
       color: defaultText,
       border: '1px solid #e5e7eb'
     };
   }
   
   return {
-    backgroundColor: `${estagio.cor}20`, // 20% de opacidade para fundo
-    color: estagio.cor, // cor sólida para o texto
-    border: '1px solid transparent'
+    backgroundColor: `${estagio.cor}15`, // 15% de opacidade
+    color: estagio.cor,
+    border: '1px solid transparent',
+    fontWeight: '500'
   };
 }
 
@@ -51,7 +52,6 @@ export default async function ApontamentoPage() {
       maquinaId: producoesTable.maquinaId,
       estagioId: producoesTable.estagioId,
       dataInicio: producoesTable.dataInicio,
-      metragemProgramada: producoesTable.metragemProgramada,
       op: {
         op: ops.op,
         produto: ops.produto,
@@ -107,7 +107,6 @@ export default async function ApontamentoPage() {
             </MobileCard>
           ) : (
             producoesAtivas.map((prod) => {
-              // Calcular estilo do estágio com fallback seguro
               const estiloEstagio = getEstagioStyle(prod.estagio);
               const nomeEstagio = prod.estagio?.nome || 'Sem estágio';
               const nomeMaquina = prod.maquina?.nome || 'Máquina não identificada';

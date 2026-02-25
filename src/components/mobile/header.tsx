@@ -12,9 +12,10 @@ interface MobileHeaderProps {
     nome: string;
     matricula: string;
   };
+  title?: string; // ← ADICIONAR ESTA LINHA
 }
 
-// Mapeamento de rotas para títulos
+// Mapeamento de rotas para títulos (fallback)
 const pageTitles: Record<string, string> = {
   '/apontamento': 'Início',
   '/apontamento/leitor': 'Ler QR Code',
@@ -25,11 +26,16 @@ const pageTitles: Record<string, string> = {
   '/apontamento/perfil': 'Meu Perfil',
 };
 
-export function MobileHeader({ user }: MobileHeaderProps) {
+export function MobileHeader({ user, title }: MobileHeaderProps) {
   const pathname = usePathname();
   
-  // Determinar o título baseado na rota atual
+  // Determinar o título baseado na prop ou na rota
   const getPageTitle = () => {
+    // Se veio uma prop title, usar ela
+    if (title) {
+      return title;
+    }
+    
     // Tenta encontrar um título exato
     if (pageTitles[pathname]) {
       return pageTitles[pathname];
@@ -72,6 +78,11 @@ export function MobileHeader({ user }: MobileHeaderProps) {
                 </Link>
               </li>
               <li>
+                <Link href="/apontamento/leitor" className="flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg">
+                  Ler QR
+                </Link>
+              </li>
+              <li>
                 <Link href="/apontamento/producoes" className="flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg">
                   Produções
                 </Link>
@@ -104,7 +115,7 @@ export function MobileHeader({ user }: MobileHeaderProps) {
         </SheetContent>
       </Sheet>
 
-      {/* Título da página (centro) - DINÂMICO */}
+      {/* Título da página (centro) */}
       <h1 className="text-lg font-semibold">{getPageTitle()}</h1>
 
       {/* Avatar do usuário (direita) */}
