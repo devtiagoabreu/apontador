@@ -155,7 +155,7 @@ const editarProducaoSchema = z.object({
   isReprocesso: z.boolean().optional(),
 });
 
-// Colunas da tabela
+// Colunas da tabela - AGORA COM CARREGADO
 const columns = [
   {
     key: 'dataFim' as const,
@@ -210,6 +210,11 @@ const columns = [
     key: 'metragemProgramada' as const,
     title: 'Programado',
     format: (value: number) => value ? formatNumber(value) : '-'
+  },
+  {
+    key: 'op' as const, // Usando a relação para acessar carregado
+    title: 'Carregado',
+    format: (value: any) => value?.carregado ? formatNumber(value.carregado) : '-'
   },
   {
     key: 'metragemProcessada' as const,
@@ -616,7 +621,7 @@ export default function ProducoesPage() {
         </div>
       </div>
 
-      {/* Tabela */}
+      {/* Tabela - AGORA COM COLUNA CARREGADO */}
       <DataTable
         data={producoes}
         columns={columns}
@@ -685,7 +690,7 @@ export default function ProducoesPage() {
         schema={iniciarProducaoSchema}
       />
 
-      {/* Modal de Finalizar Produção - COM CARREGADO COMO SUGESTÃO */}
+      {/* Modal de Finalizar Produção */}
       <FormModal
         open={modalFinalizarOpen}
         onClose={() => {
@@ -697,7 +702,7 @@ export default function ProducoesPage() {
         title="Finalizar Produção"
         fields={camposFinalizar}
         initialData={selectedProducao ? {
-          metragemProcessada: selectedProducao.op?.carregado || 0, // ← USA O CARREGADO
+          metragemProcessada: selectedProducao.op?.carregado || 0,
         } : {}}
         schema={finalizarProducaoSchema}
       />
