@@ -15,14 +15,25 @@ const finalizarSchema = z.object({
   observacoes: z.string().optional(),
 });
 
+// Interface para tipar os apontamentos
+interface Apontamento {
+  id: string;
+  opId: number;
+  maquinaId: string;
+  estagioId: string;
+  dataInicio: Date;
+  dataFim: Date | null;
+  metragemProcessada: string | null;
+}
+
 // Função auxiliar para determinar status da OP
-async function determinarStatusOP(opId: number, tx: any) {
+async function determinarStatusOP(opId: number, tx: any): Promise<string> {
   console.log(`🔍 Determinando status para OP ${opId}...`);
   
   // Buscar todos os apontamentos de produção desta OP
   const apontamentos = await tx.query.producoesTable.findMany({
     where: eq(producoesTable.opId, opId),
-  });
+  }) as Apontamento[];
 
   console.log(`📊 Encontrados ${apontamentos.length} apontamentos`);
 
@@ -32,19 +43,19 @@ async function determinarStatusOP(opId: number, tx: any) {
   }
 
   // Verificar se tem algum apontamento em andamento
-  const temEmAndamento = apontamentos.some(a => !a.dataFim);
+  const temEmAndamento = apontamentos.some((a: Apontamento) => !a.dataFim);
   if (temEmAndamento) {
     console.log('✅ Tem apontamento em andamento -> EM_ANDAMENTO');
     return 'EM_ANDAMENTO';
   }
 
   // Verificar se todos estão finalizados
-  const todosFinalizados = apontamentos.every(a => a.dataFim);
+  const todosFinalizados = apontamentos.every((a: Apontamento) => a.dataFim);
   if (todosFinalizados) {
     console.log('✅ Todos apontamentos finalizados');
     
     // Buscar o último apontamento (mais recente)
-    const ultimoApontamento = apontamentos.sort((a, b) => 
+    const ultimoApontamento = apontamentos.sort((a: Apontamento, b: Apontamento) => 
       new Date(b.dataFim!).getTime() - new Date(a.dataFim!).getTime()
     )[0];
 
@@ -187,8 +198,8 @@ export async function POST(
 
       console.log(`✅ Status da OP atualizado para: ${novoStatus}`);
 
-      // Se for revisão e for o último estágio, atualizar qtdeProduzida
-      if (proximoEstagio === undefined) { // Não há próximo estágio = é o último
+      // Se for o último estágio (não há próximo) e for revisão, atualizar qtdeProduzida
+      if (!proximoEstagio) {
         const estagioRevisao = await tx.query.estagios.findFirst({
           where: eq(estagios.nome, 'REVISÃO'),
         });
