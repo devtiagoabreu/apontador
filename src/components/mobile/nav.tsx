@@ -1,6 +1,6 @@
 'use client';
 
-import { Home, QrCode, Clock, History } from 'lucide-react';
+import { Home, QrCode, Clock, History, Factory } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -11,7 +11,8 @@ export function MobileNav() {
   const items = [
     { href: '/apontamento', icon: Home, label: 'Início' },
     { href: '/apontamento/leitor', icon: QrCode, label: 'Ler QR' },
-    { href: '/apontamento/ativos', icon: Clock, label: 'Ativos' },
+    { href: '/apontamento/producoes', icon: Factory, label: 'Produções' }, // NOVO
+    { href: '/apontamento/paradas', icon: Clock, label: 'Paradas' },
     { href: '/apontamento/historico', icon: History, label: 'Histórico' },
   ];
 
