@@ -210,6 +210,7 @@ export async function POST(request: Request) {
   
   try {
     // 1. Verificar autenticação
+    console.log('🔐 Verificando autenticação...');
     const session = await getServerSession(authOptions);
     console.log('👤 Sessão:', session?.user?.id);
     
@@ -219,14 +220,26 @@ export async function POST(request: Request) {
     }
 
     // 2. Receber body
+    console.log('📨 Recebendo body...');
     const body = await request.json();
     console.log('📦 Body recebido:', JSON.stringify(body, null, 2));
 
     // 3. Validar dados
-    const validated = iniciarProducaoSchema.parse(body);
-    console.log('✅ Dados validados:', validated);
+    console.log('🔍 Validando dados...');
+    let validated;
+    try {
+      validated = iniciarProducaoSchema.parse(body);
+      console.log('✅ Dados validados com sucesso:', validated);
+    } catch (validationError) {
+      console.error('❌ Erro de validação:', validationError);
+      return NextResponse.json(
+        { error: 'Dados inválidos', detalhes: validationError.errors },
+        { status: 400 }
+      );
+    }
 
     // 4. Verificar se OP existe
+    console.log('🔍 Buscando OP:', validated.opId);
     const op = await db.query.ops.findFirst({
       where: eq(ops.op, validated.opId),
     });
@@ -238,8 +251,10 @@ export async function POST(request: Request) {
         { status: 404 }
       );
     }
+    console.log('✅ OP encontrada:', op.op, op.produto);
 
     // 5. Verificar se máquina existe
+    console.log('🔍 Buscando máquina:', validated.maquinaId);
     const maquina = await db.query.maquinas.findFirst({
       where: eq(maquinas.id, validated.maquinaId),
     });
@@ -251,8 +266,10 @@ export async function POST(request: Request) {
         { status: 404 }
       );
     }
+    console.log('✅ Máquina encontrada:', maquina.nome, maquina.codigo);
 
     // 6. Verificar se máquina está disponível
+    console.log('🔍 Verificando status da máquina:', maquina.status);
     if (maquina.status !== 'DISPONIVEL') {
       console.log('❌ Máquina não está disponível. Status:', maquina.status);
       return NextResponse.json(
@@ -260,8 +277,10 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+    console.log('✅ Máquina disponível');
 
     // 7. Verificar se já existe produção ativa para esta OP
+    console.log('🔍 Verificando se OP já tem produção ativa...');
     const producaoAtivaOP = await db.execute(sql`
       SELECT id FROM producoes 
       WHERE op_id = ${validated.opId} 
@@ -275,8 +294,10 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+    console.log('✅ OK - Nenhuma produção ativa para esta OP');
 
     // 8. Verificar se já existe produção ativa para esta máquina
+    console.log('🔍 Verificando se máquina já tem produção ativa...');
     const producaoAtivaMaquina = await db.execute(sql`
       SELECT id FROM producoes 
       WHERE maquina_id = ${validated.maquinaId} 
@@ -290,8 +311,10 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+    console.log('✅ OK - Nenhuma produção ativa para esta máquina');
 
     // 9. Verificar se estágio existe
+    console.log('🔍 Buscando estágio:', validated.estagioId);
     const estagio = await db.query.estagios.findFirst({
       where: eq(estagios.id, validated.estagioId),
     });
@@ -303,8 +326,10 @@ export async function POST(request: Request) {
         { status: 404 }
       );
     }
+    console.log('✅ Estágio encontrado:', estagio.nome, estagio.codigo);
 
     // 10. Preparar dados para inserção
+    console.log('📝 Preparando dados para inserção...');
     const agora = new Date();
     const dadosInserir = {
       opId: validated.opId,
@@ -319,46 +344,71 @@ export async function POST(request: Request) {
       updatedAt: agora,
     };
 
-    console.log('💾 Inserindo produção:', JSON.stringify(dadosInserir, null, 2));
+    console.log('💾 Dados para inserir:', JSON.stringify(dadosInserir, null, 2));
 
     // 11. Inserir no banco
-    const [novaProducao] = await db
-      .insert(producoesTable)
-      .values(dadosInserir)
-      .returning();
-
-    console.log('✅ Produção iniciada com sucesso! ID:', novaProducao.id);
+    console.log('📥 Inserindo no banco...');
+    let novaProducao;
+    try {
+      [novaProducao] = await db
+        .insert(producoesTable)
+        .values(dadosInserir)
+        .returning();
+      
+      console.log('✅ Produção inserida com sucesso! ID:', novaProducao.id);
+      console.log('📦 Objeto retornado:', JSON.stringify(novaProducao, null, 2));
+    } catch (dbError) {
+      console.error('❌ Erro ao inserir no banco:', dbError);
+      return NextResponse.json(
+        { error: 'Erro ao inserir no banco de dados' },
+        { status: 500 }
+      );
+    }
 
     // 12. Atualizar status da máquina
-    await db
-      .update(maquinas)
-      .set({ 
-        status: 'EM_PROCESSO',
-        updatedAt: agora 
-      })
-      .where(eq(maquinas.id, validated.maquinaId));
+    console.log('🔄 Atualizando status da máquina...');
+    try {
+      await db
+        .update(maquinas)
+        .set({ 
+          status: 'EM_PROCESSO',
+          updatedAt: agora 
+        })
+        .where(eq(maquinas.id, validated.maquinaId));
+      console.log('✅ Status da máquina atualizado para EM_PROCESSO');
+    } catch (updateError) {
+      console.error('❌ Erro ao atualizar máquina:', updateError);
+      // Não interrompe o fluxo
+    }
 
-    // 13. Atualizar status da OP para EM_ANDAMENTO
-    await db
-      .update(ops)
-      .set({ 
-        status: 'EM_ANDAMENTO',
-        codMaquinaAtual: maquina.codigo,
-        maquinaAtual: maquina.nome,
-        dataUltimoApontamento: agora,
-      })
-      .where(eq(ops.op, validated.opId));
+    // 13. Atualizar status da OP
+    console.log('🔄 Atualizando status da OP...');
+    try {
+      await db
+        .update(ops)
+        .set({ 
+          status: 'EM_ANDAMENTO',
+          codMaquinaAtual: maquina.codigo,
+          maquinaAtual: maquina.nome,
+          dataUltimoApontamento: agora,
+        })
+        .where(eq(ops.op, validated.opId));
+      console.log('✅ Status da OP atualizado para EM_ANDAMENTO');
+    } catch (updateError) {
+      console.error('❌ Erro ao atualizar OP:', updateError);
+      // Não interrompe o fluxo
+    }
 
-    console.log('✅ Status da máquina e OP atualizados');
     console.log('='.repeat(50));
     console.log('🎉 PRODUÇÃO INICIADA COM SUCESSO!');
     console.log('='.repeat(50));
 
-    // ✅ RETORNAR COM STATUS 201 E O OBJETO COMPLETO
+    // ✅ RETORNAR COM STATUS 201
     return NextResponse.json(novaProducao, { status: 201 });
 
   } catch (error) {
-    console.error('❌ ERRO:', error);
+    console.error('❌ ERRO GERAL:', error);
+    console.error('📚 Stack:', error instanceof Error ? error.stack : 'N/A');
     
     if (error instanceof z.ZodError) {
       console.error('❌ Erro de validação Zod:', error.errors);
