@@ -15,6 +15,27 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { formatDate, formatNumber } from '@/lib/utils';
 
+// Função auxiliar para estilizar o estágio (resolvendo o erro de cor)
+function getEstagioStyle(estagio: any) {
+  // Cores padrão (cinza)
+  const defaultBg = '#6b7280'; // gray-500
+  const defaultText = '#ffffff';
+  
+  if (!estagio?.cor) {
+    return {
+      backgroundColor: `${defaultBg}20`, // 20 = 12% de opacidade
+      color: defaultText,
+      border: '1px solid #e5e7eb'
+    };
+  }
+  
+  return {
+    backgroundColor: `${estagio.cor}20`, // 20% de opacidade para fundo
+    color: estagio.cor, // cor sólida para o texto
+    border: '1px solid transparent'
+  };
+}
+
 export default async function ApontamentoPage() {
   const session = await getServerSession(authOptions);
 
@@ -77,67 +98,84 @@ export default async function ApontamentoPage() {
         </Link>
 
         {/* Produções em andamento */}
-        {producoesAtivas.length > 0 ? (
-          <div className="space-y-3">
-            <h3 className="font-medium text-gray-700">Em andamento</h3>
-            {producoesAtivas.map((prod) => (
-              <MobileCard key={prod.id}>
-                <div className="space-y-2">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-medium">OP {prod.op?.op}</p>
-                      <p className="text-sm text-gray-500 line-clamp-2">{prod.op?.produto}</p>
-                    </div>
-                    <span 
-                      className="text-xs px-2 py-1 rounded-full"
-                      style={{ 
-                        backgroundColor: `${prod.estagio?.cor}20`,
-                        color: prod.estagio?.cor 
-                      }}
-                    >
-                      {prod.estagio?.nome}
-                    </span>
-                  </div>
+        <div className="space-y-3">
+          <h3 className="font-medium text-gray-700">Em andamento</h3>
+          
+          {producoesAtivas.length === 0 ? (
+            <MobileCard className="text-center py-8 text-gray-500">
+              Nenhuma produção em andamento
+            </MobileCard>
+          ) : (
+            producoesAtivas.map((prod) => {
+              // Calcular estilo do estágio com fallback seguro
+              const estiloEstagio = getEstagioStyle(prod.estagio);
+              const nomeEstagio = prod.estagio?.nome || 'Sem estágio';
+              const nomeMaquina = prod.maquina?.nome || 'Máquina não identificada';
+              const valorCarregado = prod.op?.carregado || 0;
+              const unidade = prod.op?.um || 'm';
+              const dataInicio = prod.dataInicio ? formatDate(prod.dataInicio) : 'Data não disponível';
 
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <span className="text-gray-500">Máquina:</span>
-                      <p className="font-medium">{prod.maquina?.nome}</p>
+              return (
+                <MobileCard key={prod.id}>
+                  <div className="space-y-2">
+                    {/* Cabeçalho com OP e Estágio */}
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-medium">OP {prod.op?.op || '---'}</p>
+                        <p className="text-sm text-gray-500 line-clamp-2">
+                          {prod.op?.produto || 'Produto não especificado'}
+                        </p>
+                      </div>
+                      <span 
+                        className="text-xs px-3 py-1 rounded-full font-medium"
+                        style={estiloEstagio}
+                      >
+                        {nomeEstagio}
+                      </span>
                     </div>
-                    <div>
-                      <span className="text-gray-500">Carregado:</span>
-                      <p className="font-medium">
-                        {formatNumber(prod.op?.carregado || 0)} {prod.op?.um}
-                      </p>
+
+                    {/* Informações da máquina e carregado */}
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-gray-500">Máquina:</span>
+                        <p className="font-medium">{nomeMaquina}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Carregado:</span>
+                        <p className="font-medium">
+                          {formatNumber(valorCarregado)} {unidade}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Data de início */}
+                    <div className="flex items-center gap-1 text-xs text-gray-400">
+                      <Clock className="h-3 w-3" />
+                      {dataInicio}
+                    </div>
+
+                    {/* Botões de ação */}
+                    <div className="flex gap-2 pt-2">
+                      <Link href={`/apontamento/producoes/finalizar?id=${prod.id}`} className="flex-1">
+                        <Button size="sm" className="w-full bg-green-600 hover:bg-green-700">
+                          <CheckCircle className="h-4 w-4 mr-1" /> Finalizar
+                        </Button>
+                      </Link>
+                      <Link 
+                        href={`/apontamento/parada?maquinaId=${prod.maquinaId}&opId=${prod.opId}`} 
+                        className="flex-1"
+                      >
+                        <Button size="sm" variant="outline" className="w-full text-yellow-600">
+                          <Pause className="h-4 w-4 mr-1" /> Parada
+                        </Button>
+                      </Link>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-1 text-xs text-gray-400">
-                    <Clock className="h-3 w-3" />
-                    {formatDate(prod.dataInicio)}
-                  </div>
-
-                  <div className="flex gap-2 pt-2">
-                    <Link href={`/apontamento/producoes/finalizar?id=${prod.id}`} className="flex-1">
-                      <Button size="sm" className="w-full bg-green-600 hover:bg-green-700">
-                        <CheckCircle className="h-4 w-4 mr-1" /> Finalizar
-                      </Button>
-                    </Link>
-                    <Link href={`/apontamento/parada?maquinaId=${prod.maquinaId}&opId=${prod.opId}`} className="flex-1">
-                      <Button size="sm" variant="outline" className="w-full text-yellow-600">
-                        <Pause className="h-4 w-4 mr-1" /> Parada
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
-              </MobileCard>
-            ))}
-          </div>
-        ) : (
-          <MobileCard className="text-center py-8 text-gray-500">
-            Nenhuma produção em andamento
-          </MobileCard>
-        )}
+                </MobileCard>
+              );
+            })
+          )}
+        </div>
       </main>
       
       <MobileNav />
