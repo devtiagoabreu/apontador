@@ -4,9 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { MobileCard } from '@/components/mobile/card';
-import { MobileHeader } from '@/components/mobile/header';
-import { MobileNav } from '@/components/mobile/nav';
-import { Play, Plus, Clock } from 'lucide-react';
+import { Plus, Play, Clock } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { toast } from '@/components/ui/use-toast';
 
@@ -25,7 +23,7 @@ interface Parada {
   };
 }
 
-export default function ParadasListPage() {
+export default function ParadasPage() {
   const [paradas, setParadas] = useState<Parada[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -49,7 +47,7 @@ export default function ParadasListPage() {
     }
   }
 
-  async function finalizarParada(id: string, maquinaId: string) {
+  async function finalizarParada(id: string) {
     try {
       const response = await fetch(`/api/paradas-maquina/${id}/finalizar`, {
         method: 'POST',
@@ -75,75 +73,61 @@ export default function ParadasListPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <MobileHeader user={{ nome: 'Operador', matricula: '123' }} title="Paradas Ativas" />
-      
-      <main className="p-4 pb-20">
-        {/* REMOVIDO O H1 DUPLICADO */}
+    <div className="p-4">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-semibold">Paradas</h1>
+        <Link href="/apontamento/parada">
+          <Button variant="outline" size="sm">
+            <Plus className="h-4 w-4 mr-2" /> Nova
+          </Button>
+        </Link>
+      </div>
 
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-xl font-semibold">Paradas Ativas</h1>
-          <Link href="/apontamento/parada">
-            <Button variant="outline" size="sm">
-              <Plus className="h-4 w-4 mr-2" /> Nova Parada
-            </Button>
-          </Link>
-        </div>
-
-        {loading ? (
-          <div className="text-center py-8">Carregando...</div>
-        ) : paradas.length === 0 ? (
-          <MobileCard className="text-center py-8 text-gray-500">
-            Nenhuma parada ativa no momento
-          </MobileCard>
-        ) : (
-          <div className="space-y-3">
-            {paradas.map((parada) => (
-              <MobileCard key={parada.id}>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-medium text-red-600">⏸️ Parada</span>
-                      <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded-full">
-                        {parada.maquina?.codigo}
-                      </span>
-                    </div>
-                    
-                    <p className="font-medium">{parada.maquina?.nome}</p>
-                    
-                    <p className="text-sm text-gray-600 mt-1">
-                      {parada.motivo?.descricao}
-                    </p>
-                    
-                    {parada.observacoes && (
-                      <p className="text-xs text-gray-500 mt-1 italic">
-                        "{parada.observacoes}"
-                      </p>
-                    )}
-                    
-                    <div className="flex items-center gap-1 text-xs text-gray-400 mt-2">
-                      <Clock className="h-3 w-3" />
-                      {formatDate(parada.dataInicio)}
-                    </div>
+      {loading ? (
+        <div className="text-center py-8">Carregando...</div>
+      ) : paradas.length === 0 ? (
+        <MobileCard className="text-center py-8 text-gray-500">
+          Nenhuma parada ativa
+        </MobileCard>
+      ) : (
+        <div className="space-y-3">
+          {paradas.map((parada) => (
+            <MobileCard key={parada.id}>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-medium text-red-600">⏸️ Parada</span>
+                    <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded-full">
+                      {parada.maquina?.codigo}
+                    </span>
                   </div>
                   
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-green-600 border-green-200 hover:bg-green-50"
-                    onClick={() => finalizarParada(parada.id, parada.maquinaId)}
-                  >
-                    <Play className="h-4 w-4 mr-1" />
-                    Finalizar
-                  </Button>
+                  <p className="font-medium">{parada.maquina?.nome}</p>
+                  <p className="text-sm text-gray-600 mt-1">{parada.motivo?.descricao}</p>
+                  
+                  {parada.observacoes && (
+                    <p className="text-xs text-gray-500 mt-1 italic">"{parada.observacoes}"</p>
+                  )}
+                  
+                  <div className="flex items-center gap-1 text-xs text-gray-400 mt-2">
+                    <Clock className="h-3 w-3" />
+                    {formatDate(parada.dataInicio)}
+                  </div>
                 </div>
-              </MobileCard>
-            ))}
-          </div>
-        )}
-      </main>
-      
-      <MobileNav />
+                
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-green-600"
+                  onClick={() => finalizarParada(parada.id)}
+                >
+                  <Play className="h-4 w-4 mr-1" /> Finalizar
+                </Button>
+              </div>
+            </MobileCard>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
