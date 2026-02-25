@@ -118,9 +118,12 @@ interface Filtros {
   dataFim?: string;
 }
 
-// Schema para iniciar produção
+// Schema para iniciar produção - CORRIGIDO (aceita string e converte para número)
 const iniciarProducaoSchema = z.object({
-  opId: z.number().int().positive('OP é obrigatória'),
+  opId: z.union([z.string(), z.number()])
+    .transform(val => Number(val))
+    .refine(val => !isNaN(val) && val > 0, 'OP é obrigatória'),
+  
   maquinaId: z.string().min(1, 'Máquina é obrigatória'),
   operadorInicioId: z.string().min(1, 'Operador é obrigatório'),
   estagioId: z.string().min(1, 'Estágio é obrigatório'),
@@ -130,11 +133,14 @@ const iniciarProducaoSchema = z.object({
 
 // Schema para finalizar produção
 const finalizarProducaoSchema = z.object({
-  metragemProcessada: z.number().positive('Metragem deve ser positiva'),
+  metragemProcessada: z.union([z.string(), z.number()])
+    .transform(val => Number(val))
+    .refine(val => !isNaN(val) && val > 0, 'Metragem deve ser positiva'),
+  
   observacoes: z.string().optional(),
 });
 
-// Colunas da tabela - TODAS com format de 1 argumento
+// Colunas da tabela
 const columns = [
   {
     key: 'dataFim' as const,
@@ -283,15 +289,13 @@ export default function ProducoesPage() {
 
   async function handleIniciarProducao(data: any) {
     try {
-      const dadosParaEnviar = {
-        ...data,
-        opId: parseInt(data.opId),
-      };
-
+      console.log('📦 Dados recebidos:', data);
+      
+      // O schema já converteu opId para número
       const response = await fetch('/api/producoes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dadosParaEnviar),
+        body: JSON.stringify(data),
       });
 
       if (!response.ok) {
@@ -320,6 +324,8 @@ export default function ProducoesPage() {
     if (!selectedProducao) return;
 
     try {
+      console.log('📦 Dados recebidos:', data);
+      
       const response = await fetch(`/api/producoes/${selectedProducao.id}/finalizar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
