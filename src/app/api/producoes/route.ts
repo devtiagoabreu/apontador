@@ -233,7 +233,6 @@ export async function POST(request: Request) {
     } catch (validationError) {
       console.error('❌ Erro de validação:', validationError);
       
-      // CORREÇÃO: verificar se é um erro do Zod
       if (validationError instanceof z.ZodError) {
         return NextResponse.json(
           { error: 'Dados inválidos', detalhes: validationError.errors },
@@ -241,7 +240,6 @@ export async function POST(request: Request) {
         );
       }
       
-      // Se for outro tipo de erro
       return NextResponse.json(
         { error: 'Erro de validação desconhecido' },
         { status: 400 }
@@ -388,7 +386,6 @@ export async function POST(request: Request) {
       console.log('✅ Status da máquina atualizado para EM_PROCESSO');
     } catch (updateError) {
       console.error('❌ Erro ao atualizar máquina:', updateError);
-      // Não interrompe o fluxo
     }
 
     // 13. Atualizar status da OP
@@ -406,14 +403,12 @@ export async function POST(request: Request) {
       console.log('✅ Status da OP atualizado para EM_ANDAMENTO');
     } catch (updateError) {
       console.error('❌ Erro ao atualizar OP:', updateError);
-      // Não interrompe o fluxo
     }
 
     console.log('='.repeat(50));
     console.log('🎉 PRODUÇÃO INICIADA COM SUCESSO!');
     console.log('='.repeat(50));
 
-    // ✅ RETORNAR COM STATUS 201
     return NextResponse.json(novaProducao, { status: 201 });
 
   } catch (error) {

@@ -449,7 +449,7 @@ export default function ProducoesPage() {
     }
   }
 
-  // Campos para iniciar produção - COM FILTRO CORRETO
+  // Campos para iniciar produção
   const camposIniciar = [
     {
       name: 'opId',
@@ -458,27 +458,14 @@ export default function ProducoesPage() {
       required: true,
       options: ops
         .filter(op => {
-          // Excluir canceladas e finalizadas
-          if (op.status === 'CANCELADA' || op.status === 'FINALIZADA') {
-            return false;
-          }
-          
-          // Abertas podem sempre iniciar
-          if (op.status === 'ABERTA') {
-            return true;
-          }
-          
-          // Em andamento: verificar se o último estágio foi finalizado
+          if (op.status === 'CANCELADA' || op.status === 'FINALIZADA') return false;
+          if (op.status === 'ABERTA') return true;
           if (op.status === 'EM_ANDAMENTO') {
             const ultimoApontamento = producoes
               .filter(p => p.opId === op.op)
               .sort((a, b) => new Date(b.dataFim || 0).getTime() - new Date(a.dataFim || 0).getTime())[0];
-            
-            // Se o último apontamento tem dataFim, o estágio foi finalizado
-            // Então a OP pode ser iniciada novamente no próximo estágio
             return ultimoApontamento?.dataFim !== null;
           }
-          
           return false;
         })
         .map(op => ({ 
@@ -532,7 +519,7 @@ export default function ProducoesPage() {
     },
   ];
 
-  // Campos para finalizar produção - USANDO CARREGADO COMO SUGESTÃO
+  // Campos para finalizar produção
   const camposFinalizar = [
     {
       name: 'metragemProcessada',
@@ -698,7 +685,7 @@ export default function ProducoesPage() {
         schema={iniciarProducaoSchema}
       />
 
-      {/* Modal de Finalizar Produção */}
+      {/* Modal de Finalizar Produção - COM CARREGADO COMO SUGESTÃO */}
       <FormModal
         open={modalFinalizarOpen}
         onClose={() => {
@@ -710,7 +697,7 @@ export default function ProducoesPage() {
         title="Finalizar Produção"
         fields={camposFinalizar}
         initialData={selectedProducao ? {
-          metragemProcessada: selectedProducao.op?.carregado,
+          metragemProcessada: selectedProducao.op?.carregado || 0, // ← USA O CARREGADO
         } : {}}
         schema={finalizarProducaoSchema}
       />
