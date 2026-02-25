@@ -232,8 +232,18 @@ export async function POST(request: Request) {
       console.log('✅ Dados validados com sucesso:', validated);
     } catch (validationError) {
       console.error('❌ Erro de validação:', validationError);
+      
+      // CORREÇÃO: verificar se é um erro do Zod
+      if (validationError instanceof z.ZodError) {
+        return NextResponse.json(
+          { error: 'Dados inválidos', detalhes: validationError.errors },
+          { status: 400 }
+        );
+      }
+      
+      // Se for outro tipo de erro
       return NextResponse.json(
-        { error: 'Dados inválidos', detalhes: validationError.errors },
+        { error: 'Erro de validação desconhecido' },
         { status: 400 }
       );
     }
