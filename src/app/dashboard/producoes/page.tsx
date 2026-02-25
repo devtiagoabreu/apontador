@@ -11,7 +11,9 @@ import {
   Filter,
   ChevronLeft, 
   ChevronRight,
-  CheckCircle
+  CheckCircle,
+  Pencil,
+  Trash2
 } from 'lucide-react';
 import { formatDate, formatNumber } from '@/lib/utils';
 import {
@@ -78,6 +80,7 @@ interface OP {
   produto: string;
   qtdeProgramado: number | null;
   um: string;
+  status: string;
 }
 
 interface Maquina {
@@ -118,7 +121,7 @@ interface Filtros {
   dataFim?: string;
 }
 
-// Schema para iniciar produção - CORRIGIDO (aceita string e converte para número)
+// Schema para iniciar produção
 const iniciarProducaoSchema = z.object({
   opId: z.union([z.string(), z.number()])
     .transform(val => Number(val))
@@ -138,6 +141,16 @@ const finalizarProducaoSchema = z.object({
     .refine(val => !isNaN(val) && val > 0, 'Metragem deve ser positiva'),
   
   observacoes: z.string().optional(),
+});
+
+// Schema para editar produção
+const editarProducaoSchema = z.object({
+  operadorFimId: z.string().optional(),
+  metragemProcessada: z.union([z.string(), z.number()])
+    .transform(val => Number(val))
+    .optional(),
+  observacoes: z.string().optional(),
+  isReprocesso: z.boolean().optional(),
 });
 
 // Colunas da tabela
@@ -225,6 +238,7 @@ export default function ProducoesPage() {
   const [loading, setLoading] = useState(false);
   const [modalIniciarOpen, setModalIniciarOpen] = useState(false);
   const [modalFinalizarOpen, setModalFinalizarOpen] = useState(false);
+  const [modalEditarOpen, setModalEditarOpen] = useState(false);
   const [filtrosOpen, setFiltrosOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedProducao, setSelectedProducao] = useState<Producao | null>(null);
@@ -289,18 +303,19 @@ export default function ProducoesPage() {
 
   async function handleIniciarProducao(data: any) {
     try {
-      console.log('📦 Dados recebidos:', data);
+      console.log('📦 Iniciando produção:', data);
       
-      // O schema já converteu opId para número
       const response = await fetch('/api/producoes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
 
+      const responseData = await response.json();
+      console.log('📦 Resposta:', responseData);
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Erro ao iniciar produção');
+        throw new Error(responseData.error || 'Erro ao iniciar produção');
       }
 
       toast({
@@ -312,6 +327,7 @@ export default function ProducoesPage() {
       setFormData({});
       await carregarProducoes(1);
     } catch (error) {
+      console.error('❌ Erro:', error);
       toast({
         title: 'Erro',
         description: error instanceof Error ? error.message : 'Erro ao iniciar',
@@ -324,7 +340,7 @@ export default function ProducoesPage() {
     if (!selectedProducao) return;
 
     try {
-      console.log('📦 Dados recebidos:', data);
+      console.log('📦 Finalizando produção:', data);
       
       const response = await fetch(`/api/producoes/${selectedProducao.id}/finalizar`, {
         method: 'POST',
@@ -332,9 +348,11 @@ export default function ProducoesPage() {
         body: JSON.stringify(data),
       });
 
+      const responseData = await response.json();
+      console.log('📦 Resposta:', responseData);
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Erro ao finalizar');
+        throw new Error(responseData.error || 'Erro ao finalizar');
       }
 
       toast({
@@ -347,9 +365,76 @@ export default function ProducoesPage() {
       setFormData({});
       await carregarProducoes(pagination.page);
     } catch (error) {
+      console.error('❌ Erro:', error);
       toast({
         title: 'Erro',
         description: error instanceof Error ? error.message : 'Erro ao finalizar',
+        variant: 'destructive',
+      });
+    }
+  }
+
+  async function handleEditarProducao(data: any) {
+    if (!selectedProducao) return;
+
+    try {
+      console.log('📦 Editando produção:', data);
+      
+      const response = await fetch(`/api/producoes/${selectedProducao.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      const responseData = await response.json();
+      console.log('📦 Resposta:', responseData);
+
+      if (!response.ok) {
+        throw new Error(responseData.error || 'Erro ao editar');
+      }
+
+      toast({
+        title: 'Sucesso',
+        description: 'Produção editada com sucesso',
+      });
+
+      setModalEditarOpen(false);
+      setSelectedProducao(null);
+      setFormData({});
+      await carregarProducoes(pagination.page);
+    } catch (error) {
+      console.error('❌ Erro:', error);
+      toast({
+        title: 'Erro',
+        description: error instanceof Error ? error.message : 'Erro ao editar',
+        variant: 'destructive',
+      });
+    }
+  }
+
+  async function handleDeletarProducao(producao: Producao) {
+    if (!confirm(`Tem certeza que deseja excluir a produção da OP ${producao.op?.op}?`)) return;
+
+    try {
+      const response = await fetch(`/api/producoes/${producao.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Erro ao excluir');
+      }
+
+      toast({
+        title: 'Sucesso',
+        description: 'Produção excluída com sucesso',
+      });
+
+      await carregarProducoes(pagination.page);
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: error instanceof Error ? error.message : 'Erro ao excluir',
         variant: 'destructive',
       });
     }
@@ -362,10 +447,12 @@ export default function ProducoesPage() {
       label: 'OP',
       type: 'select' as const,
       required: true,
-      options: ops.map(op => ({ 
-        value: op.op.toString(), 
-        label: `OP ${op.op} - ${op.produto.substring(0, 30)} (${op.qtdeProgramado || 0} ${op.um})` 
-      }))
+      options: ops
+        .filter(op => op.status === 'ABERTA') // Apenas OPs em aberto
+        .map(op => ({ 
+          value: op.op.toString(), 
+          label: `OP ${op.op} - ${op.produto.substring(0, 30)} (${op.qtdeProgramado || 0} ${op.um})` 
+        }))
     },
     {
       name: 'maquinaId',
@@ -373,7 +460,7 @@ export default function ProducoesPage() {
       type: 'select' as const,
       required: true,
       options: maquinas
-        .filter(m => m.status === 'DISPONIVEL')
+        .filter(m => m.status === 'DISPONIVEL') // Apenas máquinas disponíveis
         .map(m => ({ 
           value: m.id, 
           label: `${m.codigo} - ${m.nome}` 
@@ -425,6 +512,41 @@ export default function ProducoesPage() {
       name: 'observacoes',
       label: 'Observações',
       type: 'textarea' as const,
+      required: false,
+    },
+  ];
+
+  // Campos para editar produção
+  const camposEditar = [
+    {
+      name: 'operadorFimId',
+      label: 'Operador (Fim)',
+      type: 'select' as const,
+      required: false,
+      options: [
+        { value: '', label: 'Nenhum' },
+        ...operadores.map(o => ({ 
+          value: o.id, 
+          label: `${o.matricula} - ${o.nome}` 
+        }))
+      ]
+    },
+    {
+      name: 'metragemProcessada',
+      label: 'Metragem Processada',
+      type: 'number' as const,
+      required: false,
+    },
+    {
+      name: 'observacoes',
+      label: 'Observações',
+      type: 'textarea' as const,
+      required: false,
+    },
+    {
+      name: 'isReprocesso',
+      label: 'É Reprocesso?',
+      type: 'switch' as const,
       required: false,
     },
   ];
@@ -483,20 +605,51 @@ export default function ProducoesPage() {
           setSelectedProducao(producao);
           setDetailsOpen(true);
         }}
-        extraActions={(producao) => !producao.dataFim ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => {
-              setSelectedProducao(producao);
-              setModalFinalizarOpen(true);
-            }}
-            className="h-8 w-8 text-green-600"
-            title="Finalizar Produção"
-          >
-            <CheckCircle className="h-4 w-4" />
-          </Button>
-        ) : null}
+        extraActions={(producao) => (
+          <div className="flex items-center gap-1">
+            {!producao.dataFim && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setSelectedProducao(producao);
+                  setModalFinalizarOpen(true);
+                }}
+                className="h-8 w-8 text-green-600"
+                title="Finalizar Produção"
+              >
+                <CheckCircle className="h-4 w-4" />
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                setSelectedProducao(producao);
+                setFormData({
+                  operadorFimId: producao.operadorFimId || '',
+                  metragemProcessada: producao.metragemProcessada,
+                  observacoes: producao.observacoes || '',
+                  isReprocesso: producao.isReprocesso,
+                });
+                setModalEditarOpen(true);
+              }}
+              className="h-8 w-8 text-blue-600"
+              title="Editar Produção"
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleDeletarProducao(producao)}
+              className="h-8 w-8 text-red-600"
+              title="Excluir Produção"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       />
 
       {/* Modal de Iniciar Produção */}
@@ -528,6 +681,21 @@ export default function ProducoesPage() {
           metragemProcessada: selectedProducao.metragemProgramada,
         } : {}}
         schema={finalizarProducaoSchema}
+      />
+
+      {/* Modal de Editar Produção */}
+      <FormModal
+        open={modalEditarOpen}
+        onClose={() => {
+          setModalEditarOpen(false);
+          setSelectedProducao(null);
+          setFormData({});
+        }}
+        onSubmit={handleEditarProducao}
+        title="Editar Produção"
+        fields={camposEditar}
+        initialData={formData}
+        schema={editarProducaoSchema}
       />
 
       {/* Modal de Detalhes */}

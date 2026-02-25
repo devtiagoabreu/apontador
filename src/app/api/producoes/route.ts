@@ -348,13 +348,18 @@ export async function POST(request: Request) {
       .where(eq(ops.op, validated.opId));
 
     console.log('✅ Status da máquina e OP atualizados');
+    console.log('='.repeat(50));
+    console.log('🎉 PRODUÇÃO INICIADA COM SUCESSO!');
+    console.log('='.repeat(50));
 
+    // ✅ RETORNAR COM STATUS 201 (CREATED)
     return NextResponse.json(novaProducao, { status: 201 });
 
   } catch (error) {
     console.error('❌ ERRO:', error);
     
     if (error instanceof z.ZodError) {
+      console.error('❌ Erro de validação Zod:', error.errors);
       return NextResponse.json(
         { error: 'Dados inválidos', detalhes: error.errors },
         { status: 400 }
