@@ -66,7 +66,7 @@ export async function POST(
     const agora = new Date();
 
     await db.transaction(async (tx) => {
-      // 1. Finalizar produção
+      // 1. Finalizar produção (salvar metragem processada DESTE estágio)
       await tx
         .update(producoesTable)
         .set({
@@ -78,7 +78,7 @@ export async function POST(
         })
         .where(eq(producoesTable.id, params.id));
 
-      console.log('✅ Produção finalizada');
+      console.log('✅ Produção finalizada - metragem processada salva:', validated.metragemProcessada);
 
       // 2. Buscar OP
       const op = await tx.query.ops.findFirst({
@@ -98,7 +98,7 @@ export async function POST(
         throw new Error('Estágio não encontrado');
       }
 
-      // 4. Verificar se é o último estágio
+      // 4. Verificar se é o último estágio (REVISÃO)
       const ultimoEstagio = await tx.query.estagios.findFirst({
         orderBy: (estagios, { desc }) => [desc(estagios.ordem)],
       });
@@ -106,8 +106,8 @@ export async function POST(
       const isUltimoEstagio = estagioAtual.codigo === ultimoEstagio?.codigo;
 
       if (isUltimoEstagio) {
-        // É o último estágio - finalizar OP
-        console.log('🏁 Último estágio - finalizando OP');
+        // É REVISÃO - atualizar qtdeProduzida da OP
+        console.log('🏁 REVISÃO - atualizando OP.qtdeProduzida para:', validated.metragemProcessada);
         await tx
           .update(ops)
           .set({
@@ -118,9 +118,11 @@ export async function POST(
             dataUltimoApontamento: agora,
           })
           .where(eq(ops.op, producao.opId));
+        
+        console.log('✅ OP finalizada com produção:', validated.metragemProcessada);
       } else {
-        // Não é o último - avançar para o próximo estágio
-        console.log('➡️ Avançando para próximo estágio');
+        // NÃO É REVISÃO - apenas avança estágio, NÃO atualiza qtdeProduzida
+        console.log('➡️ Avançando para próximo estágio - mantendo qtdeProduzida da OP');
         
         const proximoEstagio = await tx.query.estagios.findFirst({
           where: sql`${estagios.ordem} > ${estagioAtual.ordem}`,
@@ -134,8 +136,11 @@ export async function POST(
               codEstagioAtual: proximoEstagio.codigo,
               estagioAtual: proximoEstagio.nome,
               dataUltimoApontamento: agora,
+              // NÃO MEXE EM qtdeProduzida!
             })
             .where(eq(ops.op, producao.opId));
+          
+          console.log('✅ OP avançada para estágio:', proximoEstagio.nome);
         }
       }
 
@@ -152,6 +157,7 @@ export async function POST(
     });
 
     console.log('🎉 Produção finalizada com sucesso!');
+    console.log('='.repeat(50));
 
     return NextResponse.json({ success: true });
 

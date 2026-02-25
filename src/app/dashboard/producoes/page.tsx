@@ -53,7 +53,8 @@ interface Producao {
   op?: {
     op: number;
     produto: string;
-    programado: number | null;
+    programado: number | null;  // qtdeProgramado da OP
+    carregado: number | null;    // qtdeCarregado da OP
     um: string;
   };
   maquina?: {
@@ -79,6 +80,7 @@ interface OP {
   op: number;
   produto: string;
   qtdeProgramado: number | null;
+  qtdeCarregado: number | null;
   um: string;
   status: string;
 }
@@ -211,7 +213,7 @@ const columns = [
   },
   {
     key: 'metragemProcessada' as const,
-    title: 'Produzido',
+    title: 'Processado',
     format: (value: number) => value ? formatNumber(value) : '-'
   },
   {
@@ -448,10 +450,10 @@ export default function ProducoesPage() {
       type: 'select' as const,
       required: true,
       options: ops
-        .filter(op => op.status === 'ABERTA') // Apenas OPs em aberto
+        .filter(op => op.status === 'ABERTA')
         .map(op => ({ 
           value: op.op.toString(), 
-          label: `OP ${op.op} - ${op.produto.substring(0, 30)} (${op.qtdeProgramado || 0} ${op.um})` 
+          label: `OP ${op.op} - ${op.produto.substring(0, 30)} (Carregado: ${op.qtdeCarregado || 0} ${op.um})` 
         }))
     },
     {
@@ -460,7 +462,7 @@ export default function ProducoesPage() {
       type: 'select' as const,
       required: true,
       options: maquinas
-        .filter(m => m.status === 'DISPONIVEL') // Apenas máquinas disponíveis
+        .filter(m => m.status === 'DISPONIVEL')
         .map(m => ({ 
           value: m.id, 
           label: `${m.codigo} - ${m.nome}` 
@@ -500,11 +502,11 @@ export default function ProducoesPage() {
     },
   ];
 
-  // Campos para finalizar produção
+  // Campos para finalizar produção - USANDO CARREGADO COMO SUGESTÃO
   const camposFinalizar = [
     {
       name: 'metragemProcessada',
-      label: 'Metragem Processada',
+      label: 'Metragem Processada neste Estágio',
       type: 'number' as const,
       required: true,
     },
@@ -666,7 +668,7 @@ export default function ProducoesPage() {
         schema={iniciarProducaoSchema}
       />
 
-      {/* Modal de Finalizar Produção */}
+      {/* Modal de Finalizar Produção - COM SUGESTÃO DO CARREGADO */}
       <FormModal
         open={modalFinalizarOpen}
         onClose={() => {
@@ -678,7 +680,7 @@ export default function ProducoesPage() {
         title="Finalizar Produção"
         fields={camposFinalizar}
         initialData={selectedProducao ? {
-          metragemProcessada: selectedProducao.metragemProgramada,
+          metragemProcessada: selectedProducao.op?.carregado, // ← USA O CARREGADO, NÃO O PROGRAMADO
         } : {}}
         schema={finalizarProducaoSchema}
       />
@@ -747,11 +749,15 @@ export default function ProducoesPage() {
                   <p className="text-sm">{selectedProducao.dataFim ? formatDate(selectedProducao.dataFim) : '-'}</p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Metragem Programada</p>
+                  <p className="text-sm font-medium text-gray-500">Programado (meta PCP)</p>
                   <p className="text-sm">{selectedProducao.metragemProgramada} {selectedProducao.op?.um}</p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Metragem Produzida</p>
+                  <p className="text-sm font-medium text-gray-500">Carregado (tecido real)</p>
+                  <p className="text-sm">{selectedProducao.op?.carregado} {selectedProducao.op?.um}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Processado neste estágio</p>
                   <p className="text-sm">{selectedProducao.metragemProcessada || '-'} {selectedProducao.op?.um}</p>
                 </div>
                 <div>
