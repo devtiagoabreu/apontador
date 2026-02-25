@@ -19,7 +19,8 @@
     "db:seed-kanban": "tsx src/lib/db/seed-kanban.ts",
     "db:migrate-apontamentos": "tsx src/lib/db/migrations/run-apontamentos-migration.ts",
     "db:migrate-tipo": "tsx src/lib/db/migrations/add-tipo-apontamentos.ts",
-    "db:migrate-paradas": "tsx src/lib/db/migrations/01_create_paradas_maquina.ts"
+    "db:migrate-paradas": "tsx src/lib/db/migrations/01_create_paradas_maquina.ts",
+    "db:migrate-producoes": "tsx src/lib/db/migrations/02_create_producoes.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

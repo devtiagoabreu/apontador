@@ -11,3 +11,4 @@ export * from './motivos-cancelamento';
 export * from './ops';
 export * from './apontamentos';
 export * from './paradas-maquina';
+export * from './producoes';

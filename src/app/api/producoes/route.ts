@@ -1,0 +1,369 @@
+import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { db } from '@/lib/db';
+import { producoesTable, insertProducaoRecordSchema } from '@/lib/db/schema/producoes';
+import { ops } from '@/lib/db/schema/ops';
+import { maquinas } from '@/lib/db/schema/maquinas';
+import { usuarios } from '@/lib/db/schema/usuarios';
+import { estagios } from '@/lib/db/schema/estagios';
+import { eq, sql } from 'drizzle-orm';
+import { z } from 'zod';
+
+// Funções auxiliares para conversão segura
+const safeParseFloat = (value: any): number | null => {
+  if (value === null || value === undefined) return null;
+  const str = String(value);
+  if (str.trim() === '') return null;
+  const num = parseFloat(str);
+  return isNaN(num) ? null : num;
+};
+
+const safeParseBoolean = (value: any): boolean => {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    return value.toLowerCase() === 'true' || value === '1';
+  }
+  if (typeof value === 'number') return value === 1;
+  return false;
+};
+
+const safeParseInt = (value: any): number | null => {
+  if (value === null || value === undefined) return null;
+  const str = String(value);
+  if (str.trim() === '') return null;
+  const num = parseInt(str, 10);
+  return isNaN(num) ? null : num;
+};
+
+const safeParseString = (value: any): string => {
+  if (value === null || value === undefined) return '';
+  return String(value);
+};
+
+// Schema de validação para iniciar produção
+const iniciarProducaoSchema = z.object({
+  opId: z.number().int().positive('OP é obrigatória'),
+  maquinaId: z.string().uuid('Máquina inválida'),
+  operadorInicioId: z.string().uuid('Operador inválido'),
+  estagioId: z.string().uuid('Estágio inválido'),
+  isReprocesso: z.boolean().default(false),
+  observacoes: z.string().optional(),
+});
+
+// GET - Listar produções
+export async function GET(request: Request) {
+  console.log('📦 GET /api/producoes - Iniciando');
+  
+  try {
+    const session = await getServerSession(authOptions);
+    
+    if (!session) {
+      console.log('❌ Não autorizado');
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '50');
+    const offset = (page - 1) * limit;
+    const ativas = searchParams.get('ativas') === 'true';
+    const opId = searchParams.get('opId');
+    const maquinaId = searchParams.get('maquinaId');
+    const estagioId = searchParams.get('estagioId');
+
+    console.log(`📊 Buscando produções - página ${page}, limite ${limit}, ativas: ${ativas}`);
+
+    // Construir query base
+    let query = sql`
+      SELECT 
+        p.*,
+        o.op as op_numero,
+        o.produto as op_produto,
+        o.qtde_programado as op_programado,
+        o.um as op_um,
+        m.nome as maquina_nome,
+        m.codigo as maquina_codigo,
+        ui.nome as operador_inicio_nome,
+        ui.matricula as operador_inicio_matricula,
+        uf.nome as operador_fim_nome,
+        uf.matricula as operador_fim_matricula,
+        e.nome as estagio_nome,
+        e.codigo as estagio_codigo,
+        e.cor as estagio_cor
+      FROM producoes p
+      LEFT JOIN ops o ON p.op_id = o.op
+      LEFT JOIN maquinas m ON p.maquina_id = m.id
+      LEFT JOIN usuarios ui ON p.operador_inicio_id = ui.id
+      LEFT JOIN usuarios uf ON p.operador_fim_id = uf.id
+      LEFT JOIN estagios e ON p.estagio_id = e.id
+      WHERE 1=1
+    `;
+
+    // Aplicar filtros
+    if (ativas) {
+      query = sql`${query} AND p.data_fim IS NULL`;
+    }
+    if (opId) {
+      query = sql`${query} AND p.op_id = ${parseInt(opId)}`;
+    }
+    if (maquinaId) {
+      query = sql`${query} AND p.maquina_id = ${maquinaId}`;
+    }
+    if (estagioId) {
+      query = sql`${query} AND p.estagio_id = ${estagioId}`;
+    }
+
+    // Ordenação e paginação
+    query = sql`${query} ORDER BY p.data_inicio DESC LIMIT ${limit} OFFSET ${offset}`;
+
+    const result = await db.execute(query);
+
+    // Contar total
+    let countQuery = sql`SELECT COUNT(*) as total FROM producoes p WHERE 1=1`;
+    if (ativas) {
+      countQuery = sql`${countQuery} AND p.data_fim IS NULL`;
+    }
+    if (opId) {
+      countQuery = sql`${countQuery} AND p.op_id = ${parseInt(opId)}`;
+    }
+    if (maquinaId) {
+      countQuery = sql`${countQuery} AND p.maquina_id = ${maquinaId}`;
+    }
+    if (estagioId) {
+      countQuery = sql`${countQuery} AND p.estagio_id = ${estagioId}`;
+    }
+
+    const totalResult = await db.execute(countQuery);
+    const total = Number(totalResult.rows[0]?.total || 0);
+
+    // Formatar dados com funções de conversão segura
+    const data = result.rows.map((row: any) => ({
+      id: safeParseString(row.id),
+      opId: safeParseInt(row.op_id),
+      maquinaId: safeParseString(row.maquina_id),
+      operadorInicioId: safeParseString(row.operador_inicio_id),
+      operadorFimId: safeParseString(row.operador_fim_id) || null,
+      estagioId: safeParseString(row.estagio_id),
+      dataInicio: safeParseString(row.data_inicio),
+      dataFim: safeParseString(row.data_fim) || null,
+      metragemProgramada: safeParseFloat(row.metragem_programada),
+      metragemProcessada: safeParseFloat(row.metragem_processada),
+      isReprocesso: safeParseBoolean(row.is_reprocesso),
+      observacoes: safeParseString(row.observacoes) || null,
+      createdAt: safeParseString(row.created_at),
+      updatedAt: safeParseString(row.updated_at),
+      op: {
+        op: safeParseInt(row.op_numero),
+        produto: safeParseString(row.op_produto),
+        programado: safeParseFloat(row.op_programado),
+        um: safeParseString(row.op_um),
+      },
+      maquina: {
+        nome: safeParseString(row.maquina_nome),
+        codigo: safeParseString(row.maquina_codigo),
+      },
+      operadorInicio: {
+        nome: safeParseString(row.operador_inicio_nome),
+        matricula: safeParseString(row.operador_inicio_matricula),
+      },
+      operadorFim: row.operador_fim_nome ? {
+        nome: safeParseString(row.operador_fim_nome),
+        matricula: safeParseString(row.operador_fim_matricula),
+      } : null,
+      estagio: {
+        nome: safeParseString(row.estagio_nome),
+        codigo: safeParseString(row.estagio_codigo),
+        cor: safeParseString(row.estagio_cor) || '#3b82f6',
+      },
+    }));
+
+    console.log(`✅ Retornando ${data.length} produções`);
+
+    return NextResponse.json({
+      data,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao buscar produções:', error);
+    return NextResponse.json(
+      { error: 'Erro interno ao buscar produções' },
+      { status: 500 }
+    );
+  }
+}
+
+// POST - Iniciar nova produção
+export async function POST(request: Request) {
+  console.log('='.repeat(50));
+  console.log('📦 POST /api/producoes - INICIAR PRODUÇÃO');
+  console.log('='.repeat(50));
+  
+  try {
+    // 1. Verificar autenticação
+    const session = await getServerSession(authOptions);
+    console.log('👤 Sessão:', session?.user?.id);
+    
+    if (!session) {
+      console.log('❌ Não autorizado');
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    }
+
+    // 2. Receber body
+    const body = await request.json();
+    console.log('📦 Body recebido:', JSON.stringify(body, null, 2));
+
+    // 3. Validar dados
+    const validated = iniciarProducaoSchema.parse(body);
+    console.log('✅ Dados validados:', validated);
+
+    // 4. Verificar se OP existe
+    const op = await db.query.ops.findFirst({
+      where: eq(ops.op, validated.opId),
+    });
+
+    if (!op) {
+      console.log('❌ OP não encontrada:', validated.opId);
+      return NextResponse.json(
+        { error: 'OP não encontrada' },
+        { status: 404 }
+      );
+    }
+
+    // 5. Verificar se máquina existe
+    const maquina = await db.query.maquinas.findFirst({
+      where: eq(maquinas.id, validated.maquinaId),
+    });
+
+    if (!maquina) {
+      console.log('❌ Máquina não encontrada:', validated.maquinaId);
+      return NextResponse.json(
+        { error: 'Máquina não encontrada' },
+        { status: 404 }
+      );
+    }
+
+    // 6. Verificar se máquina está disponível
+    if (maquina.status !== 'DISPONIVEL') {
+      console.log('❌ Máquina não está disponível. Status:', maquina.status);
+      return NextResponse.json(
+        { error: 'Máquina não está disponível' },
+        { status: 400 }
+      );
+    }
+
+    // 7. Verificar se já existe produção ativa para esta OP
+    const producaoAtivaOP = await db.execute(sql`
+      SELECT id FROM producoes 
+      WHERE op_id = ${validated.opId} 
+      AND data_fim IS NULL
+    `);
+
+    if (producaoAtivaOP.rows.length > 0) {
+      console.log('❌ OP já possui produção ativa:', producaoAtivaOP.rows[0].id);
+      return NextResponse.json(
+        { error: 'Esta OP já está em produção' },
+        { status: 400 }
+      );
+    }
+
+    // 8. Verificar se já existe produção ativa para esta máquina
+    const producaoAtivaMaquina = await db.execute(sql`
+      SELECT id FROM producoes 
+      WHERE maquina_id = ${validated.maquinaId} 
+      AND data_fim IS NULL
+    `);
+
+    if (producaoAtivaMaquina.rows.length > 0) {
+      console.log('❌ Máquina já possui produção ativa:', producaoAtivaMaquina.rows[0].id);
+      return NextResponse.json(
+        { error: 'Máquina já está em produção' },
+        { status: 400 }
+      );
+    }
+
+    // 9. Verificar se estágio existe
+    const estagio = await db.query.estagios.findFirst({
+      where: eq(estagios.id, validated.estagioId),
+    });
+
+    if (!estagio) {
+      console.log('❌ Estágio não encontrado:', validated.estagioId);
+      return NextResponse.json(
+        { error: 'Estágio não encontrado' },
+        { status: 404 }
+      );
+    }
+
+    // 10. Preparar dados para inserção
+    const agora = new Date();
+    const dadosInserir = {
+      opId: validated.opId,
+      maquinaId: validated.maquinaId,
+      operadorInicioId: validated.operadorInicioId,
+      estagioId: validated.estagioId,
+      dataInicio: agora,
+      metragemProgramada: op.qtdeProgramado?.toString() || '0',
+      isReprocesso: validated.isReprocesso,
+      observacoes: validated.observacoes,
+      createdAt: agora,
+      updatedAt: agora,
+    };
+
+    console.log('💾 Inserindo produção:', JSON.stringify(dadosInserir, null, 2));
+
+    // 11. Inserir no banco
+    const [novaProducao] = await db
+      .insert(producoesTable)
+      .values(dadosInserir)
+      .returning();
+
+    console.log('✅ Produção iniciada com sucesso! ID:', novaProducao.id);
+
+    // 12. Atualizar status da máquina
+    await db
+      .update(maquinas)
+      .set({ 
+        status: 'EM_PROCESSO',
+        updatedAt: agora 
+      })
+      .where(eq(maquinas.id, validated.maquinaId));
+
+    // 13. Atualizar status da OP
+    await db
+      .update(ops)
+      .set({ 
+        status: 'EM_ANDAMENTO',
+        codMaquinaAtual: maquina.codigo,
+        maquinaAtual: maquina.nome,
+        dataUltimoApontamento: agora,
+      })
+      .where(eq(ops.op, validated.opId));
+
+    console.log('✅ Status da máquina e OP atualizados');
+
+    return NextResponse.json(novaProducao, { status: 201 });
+
+  } catch (error) {
+    console.error('❌ ERRO:', error);
+    
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Dados inválidos', detalhes: error.errors },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: 'Erro interno ao iniciar produção' },
+      { status: 500 }
+    );
+  }
+}
