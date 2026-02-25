@@ -1,6 +1,6 @@
 'use client';
 
-import { Home, QrCode, Clock, History, Factory } from 'lucide-react';
+import { Home, QrCode, Clock, History } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -11,17 +11,16 @@ export function MobileNav() {
   const items = [
     { href: '/apontamento', icon: Home, label: 'Início' },
     { href: '/apontamento/leitor', icon: QrCode, label: 'Ler QR' },
-    { href: '/apontamento/producoes', icon: Factory, label: 'Produções' }, // NOVO
-    { href: '/apontamento/paradas', icon: Clock, label: 'Paradas' },
+    { href: '/apontamento/paradas', icon: Clock, label: 'Paradas' }, // PLURAL!
     { href: '/apontamento/historico', icon: History, label: 'Histórico' },
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-2 py-1">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-2 py-1 z-50">
       <div className="flex justify-around">
         {items.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href;
+          const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
           
           return (
             <Link
