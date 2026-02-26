@@ -75,17 +75,35 @@ interface MotivoCancelamento {
   descricao: string;
 }
 
-// Schema para criação/edição de OP
+// Schema para criação/edição de OP - CORRIGIDO para aceitar strings
 const opSchema = z.object({
-  op: z.number().int().positive('OP deve ser um número positivo'),
+  op: z.union([z.string(), z.number()])
+    .transform(val => Number(val))
+    .refine(val => !isNaN(val) && val > 0, 'OP deve ser um número positivo'),
+  
   produto: z.string().min(1, 'Produto é obrigatório'),
-  qtdeProgramado: z.number().optional().nullable(),
-  qtdeCarregado: z.number().optional().nullable(),
-  qtdeProduzida: z.number().optional().nullable(),
+  
+  qtdeProgramado: z.union([z.string(), z.number()])
+    .transform(val => val === '' ? null : Number(val))
+    .optional()
+    .nullable(),
+  
+  qtdeCarregado: z.union([z.string(), z.number()])
+    .transform(val => val === '' ? null : Number(val))
+    .optional()
+    .nullable(),
+  
+  qtdeProduzida: z.union([z.string(), z.number()])
+    .transform(val => val === '' ? null : Number(val))
+    .optional()
+    .nullable(),
+  
   um: z.string().optional().nullable(),
   narrativa: z.string().optional().nullable(),
   obs: z.string().optional().nullable(),
+  
   status: z.enum(['ABERTA', 'EM_ANDAMENTO', 'FINALIZADA', 'CANCELADA']),
+  
   codEstagioAtual: z.string().optional().default('00'),
   estagioAtual: z.string().optional().default('NENHUM'),
 });
@@ -252,15 +270,19 @@ export default function OpsPage() {
 
   async function handleCreateOp(data: any) {
     try {
+      console.log('📦 Criando OP com dados:', data);
+      
       const response = await fetch('/api/ops', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
 
+      const responseData = await response.json();
+      console.log('📦 Resposta:', responseData);
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Erro ao criar OP');
+        throw new Error(responseData.error || 'Erro ao criar OP');
       }
 
       toast({
@@ -285,15 +307,19 @@ export default function OpsPage() {
     if (!selectedOp) return;
 
     try {
+      console.log('📦 Atualizando OP com dados:', data);
+      
       const response = await fetch(`/api/ops/${selectedOp.op}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
 
+      const responseData = await response.json();
+      console.log('📦 Resposta:', responseData);
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Erro ao atualizar OP');
+        throw new Error(responseData.error || 'Erro ao atualizar OP');
       }
 
       toast({
@@ -617,7 +643,7 @@ export default function OpsPage() {
         title={editMode ? `Editar OP ${selectedOp?.op}` : 'Nova OP'}
         fields={formFields}
         initialData={formData}
-        schema={opSchema}
+        schema={opSchema} // ← Agora com schema corrigido
       />
 
       {/* Modal de Cancelamento */}
