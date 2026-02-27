@@ -216,7 +216,7 @@ export async function POST(
         console.log('✅ OP voltou para NENHUM/NENHUMA');
       }
 
-      console.log('✅ UPDATE RESULT:', JSON.stringify(updateResult, null, 2));
+      console.log('✅ UPDATE RESULT:', updateResult);
 
       // 5. Determinar o status correto da OP baseado em TODOS os apontamentos
       const novoStatus = await determinarStatusOP(producao.opId, tx);
