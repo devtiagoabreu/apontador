@@ -389,9 +389,13 @@ export async function POST(request: Request) {
     }
 
     // 🔥 13. ATUALIZAR A OP - COLOCAR ESTÁGIO E MÁQUINA (AO INICIAR)
-    console.log('🔄 Atualizando OP com estágio e máquina...');
+    console.log('🔥 ATUALIZANDO OP - INICIAR PRODUÇÃO');
+    console.log('📦 OP ID:', validated.opId);
+    console.log('📦 Estágio:', estagio.codigo, estagio.nome);
+    console.log('📦 Máquina:', maquina.codigo, maquina.nome);
+
     try {
-      await db
+      const updateResult = await db
         .update(ops)
         .set({ 
           status: 'EM_ANDAMENTO',
@@ -401,11 +405,19 @@ export async function POST(request: Request) {
           maquinaAtual: maquina.nome,
           dataUltimoApontamento: agora,
         })
-        .where(eq(ops.op, validated.opId));
+        .where(eq(ops.op, validated.opId))
+        .returning();
 
-      console.log('✅ OP atualizada - Estágio:', estagio.nome, 'Máquina:', maquina.nome);
+      console.log('✅ UPDATE RESULT:', updateResult);
+      
+      if (updateResult.length === 0) {
+        console.error('❌ NENHUMA LINHA ATUALIZADA!');
+      } else {
+        console.log('✅ OP atualizada com sucesso!');
+        console.log('📦 Novo estado:', updateResult[0]);
+      }
     } catch (updateError) {
-      console.error('❌ Erro ao atualizar OP:', updateError);
+      console.error('❌ Erro no update:', updateError);
     }
 
     console.log('='.repeat(50));

@@ -165,23 +165,24 @@ export async function POST(
         throw new Error('Estágio não encontrado');
       }
 
-      // 4. Buscar próximo estágio (se houver)
-      const proximoEstagio = await tx.query.estagios.findFirst({
-        where: sql`${estagios.ordem} > ${estagioAtual.ordem}`,
-        orderBy: (estagios, { asc }) => [asc(estagios.ordem)],
-      });
-
-      // 5. Verificar se é o último estágio (REVISÃO)
+      // 4. Verificar se é revisão
       const estagioRevisao = await tx.query.estagios.findFirst({
         where: eq(estagios.nome, 'REVISÃO'),
       });
 
-      const isUltimoEstagio = estagioAtual.id === estagioRevisao?.id;
+      const isRevisao = estagioAtual.id === estagioRevisao?.id;
 
-      if (isUltimoEstagio) {
+      console.log('🔥 ATUALIZANDO OP - FINALIZAR PRODUÇÃO');
+      console.log('📦 OP ID:', producao.opId);
+      console.log('📦 É revisão?', isRevisao);
+      console.log('📦 Estágio atual:', estagioAtual.nome);
+
+      let updateResult;
+
+      if (isRevisao) {
         // É REVISÃO - finalizar OP
         console.log('🏁 REVISÃO - FINALIZANDO OP');
-        await tx
+        updateResult = await tx
           .update(ops)
           .set({
             qtdeProduzida: validated.metragemProcessada.toString(),
@@ -192,31 +193,35 @@ export async function POST(
             maquinaAtual: 'NENHUMA',
             dataUltimoApontamento: agora,
           })
-          .where(eq(ops.op, producao.opId));
+          .where(eq(ops.op, producao.opId))
+          .returning();
         
         console.log('✅ OP FINALIZADA');
-      } else if (proximoEstagio) {
-        // NÃO É REVISÃO - apenas avança estágio, mas LIMPA a máquina
-        console.log('➡️ Avançando para próximo estágio:', proximoEstagio.nome);
-        await tx
+      } else {
+        // NÃO É REVISÃO - limpar estágio e máquina
+        console.log('➡️ FINALIZOU ESTÁGIO - VOLTANDO PARA NENHUM');
+        updateResult = await tx
           .update(ops)
           .set({
             status: 'EM_ANDAMENTO',
-            codEstagioAtual: proximoEstagio.codigo,
-            estagioAtual: proximoEstagio.nome,
+            codEstagioAtual: '00',
+            estagioAtual: 'NENHUM',
             codMaquinaAtual: '00',
             maquinaAtual: 'NENHUMA',
             dataUltimoApontamento: agora,
           })
-          .where(eq(ops.op, producao.opId));
+          .where(eq(ops.op, producao.opId))
+          .returning();
         
-        console.log('✅ OP avançada para:', proximoEstagio.nome, '- máquina removida');
+        console.log('✅ OP voltou para NENHUM/NENHUMA');
       }
 
-      // 6. Determinar o status correto da OP baseado em TODOS os apontamentos
+      console.log('✅ UPDATE RESULT:', updateResult);
+
+      // 5. Determinar o status correto da OP baseado em TODOS os apontamentos
       const novoStatus = await determinarStatusOP(producao.opId, tx);
       
-      // 7. Atualizar status da OP (reforço)
+      // 6. Atualizar status da OP (reforço)
       await tx
         .update(ops)
         .set({
@@ -227,7 +232,7 @@ export async function POST(
 
       console.log(`✅ Status da OP atualizado para: ${novoStatus}`);
 
-      // 8. Liberar máquina
+      // 7. Liberar máquina
       await tx
         .update(maquinas)
         .set({
