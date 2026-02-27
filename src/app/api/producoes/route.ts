@@ -388,26 +388,24 @@ export async function POST(request: Request) {
       console.error('❌ Erro ao atualizar máquina:', updateError);
     }
 
-    // 🔥 13. ATUALIZAR A OP - VERSÃO CORRIGIDA
-    console.log('🔥🔥🔥 ATUALIZANDO OP - INICIAR PRODUÇÃO 🔥🔥🔥');
+    // 13. ATUALIZAR A OP COM ESTÁGIO E MÁQUINA SELECIONADOS
+    console.log('🔥 ATUALIZANDO OP - INICIAR PRODUÇÃO 🔥');
     console.log('📦 OP ID:', validated.opId);
-    console.log('📦 Estágio código:', estagio.codigo);
-    console.log('📦 Estágio nome:', estagio.nome);
-    console.log('📦 Máquina código:', maquina.codigo);
-    console.log('📦 Máquina nome:', maquina.nome);
+    console.log('📦 Estágio selecionado:', estagio.nome, '(Código:', estagio.codigo || 'N/A', ')');
+    console.log('📦 Máquina selecionada:', maquina.nome, '(Código:', maquina.codigo || 'N/A', ')');
 
     try {
-      // Preparar os dados explicitamente
+      // Preparar os dados para atualização usando os objetos já buscados
       const dadosUpdate = {
         status: 'EM_ANDAMENTO',
-        codEstagioAtual: String(estagio.codigo),
+        codEstagioAtual: String(estagio.codigo || '00'),
         estagioAtual: String(estagio.nome),
-        codMaquinaAtual: String(maquina.codigo),
+        codMaquinaAtual: String(maquina.codigo || '00'),
         maquinaAtual: String(maquina.nome),
         dataUltimoApontamento: agora,
       };
       
-      console.log('📦 Dados para update:', dadosUpdate);
+      console.log('📦 Dados para update da OP:', JSON.stringify(dadosUpdate, null, 2));
 
       const updateResult = await db
         .update(ops)
@@ -415,13 +413,13 @@ export async function POST(request: Request) {
         .where(eq(ops.op, validated.opId))
         .returning();
 
-      console.log('✅ UPDATE RESULT:', JSON.stringify(updateResult, null, 2));
+      console.log('✅ Resultado do update da OP:', JSON.stringify(updateResult, null, 2));
       
       if (updateResult.length === 0) {
-        console.error('❌ NENHUMA LINHA ATUALIZADA!');
+        console.error('❌ NENHUMA LINHA ATUALIZADA NA OP!');
       } else {
         console.log('✅ OP atualizada com sucesso!');
-        console.log('📦 NOVO ESTADO:', {
+        console.log('📦 Novo estado da OP:', {
           op: updateResult[0].op,
           status: updateResult[0].status,
           codEstagioAtual: updateResult[0].codEstagioAtual,
@@ -431,7 +429,7 @@ export async function POST(request: Request) {
         });
       }
     } catch (updateError) {
-      console.error('❌ Erro no update:', updateError);
+      console.error('❌ Erro ao atualizar OP:', updateError);
       console.error('❌ Stack:', updateError instanceof Error ? updateError.stack : 'N/A');
     }
 
