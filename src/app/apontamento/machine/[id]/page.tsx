@@ -1,360 +1,230 @@
-'use client';
-
-import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+import { redirect } from 'next/navigation';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { db } from '@/lib/db';
+import { maquinas } from '@/lib/db/schema/maquinas';
+import { ops } from '@/lib/db/schema/ops';
+import { apontamentos } from '@/lib/db/schema/apontamentos';
+import { paradasMaquina } from '@/lib/db/schema/paradas-maquina';
+import { motivosParada } from '@/lib/db/schema/motivos-parada';
+import { eq, and, sql } from 'drizzle-orm';
 import { MobileCard } from '@/components/mobile/card';
-import { ArrowLeft, Play, AlertCircle } from 'lucide-react';
-import { toast } from '@/components/ui/use-toast';
-import { Suspense } from 'react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
-import { useSession } from 'next-auth/react';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
+import { ArrowLeft, Play, Pause, CheckCircle, PlayCircle } from 'lucide-react';
 
-interface Estagio {
-  id: string;
-  codigo: string;
-  nome: string;
-}
+// FORÇA A PÁGINA A SER SEMPRE ATUALIZADA (SEM CACHE)
+export const revalidate = 0;
+export const dynamic = 'force-dynamic';
 
-function IniciarContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const machineId = searchParams.get('machine');
-  const opNumero = searchParams.get('op');
-  
-  const { data: session, status } = useSession();
-  
-  const [loading, setLoading] = useState(false);
-  const [estagios, setEstagios] = useState<Estagio[]>([]);
-  const [estagioId, setEstagioId] = useState<string>('');
-  const [isReprocesso, setIsReprocesso] = useState(false);
-  const [maquina, setMaquina] = useState<any>(null);
-  const [op, setOp] = useState<any>(null);
-  const [carregandoDados, setCarregandoDados] = useState(true);
-  const [erros, setErros] = useState<string[]>([]);
+export default async function MachinePage({ params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions);
 
-  useEffect(() => {
-    console.log('🔍 Parâmetros:', { machineId, opNumero });
-    console.log('🔐 Sessão:', { status, session });
-    
-    if (machineId && opNumero) {
-      carregarDados();
-    } else {
-      console.log('❌ Parâmetros ausentes');
-      setCarregandoDados(false);
-      setErros(prev => [...prev, 'Parâmetros ausentes na URL']);
-    }
-  }, [machineId, opNumero, status, session]);
-
-  async function carregarDados() {
-    console.log('🔄 Carregando dados...');
-    setCarregandoDados(true);
-    setErros([]);
-    
-    try {
-      // 1. Buscar máquina
-      console.log('🔍 Buscando máquina:', machineId);
-      const maquinaRes = await fetch(`/api/maquinas/${machineId}`);
-      console.log('📊 Status máquina:', maquinaRes.status);
-      
-      if (!maquinaRes.ok) {
-        throw new Error(`Erro ao carregar máquina: ${maquinaRes.status}`);
-      }
-      
-      const maquinaData = await maquinaRes.json();
-      console.log('✅ Máquina carregada:', maquinaData);
-      setMaquina(maquinaData);
-
-      // 2. Buscar OP
-      console.log('🔍 Buscando OP:', opNumero);
-      const opRes = await fetch(`/api/ops/${opNumero}`);
-      console.log('📊 Status OP:', opRes.status);
-      
-      if (!opRes.ok) {
-        throw new Error(`Erro ao carregar OP: ${opRes.status}`);
-      }
-      
-      const opData = await opRes.json();
-      console.log('✅ OP carregada:', opData);
-      setOp(opData);
-
-      // 3. Buscar estágios
-      console.log('🔍 Buscando estágios...');
-      const estagiosRes = await fetch('/api/estagios?ativos=true');
-      console.log('📊 Status estágios:', estagiosRes.status);
-      
-      if (!estagiosRes.ok) {
-        throw new Error(`Erro ao carregar estágios: ${estagiosRes.status}`);
-      }
-      
-      const estagiosData = await estagiosRes.json();
-      console.log('✅ Estágios carregados:', estagiosData.length);
-      setEstagios(estagiosData);
-      
-      // Sugerir próximo estágio baseado na ordem
-      if (opData.codEstagioAtual && opData.codEstagioAtual !== '00') {
-        const proximoCodigo = (parseInt(opData.codEstagioAtual) + 1).toString().padStart(2, '0');
-        const proximoEstagio = estagiosData.find((e: Estagio) => e.codigo === proximoCodigo);
-        if (proximoEstagio) {
-          console.log('🎯 Estágio sugerido:', proximoEstagio.nome);
-          setEstagioId(proximoEstagio.id);
-        }
-      }
-      
-    } catch (error) {
-      console.error('❌ Erro ao carregar dados:', error);
-      setErros(prev => [...prev, error instanceof Error ? error.message : 'Erro desconhecido']);
-      toast({
-        title: 'Erro',
-        description: error instanceof Error ? error.message : 'Não foi possível carregar os dados',
-        variant: 'destructive',
-      });
-    } finally {
-      setCarregandoDados(false);
-    }
+  if (!session) {
+    redirect('/login');
   }
 
-  async function handleIniciar() {
-    console.log('🎬 handleIniciar chamado');
-    console.log('📦 Dados:', { machineId, opNumero, estagioId, isReprocesso, session });
-    
-    if (!estagioId) {
-      console.log('❌ Estágio não selecionado');
-      toast({
-        title: 'Erro',
-        description: 'Selecione o estágio de produção',
-        variant: 'destructive',
-      });
-      return;
-    }
+  // Buscar dados da máquina
+  const maquina = await db.query.maquinas.findFirst({
+    where: eq(maquinas.id, params.id),
+  });
 
-    if (!session?.user?.id) {
-      console.log('❌ Usuário não autenticado');
-      toast({
-        title: 'Erro',
-        description: 'Usuário não autenticado',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const dados = {
-        opId: parseInt(opNumero!),
-        maquinaId: machineId,
-        operadorInicioId: session.user.id,
-        estagioId,
-        isReprocesso,
-        observacoes: '',
-      };
-      
-      console.log('📦 Enviando para API:', dados);
-      
-      const response = await fetch('/api/producoes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dados),
-      });
-
-      console.log('📊 Status resposta:', response.status);
-      
-      const data = await response.json();
-      console.log('📦 Resposta:', data);
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Erro ao iniciar produção');
-      }
-
-      toast({
-        title: 'Sucesso',
-        description: isReprocesso 
-          ? 'Reprocesso iniciado com sucesso' 
-          : 'Produção iniciada com sucesso',
-      });
-
-      router.push(`/apontamento/machine/${machineId}`);
-      
-    } catch (error) {
-      console.error('❌ Erro:', error);
-      toast({
-        title: 'Erro',
-        description: error instanceof Error ? error.message : 'Erro ao iniciar',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
+  if (!maquina) {
+    redirect('/apontamento');
   }
 
-  if (carregandoDados) {
-    return (
-      <div className="p-4">
-        <div className="flex items-center gap-3">
-          <Link href="/apontamento">
-            <Button variant="ghost" size="icon" className="h-10 w-10">
-              <ArrowLeft className="h-6 w-6" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-xl font-semibold">Carregando...</h1>
-            <p className="text-sm text-gray-500">Buscando dados da máquina e OP</p>
-          </div>
-        </div>
-        
-        {/* Mostrar logs de debug */}
-        <div className="mt-4 p-4 bg-gray-100 rounded-lg text-xs font-mono">
-          <p>🔍 machineId: {machineId}</p>
-          <p>🔍 opNumero: {opNumero}</p>
-          <p>🔐 Sessão: {status}</p>
-          {erros.map((err, i) => (
-            <p key={i} className="text-red-600">❌ {err}</p>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  // Buscar apontamento ativo nesta máquina (produção)
+  const apontamentoAtivo = await db
+    .select({
+      id: apontamentos.id,
+      dataInicio: apontamentos.dataInicio,
+      opId: apontamentos.opId,
+      opNumero: ops.op,
+      opProduto: ops.produto,
+      opProgramado: ops.qtdeProgramado,
+      opUm: ops.um,
+    })
+    .from(apontamentos)
+    .leftJoin(ops, eq(apontamentos.opId, ops.op))
+    .where(
+      and(
+        eq(apontamentos.maquinaId, params.id),
+        eq(apontamentos.status, 'EM_ANDAMENTO')
+      )
+    )
+    .then(rows => rows[0] || null);
 
-  if (!maquina || !op) {
-    return (
-      <div className="p-4">
-        <div className="flex items-center gap-3">
-          <Link href="/apontamento">
-            <Button variant="ghost" size="icon" className="h-10 w-10">
-              <ArrowLeft className="h-6 w-6" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-xl font-semibold">Dados não encontrados</h1>
-            <p className="text-sm text-gray-500">Verifique se a máquina e OP existem</p>
-          </div>
-        </div>
-        
-        <div className="mt-4 p-4 bg-red-50 rounded-lg">
-          <p className="font-medium text-red-700">Erros:</p>
-          {erros.map((err, i) => (
-            <p key={i} className="text-sm text-red-600 mt-1">• {err}</p>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  // Buscar parada ativa nesta máquina
+  const paradaAtiva = await db
+    .select({
+      id: paradasMaquina.id,
+      dataInicio: paradasMaquina.dataInicio,
+      opId: paradasMaquina.opId,
+      observacoes: paradasMaquina.observacoes,
+      motivoDescricao: motivosParada.descricao,
+      motivoCodigo: motivosParada.codigo,
+    })
+    .from(paradasMaquina)
+    .leftJoin(motivosParada, eq(paradasMaquina.motivoParadaId, motivosParada.id))
+    .where(
+      and(
+        eq(paradasMaquina.maquinaId, params.id),
+        sql`${paradasMaquina.dataFim} IS NULL`
+      )
+    )
+    .then(rows => rows[0] || null);
+
+  // Buscar OPs disponíveis
+  const opsDisponiveis = await db
+    .select()
+    .from(ops)
+    .where(
+      and(
+        sql`${ops.status} != 'FINALIZADA'`,
+        sql`${ops.status} != 'CANCELADA'`
+      )
+    )
+    .limit(20);
 
   return (
     <div className="p-4 space-y-4">
-      {/* Cabeçalho */}
+      {/* Cabeçalho com botão voltar */}
       <div className="flex items-center gap-3">
-        <Link href={`/apontamento/machine/${machineId}`}>
+        <Link href="/apontamento">
           <Button variant="ghost" size="icon" className="h-10 w-10">
             <ArrowLeft className="h-6 w-6" />
           </Button>
         </Link>
-        <h1 className="text-xl font-semibold">Iniciar Produção</h1>
+        <div>
+          <h1 className="text-xl font-semibold">{maquina.nome}</h1>
+          <p className="text-sm text-gray-500">Código: {maquina.codigo}</p>
+        </div>
       </div>
 
-      {/* Card de confirmação */}
+      {/* Card de status da máquina */}
       <MobileCard>
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 text-yellow-600 bg-yellow-50 p-3 rounded-lg">
-            <AlertCircle className="h-5 w-5" />
-            <p className="text-sm">Confirme os dados antes de iniciar</p>
-          </div>
-
-          <div className="space-y-3">
-            <div>
-              <p className="text-sm text-gray-500">Máquina</p>
-              <p className="font-medium">{maquina.nome}</p>
-              <p className="text-xs text-gray-400">Código: {maquina.codigo}</p>
-            </div>
-
-            <div>
-              <p className="text-sm text-gray-500">Ordem de Produção</p>
-              <p className="font-medium">OP {op.op}</p>
-              <p className="text-sm text-gray-600 mt-1">{op.produto}</p>
-              <p className="text-xs text-gray-400 mt-1">
-                Programado: {Number(op.qtdeProgramado).toLocaleString('pt-BR')} {op.um}
-              </p>
-            </div>
-
-            {/* Seleção de Estágio */}
-            <div className="space-y-2 pt-2">
-              <Label htmlFor="estagio">Estágio de Produção *</Label>
-              <Select value={estagioId} onValueChange={setEstagioId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o estágio" />
-                </SelectTrigger>
-                <SelectContent>
-                  {estagios.map((estagio) => (
-                    <SelectItem key={estagio.id} value={estagio.id}>
-                      {estagio.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Checkbox de Reprocesso */}
-            <div className="flex items-start space-x-2 pt-2">
-              <Checkbox
-                id="reprocesso"
-                checked={isReprocesso}
-                onCheckedChange={(checked) => setIsReprocesso(checked as boolean)}
-                className="mt-1"
-              />
-              <div className="space-y-1">
-                <Label htmlFor="reprocesso" className="text-sm font-medium">
-                  🔄 É reprocesso?
-                </Label>
-                <p className="text-xs text-gray-500">
-                  Marque se este produto já passou por este estágio anteriormente
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <Link href={`/apontamento/machine/${machineId}`} className="flex-1">
-              <Button variant="outline" className="w-full" disabled={loading}>
-                Cancelar
-              </Button>
-            </Link>
-            <Button 
-              className="flex-1" 
-              onClick={handleIniciar}
-              disabled={loading}
-            >
-              <Play className="mr-2 h-4 w-4" />
-              {loading ? 'Iniciando...' : 'Confirmar Início'}
-            </Button>
-          </div>
+        <div className="flex items-center justify-between">
+          <span className="text-gray-600">Status</span>
+          <span className={`font-medium px-3 py-1 rounded-full text-sm ${
+            maquina.status === 'DISPONIVEL' ? 'bg-green-100 text-green-700' :
+            maquina.status === 'EM_PROCESSO' ? 'bg-blue-100 text-blue-700' :
+            'bg-yellow-100 text-yellow-700'
+          }`}>
+            {maquina.status === 'DISPONIVEL' ? 'Disponível' :
+             maquina.status === 'EM_PROCESSO' ? 'Em Processo' : 'Parada'}
+          </span>
         </div>
       </MobileCard>
-    </div>
-  );
-}
 
-export default function IniciarPage() {
-  return (
-    <Suspense fallback={
-      <div className="p-4">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" className="h-10 w-10">
-            <ArrowLeft className="h-6 w-6" />
-          </Button>
-          <h1 className="text-xl font-semibold">Carregando...</h1>
-        </div>
-      </div>
-    }>
-      <IniciarContent />
-    </Suspense>
+      {/* SE TEM PARADA ATIVA */}
+      {paradaAtiva && (
+        <MobileCard>
+          <h2 className="font-medium mb-3 text-yellow-600 flex items-center gap-2">
+            <Pause className="h-5 w-5" /> Máquina em Parada
+          </h2>
+          <div className="space-y-2">
+            <p className="text-sm">
+              <span className="font-medium">Motivo:</span> {paradaAtiva.motivoDescricao}
+            </p>
+            {paradaAtiva.observacoes && (
+              <p className="text-sm text-gray-600">{paradaAtiva.observacoes}</p>
+            )}
+            <p className="text-xs text-gray-400">
+              Iniciado: {new Date(paradaAtiva.dataInicio).toLocaleString('pt-BR')}
+            </p>
+            {paradaAtiva.opId && (
+              <p className="text-xs text-gray-500">
+                OP {paradaAtiva.opId} estava em produção quando parou
+              </p>
+            )}
+          </div>
+          
+          {/* Botão para finalizar parada */}
+          <div className="mt-4">
+            <Link href={`/apontamento/finalizar-parada?paradaId=${paradaAtiva.id}&maquinaId=${params.id}`}>
+              <Button className="w-full bg-green-600 hover:bg-green-700">
+                <PlayCircle className="mr-2 h-4 w-4" />
+                Finalizar Parada
+              </Button>
+            </Link>
+          </div>
+        </MobileCard>
+      )}
+
+      {/* SE TEM PRODUÇÃO ATIVA (só mostra se não tiver parada) */}
+      {!paradaAtiva && apontamentoAtivo && (
+        <MobileCard>
+          <h2 className="font-medium mb-3">Produção em andamento</h2>
+          <div className="space-y-2">
+            <p className="text-sm">OP: {apontamentoAtivo.opNumero}</p>
+            <p className="text-sm text-gray-500">{apontamentoAtivo.opProduto}</p>
+            <p className="text-xs text-gray-400">
+              Iniciado: {new Date(apontamentoAtivo.dataInicio).toLocaleString('pt-BR')}
+            </p>
+          </div>
+          
+          {/* Botões de ação */}
+          <div className="flex gap-2 mt-4">
+            <Link href={`/apontamento/finalizar?apontamento=${apontamentoAtivo.id}`} className="flex-1">
+              <Button className="w-full" variant="default">
+                <CheckCircle className="mr-2 h-4 w-4" />
+                Finalizar
+              </Button>
+            </Link>
+            <Link href={`/apontamento/parada?maquinaId=${params.id}&opId=${apontamentoAtivo.opId}`} className="flex-1">
+              <Button className="w-full text-yellow-600" variant="outline">
+                <Pause className="mr-2 h-4 w-4" />
+                Parada
+              </Button>
+            </Link>
+          </div>
+        </MobileCard>
+      )}
+
+      {/* SE NÃO TEM NADA (disponível) */}
+      {!paradaAtiva && !apontamentoAtivo && (
+        <>
+          {/* Botão de Parada Rápida (sem OP) */}
+          <Link href={`/apontamento/parada?maquinaId=${params.id}`}>
+            <Button className="w-full bg-yellow-600 hover:bg-yellow-700 text-white mb-4">
+              <Pause className="mr-2 h-4 w-4" />
+              Registrar Parada (sem OP)
+            </Button>
+          </Link>
+
+          <div className="space-y-3">
+            <h2 className="font-medium">OPs disponíveis</h2>
+            
+            {opsDisponiveis.length === 0 ? (
+              <MobileCard>
+                <p className="text-center text-gray-500 py-4">
+                  Nenhuma OP disponível no momento
+                </p>
+              </MobileCard>
+            ) : (
+              opsDisponiveis.map((op) => (
+                <MobileCard key={op.op}>
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <p className="font-medium">OP {op.op}</p>
+                      <p className="text-sm text-gray-500 line-clamp-2">{op.produto}</p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Programado: {Number(op.qtdeProgramado).toLocaleString('pt-BR')} {op.um}
+                      </p>
+                    </div>
+                    <Link href={`/apontamento/iniciar?machine=${params.id}&op=${op.op}`}>
+                      <Button size="sm" className="ml-2">
+                        <Play className="mr-1 h-4 w-4" />
+                        Iniciar
+                      </Button>
+                    </Link>
+                  </div>
+                </MobileCard>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
