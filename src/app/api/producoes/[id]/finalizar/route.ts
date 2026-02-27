@@ -196,7 +196,7 @@ export async function POST(
         
         console.log('✅ OP FINALIZADA');
       } else if (proximoEstagio) {
-        // NÃO É REVISÃO - apenas avança estágio
+        // NÃO É REVISÃO - apenas avança estágio, mas LIMPA a máquina
         console.log('➡️ Avançando para próximo estágio:', proximoEstagio.nome);
         await tx
           .update(ops)
@@ -204,13 +204,13 @@ export async function POST(
             status: 'EM_ANDAMENTO',
             codEstagioAtual: proximoEstagio.codigo,
             estagioAtual: proximoEstagio.nome,
-            codMaquinaAtual: '00', // Máquina será definida no próximo início
+            codMaquinaAtual: '00',
             maquinaAtual: 'NENHUMA',
             dataUltimoApontamento: agora,
           })
           .where(eq(ops.op, producao.opId));
         
-        console.log('✅ OP avançada para:', proximoEstagio.nome);
+        console.log('✅ OP avançada para:', proximoEstagio.nome, '- máquina removida');
       }
 
       // 6. Determinar o status correto da OP baseado em TODOS os apontamentos

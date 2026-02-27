@@ -388,7 +388,7 @@ export async function POST(request: Request) {
       console.error('❌ Erro ao atualizar máquina:', updateError);
     }
 
-    // 🔥 13. ATUALIZAR A OP - ESTÁGIO E MÁQUINA
+    // 🔥 13. ATUALIZAR A OP - COLOCAR ESTÁGIO E MÁQUINA (AO INICIAR)
     console.log('🔄 Atualizando OP com estágio e máquina...');
     try {
       await db
