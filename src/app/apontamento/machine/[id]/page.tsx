@@ -31,7 +31,7 @@ function IniciarContent() {
   const machineId = searchParams.get('machine');
   const opNumero = searchParams.get('op');
   
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   
   const [loading, setLoading] = useState(false);
   const [estagios, setEstagios] = useState<Estagio[]>([]);
@@ -40,27 +40,64 @@ function IniciarContent() {
   const [maquina, setMaquina] = useState<any>(null);
   const [op, setOp] = useState<any>(null);
   const [carregandoDados, setCarregandoDados] = useState(true);
+  const [erros, setErros] = useState<string[]>([]);
 
   useEffect(() => {
+    console.log('🔍 Parâmetros:', { machineId, opNumero });
+    console.log('🔐 Sessão:', { status, session });
+    
     if (machineId && opNumero) {
       carregarDados();
+    } else {
+      console.log('❌ Parâmetros ausentes');
+      setCarregandoDados(false);
+      setErros(prev => [...prev, 'Parâmetros ausentes na URL']);
     }
-  }, [machineId, opNumero]);
+  }, [machineId, opNumero, status, session]);
 
   async function carregarDados() {
+    console.log('🔄 Carregando dados...');
+    setCarregandoDados(true);
+    setErros([]);
+    
     try {
-      const [maquinaRes, opRes, estagiosRes] = await Promise.all([
-        fetch(`/api/maquinas/${machineId}`),
-        fetch(`/api/ops/${opNumero}`),
-        fetch('/api/estagios?ativos=true'),
-      ]);
-
+      // 1. Buscar máquina
+      console.log('🔍 Buscando máquina:', machineId);
+      const maquinaRes = await fetch(`/api/maquinas/${machineId}`);
+      console.log('📊 Status máquina:', maquinaRes.status);
+      
+      if (!maquinaRes.ok) {
+        throw new Error(`Erro ao carregar máquina: ${maquinaRes.status}`);
+      }
+      
       const maquinaData = await maquinaRes.json();
-      const opData = await opRes.json();
-      const estagiosData = await estagiosRes.json();
-
+      console.log('✅ Máquina carregada:', maquinaData);
       setMaquina(maquinaData);
+
+      // 2. Buscar OP
+      console.log('🔍 Buscando OP:', opNumero);
+      const opRes = await fetch(`/api/ops/${opNumero}`);
+      console.log('📊 Status OP:', opRes.status);
+      
+      if (!opRes.ok) {
+        throw new Error(`Erro ao carregar OP: ${opRes.status}`);
+      }
+      
+      const opData = await opRes.json();
+      console.log('✅ OP carregada:', opData);
       setOp(opData);
+
+      // 3. Buscar estágios
+      console.log('🔍 Buscando estágios...');
+      const estagiosRes = await fetch('/api/estagios?ativos=true');
+      console.log('📊 Status estágios:', estagiosRes.status);
+      
+      if (!estagiosRes.ok) {
+        throw new Error(`Erro ao carregar estágios: ${estagiosRes.status}`);
+      }
+      
+      const estagiosData = await estagiosRes.json();
+      console.log('✅ Estágios carregados:', estagiosData.length);
       setEstagios(estagiosData);
       
       // Sugerir próximo estágio baseado na ordem
@@ -68,13 +105,17 @@ function IniciarContent() {
         const proximoCodigo = (parseInt(opData.codEstagioAtual) + 1).toString().padStart(2, '0');
         const proximoEstagio = estagiosData.find((e: Estagio) => e.codigo === proximoCodigo);
         if (proximoEstagio) {
+          console.log('🎯 Estágio sugerido:', proximoEstagio.nome);
           setEstagioId(proximoEstagio.id);
         }
       }
+      
     } catch (error) {
+      console.error('❌ Erro ao carregar dados:', error);
+      setErros(prev => [...prev, error instanceof Error ? error.message : 'Erro desconhecido']);
       toast({
         title: 'Erro',
-        description: 'Não foi possível carregar os dados',
+        description: error instanceof Error ? error.message : 'Não foi possível carregar os dados',
         variant: 'destructive',
       });
     } finally {
@@ -83,7 +124,11 @@ function IniciarContent() {
   }
 
   async function handleIniciar() {
+    console.log('🎬 handleIniciar chamado');
+    console.log('📦 Dados:', { machineId, opNumero, estagioId, isReprocesso, session });
+    
     if (!estagioId) {
+      console.log('❌ Estágio não selecionado');
       toast({
         title: 'Erro',
         description: 'Selecione o estágio de produção',
@@ -93,6 +138,7 @@ function IniciarContent() {
     }
 
     if (!session?.user?.id) {
+      console.log('❌ Usuário não autenticado');
       toast({
         title: 'Erro',
         description: 'Usuário não autenticado',
@@ -103,21 +149,27 @@ function IniciarContent() {
 
     setLoading(true);
     try {
-      // Chamar a API NOVA de produções, não a antiga
+      const dados = {
+        opId: parseInt(opNumero!),
+        maquinaId: machineId,
+        operadorInicioId: session.user.id,
+        estagioId,
+        isReprocesso,
+        observacoes: '',
+      };
+      
+      console.log('📦 Enviando para API:', dados);
+      
       const response = await fetch('/api/producoes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          opId: parseInt(opNumero!),
-          maquinaId: machineId,
-          operadorInicioId: session.user.id, // ID do operador logado
-          estagioId,
-          isReprocesso,
-          observacoes: '',
-        }),
+        body: JSON.stringify(dados),
       });
 
+      console.log('📊 Status resposta:', response.status);
+      
       const data = await response.json();
+      console.log('📦 Resposta:', data);
 
       if (!response.ok) {
         throw new Error(data.error || 'Erro ao iniciar produção');
@@ -153,7 +205,20 @@ function IniciarContent() {
               <ArrowLeft className="h-6 w-6" />
             </Button>
           </Link>
-          <h1 className="text-xl font-semibold">Carregando...</h1>
+          <div>
+            <h1 className="text-xl font-semibold">Carregando...</h1>
+            <p className="text-sm text-gray-500">Buscando dados da máquina e OP</p>
+          </div>
+        </div>
+        
+        {/* Mostrar logs de debug */}
+        <div className="mt-4 p-4 bg-gray-100 rounded-lg text-xs font-mono">
+          <p>🔍 machineId: {machineId}</p>
+          <p>🔍 opNumero: {opNumero}</p>
+          <p>🔐 Sessão: {status}</p>
+          {erros.map((err, i) => (
+            <p key={i} className="text-red-600">❌ {err}</p>
+          ))}
         </div>
       </div>
     );
@@ -168,7 +233,17 @@ function IniciarContent() {
               <ArrowLeft className="h-6 w-6" />
             </Button>
           </Link>
-          <h1 className="text-xl font-semibold">Dados não encontrados</h1>
+          <div>
+            <h1 className="text-xl font-semibold">Dados não encontrados</h1>
+            <p className="text-sm text-gray-500">Verifique se a máquina e OP existem</p>
+          </div>
+        </div>
+        
+        <div className="mt-4 p-4 bg-red-50 rounded-lg">
+          <p className="font-medium text-red-700">Erros:</p>
+          {erros.map((err, i) => (
+            <p key={i} className="text-sm text-red-600 mt-1">• {err}</p>
+          ))}
         </div>
       </div>
     );
