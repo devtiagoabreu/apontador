@@ -388,36 +388,51 @@ export async function POST(request: Request) {
       console.error('❌ Erro ao atualizar máquina:', updateError);
     }
 
-    // 🔥 13. ATUALIZAR A OP - COLOCAR ESTÁGIO E MÁQUINA (AO INICIAR)
-    console.log('🔥 ATUALIZANDO OP - INICIAR PRODUÇÃO');
+    // 🔥 13. ATUALIZAR A OP - VERSÃO CORRIGIDA
+    console.log('🔥🔥🔥 ATUALIZANDO OP - INICIAR PRODUÇÃO 🔥🔥🔥');
     console.log('📦 OP ID:', validated.opId);
-    console.log('📦 Estágio:', estagio.codigo, estagio.nome);
-    console.log('📦 Máquina:', maquina.codigo, maquina.nome);
+    console.log('📦 Estágio código:', estagio.codigo);
+    console.log('📦 Estágio nome:', estagio.nome);
+    console.log('📦 Máquina código:', maquina.codigo);
+    console.log('📦 Máquina nome:', maquina.nome);
 
     try {
+      // Preparar os dados explicitamente
+      const dadosUpdate = {
+        status: 'EM_ANDAMENTO',
+        codEstagioAtual: String(estagio.codigo),
+        estagioAtual: String(estagio.nome),
+        codMaquinaAtual: String(maquina.codigo),
+        maquinaAtual: String(maquina.nome),
+        dataUltimoApontamento: agora,
+      };
+      
+      console.log('📦 Dados para update:', dadosUpdate);
+
       const updateResult = await db
         .update(ops)
-        .set({ 
-          status: 'EM_ANDAMENTO',
-          codEstagioAtual: estagio.codigo,
-          estagioAtual: estagio.nome,
-          codMaquinaAtual: maquina.codigo,
-          maquinaAtual: maquina.nome,
-          dataUltimoApontamento: agora,
-        })
+        .set(dadosUpdate)
         .where(eq(ops.op, validated.opId))
         .returning();
 
-      console.log('✅ UPDATE RESULT:', updateResult);
+      console.log('✅ UPDATE RESULT:', JSON.stringify(updateResult, null, 2));
       
       if (updateResult.length === 0) {
         console.error('❌ NENHUMA LINHA ATUALIZADA!');
       } else {
         console.log('✅ OP atualizada com sucesso!');
-        console.log('📦 Novo estado:', updateResult[0]);
+        console.log('📦 NOVO ESTADO:', {
+          op: updateResult[0].op,
+          status: updateResult[0].status,
+          codEstagioAtual: updateResult[0].codEstagioAtual,
+          estagioAtual: updateResult[0].estagioAtual,
+          codMaquinaAtual: updateResult[0].codMaquinaAtual,
+          maquinaAtual: updateResult[0].maquinaAtual,
+        });
       }
     } catch (updateError) {
       console.error('❌ Erro no update:', updateError);
+      console.error('❌ Stack:', updateError instanceof Error ? updateError.stack : 'N/A');
     }
 
     console.log('='.repeat(50));
