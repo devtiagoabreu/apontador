@@ -388,19 +388,22 @@ export async function POST(request: Request) {
       console.error('❌ Erro ao atualizar máquina:', updateError);
     }
 
-    // 13. Atualizar status da OP
-    console.log('🔄 Atualizando status da OP...');
+    // 🔥 13. ATUALIZAR A OP - ESTÁGIO E MÁQUINA
+    console.log('🔄 Atualizando OP com estágio e máquina...');
     try {
       await db
         .update(ops)
         .set({ 
           status: 'EM_ANDAMENTO',
+          codEstagioAtual: estagio.codigo,
+          estagioAtual: estagio.nome,
           codMaquinaAtual: maquina.codigo,
           maquinaAtual: maquina.nome,
           dataUltimoApontamento: agora,
         })
         .where(eq(ops.op, validated.opId));
-      console.log('✅ Status da OP atualizado para EM_ANDAMENTO');
+
+      console.log('✅ OP atualizada - Estágio:', estagio.nome, 'Máquina:', maquina.nome);
     } catch (updateError) {
       console.error('❌ Erro ao atualizar OP:', updateError);
     }

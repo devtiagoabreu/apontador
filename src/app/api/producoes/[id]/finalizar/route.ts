@@ -171,23 +171,52 @@ export async function POST(
         orderBy: (estagios, { asc }) => [asc(estagios.ordem)],
       });
 
-      // 5. Atualizar OP com novo estágio (se houver próximo)
-      if (proximoEstagio) {
+      // 5. Verificar se é o último estágio (REVISÃO)
+      const estagioRevisao = await tx.query.estagios.findFirst({
+        where: eq(estagios.nome, 'REVISÃO'),
+      });
+
+      const isUltimoEstagio = estagioAtual.id === estagioRevisao?.id;
+
+      if (isUltimoEstagio) {
+        // É REVISÃO - finalizar OP
+        console.log('🏁 REVISÃO - FINALIZANDO OP');
+        await tx
+          .update(ops)
+          .set({
+            qtdeProduzida: validated.metragemProcessada.toString(),
+            status: 'FINALIZADA',
+            codEstagioAtual: '99',
+            estagioAtual: 'FINALIZADA',
+            codMaquinaAtual: '00',
+            maquinaAtual: 'NENHUMA',
+            dataUltimoApontamento: agora,
+          })
+          .where(eq(ops.op, producao.opId));
+        
+        console.log('✅ OP FINALIZADA');
+      } else if (proximoEstagio) {
+        // NÃO É REVISÃO - apenas avança estágio
         console.log('➡️ Avançando para próximo estágio:', proximoEstagio.nome);
         await tx
           .update(ops)
           .set({
+            status: 'EM_ANDAMENTO',
             codEstagioAtual: proximoEstagio.codigo,
             estagioAtual: proximoEstagio.nome,
+            codMaquinaAtual: '00', // Máquina será definida no próximo início
+            maquinaAtual: 'NENHUMA',
             dataUltimoApontamento: agora,
           })
           .where(eq(ops.op, producao.opId));
+        
+        console.log('✅ OP avançada para:', proximoEstagio.nome);
       }
 
       // 6. Determinar o status correto da OP baseado em TODOS os apontamentos
       const novoStatus = await determinarStatusOP(producao.opId, tx);
       
-      // 7. Atualizar status da OP
+      // 7. Atualizar status da OP (reforço)
       await tx
         .update(ops)
         .set({
@@ -197,23 +226,6 @@ export async function POST(
         .where(eq(ops.op, producao.opId));
 
       console.log(`✅ Status da OP atualizado para: ${novoStatus}`);
-
-      // Se for o último estágio (não há próximo) e for revisão, atualizar qtdeProduzida
-      if (!proximoEstagio) {
-        const estagioRevisao = await tx.query.estagios.findFirst({
-          where: eq(estagios.nome, 'REVISÃO'),
-        });
-
-        if (estagioAtual.id === estagioRevisao?.id) {
-          console.log('🏁 É REVISÃO - atualizando qtdeProduzida da OP');
-          await tx
-            .update(ops)
-            .set({
-              qtdeProduzida: validated.metragemProcessada.toString(),
-            })
-            .where(eq(ops.op, producao.opId));
-        }
-      }
 
       // 8. Liberar máquina
       await tx
