@@ -92,16 +92,20 @@ function IniciarContent() {
 
     setLoading(true);
     try {
-      const response = await fetch('/api/apontamentos', {
+      // 🔴 MUDANÇA AQUI: Usar a API NOVA de produções
+      // ID fixo do Douglas (você pode substituir pelo session.user.id depois)
+      const operadorId = '5ee971b6-be6b-4b1e-9313-f0abf755ba94';
+      
+      const response = await fetch('/api/producoes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tipo: 'PRODUCAO',
           opId: parseInt(opNumero!),
           maquinaId: machineId,
+          operadorInicioId: operadorId,
           estagioId,
           isReprocesso,
-          dataInicio: new Date().toISOString(),
+          observacoes: '',
         }),
       });
 
