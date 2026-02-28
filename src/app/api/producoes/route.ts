@@ -388,38 +388,38 @@ export async function POST(request: Request) {
       console.error('❌ Erro ao atualizar máquina:', updateError);
     }
 
-    // 13. ATUALIZAR A OP COM ESTÁGIO E MÁQUINA SELECIONADOS
+    // 🔥 13. ATUALIZAR A OP COM ESTÁGIO E MÁQUINA SELECIONADOS (CORRIGIDO - IGUAL API DE OPS)
     console.log('🔥 ATUALIZANDO OP - INICIAR PRODUÇÃO 🔥');
     console.log('📦 OP ID:', validated.opId);
     console.log('📦 Estágio selecionado:', estagio.nome, '(Código:', estagio.codigo || 'N/A', ')');
     console.log('📦 Máquina selecionada:', maquina.nome, '(Código:', maquina.codigo || 'N/A', ')');
 
     try {
-      // Preparar os dados para atualização usando os objetos já buscados
-      const dadosUpdate = {
-        status: 'EM_ANDAMENTO',
-        codEstagioAtual: String(estagio.codigo || '00'),
-        estagioAtual: String(estagio.nome),
-        codMaquinaAtual: String(maquina.codigo || '00'),
-        maquinaAtual: String(maquina.nome),
-        dataUltimoApontamento: agora,
-      };
+      // CONVERTER EXPLICITAMENTE PARA STRING (IGUAL API DE OPS)
+      const dadosParaAtualizar: any = {};
       
-      console.log('📦 Dados para update da OP:', JSON.stringify(dadosUpdate, null, 2));
+      dadosParaAtualizar.status = 'EM_ANDAMENTO';
+      dadosParaAtualizar.codEstagioAtual = String(estagio.codigo || '00');
+      dadosParaAtualizar.estagioAtual = String(estagio.nome);
+      dadosParaAtualizar.codMaquinaAtual = String(maquina.codigo || '00');
+      dadosParaAtualizar.maquinaAtual = String(maquina.nome);
+      dadosParaAtualizar.dataUltimoApontamento = agora;
+      
+      console.log('📦 Dados para atualizar:', JSON.stringify(dadosParaAtualizar, null, 2));
 
       const updateResult = await db
         .update(ops)
-        .set(dadosUpdate)
+        .set(dadosParaAtualizar)
         .where(eq(ops.op, validated.opId))
         .returning();
 
-      console.log('✅ Resultado do update da OP:', JSON.stringify(updateResult, null, 2));
+      console.log('✅ Resultado do update:', JSON.stringify(updateResult, null, 2));
       
       if (updateResult.length === 0) {
-        console.error('❌ NENHUMA LINHA ATUALIZADA NA OP!');
+        console.error('❌ NENHUMA LINHA ATUALIZADA!');
       } else {
         console.log('✅ OP atualizada com sucesso!');
-        console.log('📦 Novo estado da OP:', {
+        console.log('📦 Novo estado:', {
           op: updateResult[0].op,
           status: updateResult[0].status,
           codEstagioAtual: updateResult[0].codEstagioAtual,
