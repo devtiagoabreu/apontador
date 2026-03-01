@@ -388,24 +388,24 @@ export async function POST(request: Request) {
       console.error('❌ Erro ao atualizar máquina:', updateError);
     }
 
-    // 🔥 13. ATUALIZAR A OP COM ESTÁGIO E MÁQUINA SELECIONADOS (CORRIGIDO - IGUAL API DE OPS)
+    // 🔥 13. ATUALIZAR A OP COM ESTÁGIO E MÁQUINA SELECIONADOS
     console.log('🔥 ATUALIZANDO OP - INICIAR PRODUÇÃO 🔥');
     console.log('📦 OP ID:', validated.opId);
     console.log('📦 Estágio selecionado:', estagio.nome, '(Código:', estagio.codigo || 'N/A', ')');
     console.log('📦 Máquina selecionada:', maquina.nome, '(Código:', maquina.codigo || 'N/A', ')');
 
     try {
-      // CONVERTER EXPLICITAMENTE PARA STRING (IGUAL API DE OPS)
-      const dadosParaAtualizar: any = {};
+      // USAR OS NOMES DAS COLUNAS DO BANCO (SNAKE_CASE) NO OBJETO DE UPDATE
+      const dadosParaAtualizar = {
+        status: 'EM_ANDAMENTO',
+        cod_estagio_atual: String(estagio.codigo || '00'),
+        estagio_atual: String(estagio.nome),
+        cod_maquina_atual: String(maquina.codigo || '00'),
+        maquina_atual: String(maquina.nome),
+        data_ultimo_apontamento: agora,
+      };
       
-      dadosParaAtualizar.status = 'EM_ANDAMENTO';
-      dadosParaAtualizar.codEstagioAtual = String(estagio.codigo || '00');
-      dadosParaAtualizar.estagioAtual = String(estagio.nome);
-      dadosParaAtualizar.codMaquinaAtual = String(maquina.codigo || '00');
-      dadosParaAtualizar.maquinaAtual = String(maquina.nome);
-      dadosParaAtualizar.dataUltimoApontamento = agora;
-      
-      console.log('📦 Dados para atualizar:', JSON.stringify(dadosParaAtualizar, null, 2));
+      console.log('📦 Dados para atualizar (snake_case):', JSON.stringify(dadosParaAtualizar, null, 2));
 
       const updateResult = await db
         .update(ops)
@@ -419,6 +419,7 @@ export async function POST(request: Request) {
         console.error('❌ NENHUMA LINHA ATUALIZADA!');
       } else {
         console.log('✅ OP atualizada com sucesso!');
+        // O RETORNO VEM COM OS NOMES DO SCHEMA (CAMELCASE)
         console.log('📦 Novo estado:', {
           op: updateResult[0].op,
           status: updateResult[0].status,
