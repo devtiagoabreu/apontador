@@ -106,6 +106,10 @@ const opSchema = z.object({
   
   codEstagioAtual: z.string().optional().default('00'),
   estagioAtual: z.string().optional().default('NENHUM'),
+  
+  // ✅ ADICIONAR CAMPOS DE MÁQUINA NO SCHEMA
+  codMaquinaAtual: z.string().optional().default('00'),
+  maquinaAtual: z.string().optional().default('NENHUMA'),
 });
 
 const columns = [
@@ -416,6 +420,9 @@ export default function OpsPage() {
       status: op.status,
       codEstagioAtual: op.codEstagioAtual,
       estagioAtual: op.estagioAtual,
+      // ✅ ADICIONAR CAMPOS DE MÁQUINA NO FORM DATA
+      codMaquinaAtual: op.codMaquinaAtual,
+      maquinaAtual: op.maquinaAtual,
     });
     setEditMode(true);
     setModalOpen(true);
@@ -426,6 +433,7 @@ export default function OpsPage() {
     setCancelModalOpen(true);
   };
 
+  // ✅ CAMPOS DO FORMULÁRIO CORRIGIDOS - ADICIONADOS CAMPOS DE MÁQUINA
   const formFields = [
     { name: 'op', label: 'Número da OP', type: 'number' as const, required: true },
     { name: 'produto', label: 'Produto', type: 'text' as const, required: true },
@@ -448,9 +456,25 @@ export default function OpsPage() {
     },
     { 
       name: 'codEstagioAtual', 
-      label: 'Estágio Atual', 
+      label: 'Código do Estágio', 
       type: 'select' as const,
-      options: estagios.map(e => ({ value: e.codigo, label: e.nome }))
+      options: estagios.map(e => ({ value: e.codigo, label: `${e.codigo} - ${e.nome}` }))
+    },
+    { 
+      name: 'estagioAtual', 
+      label: 'Estágio Atual', 
+      type: 'text' as const,
+    },
+    // ✅ NOVOS CAMPOS DE MÁQUINA
+    { 
+      name: 'codMaquinaAtual', 
+      label: 'Código da Máquina', 
+      type: 'text' as const,
+    },
+    { 
+      name: 'maquinaAtual', 
+      label: 'Máquina Atual', 
+      type: 'text' as const,
     },
   ];
 
@@ -591,11 +615,11 @@ export default function OpsPage() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Estágio Atual</p>
-                  <p className="text-sm">{selectedOp.estagioAtual}</p>
+                  <p className="text-sm">{selectedOp.estagioAtual} ({selectedOp.codEstagioAtual})</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Máquina Atual</p>
-                  <p className="text-sm">{selectedOp.maquinaAtual}</p>
+                  <p className="text-sm">{selectedOp.maquinaAtual} ({selectedOp.codMaquinaAtual})</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Status</p>
@@ -643,7 +667,7 @@ export default function OpsPage() {
         title={editMode ? `Editar OP ${selectedOp?.op}` : 'Nova OP'}
         fields={formFields}
         initialData={formData}
-        schema={opSchema} // ← Agora com schema corrigido
+        schema={opSchema}
       />
 
       {/* Modal de Cancelamento */}
