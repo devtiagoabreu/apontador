@@ -79,7 +79,7 @@ interface MotivoCancelamento {
   descricao: string;
 }
 
-// Schema para validação local (igual ao da API)
+// Schema para validação local
 const opSchema = z.object({
   op: z.number().optional(),
   produto: z.string().min(1).optional(),
@@ -317,6 +317,8 @@ export default function OpsPage() {
       // Remover o campo 'op' do body (já está na URL)
       const { op, ...dadosParaEnviar } = data;
       
+      console.log('📦 Enviando para API:', dadosParaEnviar);
+      
       const response = await fetch(`/api/ops/${selectedOp.op}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -418,23 +420,53 @@ export default function OpsPage() {
   // Função para lidar com a mudança do estágio
   const handleEstagioChange = (codigo: string) => {
     setEstagioSelecionado(codigo);
+    
+    // Se for "00", usar NENHUM
+    if (codigo === '00') {
+      setFormData({
+        ...formData,
+        codEstagioAtual: '00',
+        estagioAtual: 'NENHUM',
+      });
+      return;
+    }
+    
+    // Buscar o estágio pelo código
     const estagio = estagios.find(e => e.codigo === codigo);
-    setFormData({
-      ...formData,
-      codEstagioAtual: codigo,
-      estagioAtual: estagio?.nome || 'NENHUM',
-    });
+    if (estagio) {
+      setFormData({
+        ...formData,
+        codEstagioAtual: codigo,
+        estagioAtual: estagio.nome,
+      });
+    }
   };
 
   // Função para lidar com a mudança da máquina
   const handleMaquinaChange = (codigo: string) => {
     setMaquinaSelecionada(codigo);
+    
+    // Se for "00", usar NENHUMA
+    if (codigo === '00') {
+      setFormData({
+        ...formData,
+        codMaquinaAtual: '00',
+        maquinaAtual: 'NENHUMA',
+      });
+      return;
+    }
+    
+    // Buscar a máquina pelo código
     const maquina = maquinas.find(m => m.codigo === codigo);
-    setFormData({
-      ...formData,
-      codMaquinaAtual: codigo,
-      maquinaAtual: maquina?.nome || 'NENHUMA',
-    });
+    if (maquina) {
+      setFormData({
+        ...formData,
+        codMaquinaAtual: codigo,
+        maquinaAtual: maquina.nome,
+      });
+    } else {
+      console.warn('Máquina não encontrada para o código:', codigo);
+    }
   };
 
   // Preparar os dados antes de enviar
@@ -442,18 +474,30 @@ export default function OpsPage() {
     const data: any = {
       produto: formData.produto,
       status: formData.status || 'ABERTA',
-      codEstagioAtual: formData.codEstagioAtual || '00',
-      estagioAtual: formData.estagioAtual || 'NENHUM',
-      codMaquinaAtual: formData.codMaquinaAtual || '00',
-      maquinaAtual: formData.maquinaAtual || 'NENHUMA',
     };
+
+    // Campos de estágio
+    if (formData.codEstagioAtual) {
+      data.codEstagioAtual = formData.codEstagioAtual;
+    }
+    if (formData.estagioAtual) {
+      data.estagioAtual = formData.estagioAtual;
+    }
+
+    // Campos de máquina
+    if (formData.codMaquinaAtual) {
+      data.codMaquinaAtual = formData.codMaquinaAtual;
+    }
+    if (formData.maquinaAtual) {
+      data.maquinaAtual = formData.maquinaAtual;
+    }
 
     // Na criação, incluir o op
     if (!editMode && formData.op) {
       data.op = Number(formData.op);
     }
 
-    // Quantidades
+    // Quantidades (só enviar se tiver valor)
     if (formData.qtdeProgramado !== undefined && formData.qtdeProgramado !== null) {
       data.qtdeProgramado = Number(formData.qtdeProgramado);
     }
@@ -471,6 +515,7 @@ export default function OpsPage() {
     if (formData.narrativa) data.narrativa = formData.narrativa;
     if (formData.obs) data.obs = formData.obs;
 
+    console.log('📦 Dados preparados:', data);
     return data;
   };
 
@@ -788,7 +833,7 @@ export default function OpsPage() {
                   <SelectValue placeholder="Selecione um estágio" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="00">NENHUM</SelectItem>
+                  <SelectItem value="00">00 - NENHUM</SelectItem>
                   {estagios.map((estagio) => (
                     <SelectItem key={estagio.id} value={estagio.codigo}>
                       {estagio.codigo} - {estagio.nome}
@@ -806,7 +851,7 @@ export default function OpsPage() {
                   <SelectValue placeholder="Selecione uma máquina" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="00">NENHUMA</SelectItem>
+                  <SelectItem value="00">00 - NENHUMA</SelectItem>
                   {maquinas.map((maquina) => (
                     <SelectItem key={maquina.id} value={maquina.codigo}>
                       {maquina.codigo} - {maquina.nome}
