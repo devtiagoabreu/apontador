@@ -421,17 +421,7 @@ export default function OpsPage() {
   const handleEstagioChange = (codigo: string) => {
     setEstagioSelecionado(codigo);
     
-    // Se for "00", usar NENHUM
-    if (codigo === '00') {
-      setFormData({
-        ...formData,
-        codEstagioAtual: '00',
-        estagioAtual: 'NENHUM',
-      });
-      return;
-    }
-    
-    // Buscar o estágio pelo código
+    // Buscar o estágio pelo código (incluindo código "00" se existir no banco)
     const estagio = estagios.find(e => e.codigo === codigo);
     if (estagio) {
       setFormData({
@@ -446,17 +436,7 @@ export default function OpsPage() {
   const handleMaquinaChange = (codigo: string) => {
     setMaquinaSelecionada(codigo);
     
-    // Se for "00", usar NENHUMA
-    if (codigo === '00') {
-      setFormData({
-        ...formData,
-        codMaquinaAtual: '00',
-        maquinaAtual: 'NENHUMA',
-      });
-      return;
-    }
-    
-    // Buscar a máquina pelo código
+    // Buscar a máquina pelo código (incluindo código "00" se existir no banco)
     const maquina = maquinas.find(m => m.codigo === codigo);
     if (maquina) {
       setFormData({
@@ -476,13 +456,21 @@ export default function OpsPage() {
       status: formData.status || 'ABERTA',
     };
 
-    // Campos de estágio - garantir que sempre tenham valores
-    data.codEstagioAtual = formData.codEstagioAtual || '00';
-    data.estagioAtual = formData.estagioAtual || 'NENHUM';
+    // Campos de estágio - usar os valores do formData
+    if (formData.codEstagioAtual) {
+      data.codEstagioAtual = formData.codEstagioAtual;
+    }
+    if (formData.estagioAtual) {
+      data.estagioAtual = formData.estagioAtual;
+    }
 
-    // Campos de máquina - garantir que sempre tenham valores
-    data.codMaquinaAtual = formData.codMaquinaAtual || '00';
-    data.maquinaAtual = formData.maquinaAtual || 'NENHUMA';
+    // Campos de máquina - usar os valores do formData
+    if (formData.codMaquinaAtual) {
+      data.codMaquinaAtual = formData.codMaquinaAtual;
+    }
+    if (formData.maquinaAtual) {
+      data.maquinaAtual = formData.maquinaAtual;
+    }
 
     // Na criação, incluir o op
     if (!editMode && formData.op) {
@@ -825,7 +813,6 @@ export default function OpsPage() {
                   <SelectValue placeholder="Selecione um estágio" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="00">00 - NENHUM</SelectItem>
                   {estagios.map((estagio) => (
                     <SelectItem key={estagio.id} value={estagio.codigo}>
                       {estagio.codigo} - {estagio.nome}
@@ -843,7 +830,6 @@ export default function OpsPage() {
                   <SelectValue placeholder="Selecione uma máquina" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="00">00 - NENHUMA</SelectItem>
                   {maquinas.map((maquina) => (
                     <SelectItem key={maquina.id} value={maquina.codigo}>
                       {maquina.codigo} - {maquina.nome}
