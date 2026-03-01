@@ -3,13 +3,11 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
-import { FormModal } from '@/components/ui/form-modal';
 import { toast } from '@/components/ui/use-toast';
 import { 
   Download, 
   RefreshCw, 
   Plus, 
-  Eye, 
   Edit, 
   XCircle, 
   ChevronLeft, 
@@ -81,42 +79,21 @@ interface MotivoCancelamento {
   descricao: string;
 }
 
-// Schema para criação/edição de OP
+// Schema para validação local (igual ao da API)
 const opSchema = z.object({
-  op: z.union([z.string(), z.number()])
-    .transform(val => Number(val))
-    .refine(val => !isNaN(val) && val > 0, 'OP deve ser um número positivo'),
-  
-  produto: z.string().min(1, 'Produto é obrigatório'),
-  
-  qtdeProgramado: z.union([z.string(), z.number()])
-    .transform(val => val === '' ? null : Number(val))
-    .optional()
-    .nullable(),
-  
-  qtdeCarregado: z.union([z.string(), z.number()])
-    .transform(val => val === '' ? null : Number(val))
-    .optional()
-    .nullable(),
-  
-  qtdeProduzida: z.union([z.string(), z.number()])
-    .transform(val => val === '' ? null : Number(val))
-    .optional()
-    .nullable(),
-  
+  op: z.number().optional(),
+  produto: z.string().min(1).optional(),
+  qtdeProgramado: z.number().optional().nullable(),
+  qtdeCarregado: z.number().optional().nullable(),
+  qtdeProduzida: z.number().optional().nullable(),
   um: z.string().optional().nullable(),
   narrativa: z.string().optional().nullable(),
   obs: z.string().optional().nullable(),
-  
-  status: z.enum(['ABERTA', 'EM_ANDAMENTO', 'FINALIZADA', 'CANCELADA']),
-  
-  // Campos de estágio - serão preenchidos automaticamente pelo select
-  codEstagioAtual: z.string().optional().default('00'),
-  estagioAtual: z.string().optional().default('NENHUM'),
-  
-  // Campos de máquina - serão preenchidos automaticamente pelo select
-  codMaquinaAtual: z.string().optional().default('00'),
-  maquinaAtual: z.string().optional().default('NENHUMA'),
+  status: z.enum(['ABERTA', 'EM_ANDAMENTO', 'FINALIZADA', 'CANCELADA']).optional(),
+  codEstagioAtual: z.string().optional(),
+  estagioAtual: z.string().optional(),
+  codMaquinaAtual: z.string().optional(),
+  maquinaAtual: z.string().optional(),
 });
 
 const columns = [
@@ -306,7 +283,6 @@ export default function OpsPage() {
       });
 
       const responseData = await response.json();
-      console.log('📦 Resposta:', responseData);
 
       if (!response.ok) {
         throw new Error(responseData.error || 'Erro ao criar OP');
@@ -336,18 +312,21 @@ export default function OpsPage() {
     if (!selectedOp) return;
 
     try {
-      console.log('📦 Atualizando OP com dados:', data);
+      console.log('📦 Dados para atualização:', data);
+      
+      // Remover o campo 'op' do body (já está na URL)
+      const { op, ...dadosParaEnviar } = data;
       
       const response = await fetch(`/api/ops/${selectedOp.op}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(dadosParaEnviar),
       });
 
       const responseData = await response.json();
-      console.log('📦 Resposta:', responseData);
 
       if (!response.ok) {
+        console.error('❌ Erro da API:', responseData);
         throw new Error(responseData.error || 'Erro ao atualizar OP');
       }
 
@@ -364,6 +343,7 @@ export default function OpsPage() {
       setMaquinaSelecionada('');
       await carregarOps(pagination.page);
     } catch (error) {
+      console.error('❌ Erro detalhado:', error);
       toast({
         title: 'Erro',
         description: error instanceof Error ? error.message : 'Erro ao atualizar OP',
@@ -405,38 +385,9 @@ export default function OpsPage() {
     }
   }
 
-  async function handleDeleteOp(op: OP) {
-    if (!confirm(`Tem certeza que deseja excluir permanentemente a OP ${op.op}?`)) return;
-
-    try {
-      const response = await fetch(`/api/ops/${op.op}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Erro ao excluir OP');
-      }
-
-      toast({
-        title: 'Sucesso',
-        description: `OP ${op.op} excluída com sucesso`,
-      });
-
-      await carregarOps(1);
-    } catch (error) {
-      toast({
-        title: 'Erro',
-        description: error instanceof Error ? error.message : 'Erro ao excluir OP',
-        variant: 'destructive',
-      });
-    }
-  }
-
   const openEditModal = (op: OP) => {
     setSelectedOp(op);
     setFormData({
-      op: op.op,
       produto: op.produto,
       qtdeProgramado: op.qtdeProgramado,
       qtdeCarregado: op.qtdeCarregado,
@@ -445,6 +396,10 @@ export default function OpsPage() {
       narrativa: op.narrativa,
       obs: op.obs,
       status: op.status,
+      codEstagioAtual: op.codEstagioAtual,
+      estagioAtual: op.estagioAtual,
+      codMaquinaAtual: op.codMaquinaAtual,
+      maquinaAtual: op.maquinaAtual,
     });
     
     // Preencher os selects com os valores atuais
@@ -484,13 +439,39 @@ export default function OpsPage() {
 
   // Preparar os dados antes de enviar
   const prepareSubmitData = () => {
-    return {
-      ...formData,
+    const data: any = {
+      produto: formData.produto,
+      status: formData.status || 'ABERTA',
       codEstagioAtual: formData.codEstagioAtual || '00',
       estagioAtual: formData.estagioAtual || 'NENHUM',
       codMaquinaAtual: formData.codMaquinaAtual || '00',
       maquinaAtual: formData.maquinaAtual || 'NENHUMA',
     };
+
+    // Na criação, incluir o op
+    if (!editMode && formData.op) {
+      data.op = Number(formData.op);
+    }
+
+    // Quantidades
+    if (formData.qtdeProgramado !== undefined && formData.qtdeProgramado !== null) {
+      data.qtdeProgramado = Number(formData.qtdeProgramado);
+    }
+    
+    if (formData.qtdeCarregado !== undefined && formData.qtdeCarregado !== null) {
+      data.qtdeCarregado = Number(formData.qtdeCarregado);
+    }
+    
+    if (formData.qtdeProduzida !== undefined && formData.qtdeProduzida !== null) {
+      data.qtdeProduzida = Number(formData.qtdeProduzida);
+    }
+
+    // Campos de texto
+    if (formData.um) data.um = formData.um;
+    if (formData.narrativa) data.narrativa = formData.narrativa;
+    if (formData.obs) data.obs = formData.obs;
+
+    return data;
   };
 
   return (
@@ -671,7 +652,7 @@ export default function OpsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Criação/Edição Customizado */}
+      {/* Modal de Criação/Edição */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -687,23 +668,25 @@ export default function OpsPage() {
               handleCreateOp(submitData);
             }
           }} className="space-y-4">
-            {/* OP */}
-            <div className="space-y-2">
-              <Label htmlFor="op">Número da OP *</Label>
-              <Input
-                id="op"
-                type="number"
-                value={formData.op ?? ''}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setFormData({ 
-                    ...formData, 
-                    op: value === '' ? undefined : Number(value)
-                  });
-                }}
-                required
-              />
-            </div>
+            {/* OP - só aparece na criação */}
+            {!editMode && (
+              <div className="space-y-2">
+                <Label htmlFor="op">Número da OP *</Label>
+                <Input
+                  id="op"
+                  type="number"
+                  value={formData.op ?? ''}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setFormData({ 
+                      ...formData, 
+                      op: value === '' ? undefined : Number(value)
+                    });
+                  }}
+                  required
+                />
+              </div>
+            )}
 
             {/* Produto */}
             <div className="space-y-2">

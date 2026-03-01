@@ -5,16 +5,18 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 const opSchema = z.object({
-  produto: z.string().min(1),
+  produto: z.string().min(1).optional(),
   qtdeProgramado: z.number().optional().nullable(),
   qtdeCarregado: z.number().optional().nullable(),
   qtdeProduzida: z.number().optional().nullable(),
   um: z.string().optional().nullable(),
   narrativa: z.string().optional().nullable(),
   obs: z.string().optional().nullable(),
-  status: z.enum(['ABERTA', 'EM_ANDAMENTO', 'FINALIZADA', 'CANCELADA']),
+  status: z.enum(['ABERTA', 'EM_ANDAMENTO', 'FINALIZADA', 'CANCELADA']).optional(),
   codEstagioAtual: z.string().optional(),
   estagioAtual: z.string().optional(),
+  codMaquinaAtual: z.string().optional(),
+  maquinaAtual: z.string().optional(),
 });
 
 export async function GET(
@@ -75,6 +77,7 @@ export async function PUT(
       );
     }
 
+    // Validar apenas os campos que vieram no body
     const validated = opSchema.parse(body);
     console.log('✅ Dados validados:', validated);
 
@@ -82,15 +85,26 @@ export async function PUT(
     const dadosParaAtualizar: any = {};
 
     if (validated.produto !== undefined) dadosParaAtualizar.produto = validated.produto;
-    if (validated.qtdeProgramado !== undefined) dadosParaAtualizar.qtdeProgramado = validated.qtdeProgramado?.toString();
-    if (validated.qtdeCarregado !== undefined) dadosParaAtualizar.qtdeCarregado = validated.qtdeCarregado?.toString();
-    if (validated.qtdeProduzida !== undefined) dadosParaAtualizar.qtdeProduzida = validated.qtdeProduzida?.toString();
+    if (validated.qtdeProgramado !== undefined) {
+      dadosParaAtualizar.qtdeProgramado = validated.qtdeProgramado?.toString();
+    }
+    if (validated.qtdeCarregado !== undefined) {
+      dadosParaAtualizar.qtdeCarregado = validated.qtdeCarregado?.toString();
+    }
+    if (validated.qtdeProduzida !== undefined) {
+      dadosParaAtualizar.qtdeProduzida = validated.qtdeProduzida?.toString();
+    }
     if (validated.um !== undefined) dadosParaAtualizar.um = validated.um;
     if (validated.narrativa !== undefined) dadosParaAtualizar.narrativa = validated.narrativa;
     if (validated.obs !== undefined) dadosParaAtualizar.obs = validated.obs;
     if (validated.status !== undefined) dadosParaAtualizar.status = validated.status;
     if (validated.codEstagioAtual !== undefined) dadosParaAtualizar.codEstagioAtual = validated.codEstagioAtual;
     if (validated.estagioAtual !== undefined) dadosParaAtualizar.estagioAtual = validated.estagioAtual;
+    if (validated.codMaquinaAtual !== undefined) dadosParaAtualizar.codMaquinaAtual = validated.codMaquinaAtual;
+    if (validated.maquinaAtual !== undefined) dadosParaAtualizar.maquinaAtual = validated.maquinaAtual;
+
+    // Sempre atualizar o updatedAt
+    dadosParaAtualizar.updatedAt = new Date();
 
     console.log('💾 Dados para atualizar:', JSON.stringify(dadosParaAtualizar, null, 2));
 
@@ -107,6 +121,7 @@ export async function PUT(
     console.error('❌ Erro:', error);
     
     if (error instanceof z.ZodError) {
+      console.error('❌ Erros de validação:', error.errors);
       return NextResponse.json(
         { error: 'Dados inválidos', detalhes: error.errors },
         { status: 400 }
