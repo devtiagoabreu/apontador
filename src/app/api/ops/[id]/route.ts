@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { ops } from '@/lib/db/schema/ops';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 const opSchema = z.object({
@@ -61,10 +61,13 @@ export async function PUT(
   
   try {
     const opId = parseInt(params.id);
+    console.log('🔍 OP ID:', opId);
+    
     const body = await request.json();
     console.log('📦 Body recebido:', JSON.stringify(body, null, 2));
 
     // Verificar se OP existe
+    console.log('🔍 Verificando se OP existe...');
     const existing = await db.query.ops.findFirst({
       where: eq(ops.op, opId),
     });
@@ -85,62 +88,115 @@ export async function PUT(
     });
 
     // Validar apenas os campos que vieram no body
-    const validated = opSchema.parse(body);
-    console.log('✅ Dados validados:', validated);
+    console.log('🔍 Validando dados com schema...');
+    let validated;
+    try {
+      validated = opSchema.parse(body);
+      console.log('✅ Dados validados:', JSON.stringify(validated, null, 2));
+    } catch (validationError) {
+      console.error('❌ Erro de validação:', validationError);
+      if (validationError instanceof z.ZodError) {
+        return NextResponse.json(
+          { error: 'Dados inválidos', detalhes: validationError.errors },
+          { status: 400 }
+        );
+      }
+      throw validationError;
+    }
 
     // 🔥 CONVERTER NÚMEROS PARA STRING ANTES DE ATUALIZAR
     const dadosParaAtualizar: any = {};
+    console.log('🔍 Preparando dados para atualizar...');
 
-    if (validated.produto !== undefined) dadosParaAtualizar.produto = validated.produto;
+    if (validated.produto !== undefined) {
+      console.log('  - produto:', validated.produto);
+      dadosParaAtualizar.produto = validated.produto;
+    }
+    
     if (validated.qtdeProgramado !== undefined) {
+      console.log('  - qtdeProgramado:', validated.qtdeProgramado);
       dadosParaAtualizar.qtdeProgramado = validated.qtdeProgramado?.toString();
     }
+    
     if (validated.qtdeCarregado !== undefined) {
+      console.log('  - qtdeCarregado:', validated.qtdeCarregado);
       dadosParaAtualizar.qtdeCarregado = validated.qtdeCarregado?.toString();
     }
+    
     if (validated.qtdeProduzida !== undefined) {
+      console.log('  - qtdeProduzida:', validated.qtdeProduzida);
       dadosParaAtualizar.qtdeProduzida = validated.qtdeProduzida?.toString();
     }
-    if (validated.um !== undefined) dadosParaAtualizar.um = validated.um;
-    if (validated.narrativa !== undefined) dadosParaAtualizar.narrativa = validated.narrativa;
-    if (validated.obs !== undefined) dadosParaAtualizar.obs = validated.obs;
-    if (validated.status !== undefined) dadosParaAtualizar.status = validated.status;
     
-    // LOG ESPECÍFICO PARA CAMPOS DE MÁQUINA E ESTÁGIO
-    console.log('🔍 Processando campos de máquina e estágio:');
+    if (validated.um !== undefined) {
+      console.log('  - um:', validated.um);
+      dadosParaAtualizar.um = validated.um;
+    }
     
+    if (validated.narrativa !== undefined) {
+      console.log('  - narrativa:', validated.narrativa);
+      dadosParaAtualizar.narrativa = validated.narrativa;
+    }
+    
+    if (validated.obs !== undefined) {
+      console.log('  - obs:', validated.obs);
+      dadosParaAtualizar.obs = validated.obs;
+    }
+    
+    if (validated.status !== undefined) {
+      console.log('  - status:', validated.status);
+      dadosParaAtualizar.status = validated.status;
+    }
+    
+    // CAMPOS DE ESTÁGIO E MÁQUINA
     if (validated.codEstagioAtual !== undefined) {
-      console.log('  - codEstagioAtual:', validated.codEstagioAtual);
+      console.log('  - codEstagioAtual (camelCase):', validated.codEstagioAtual);
       dadosParaAtualizar.cod_estagio_atual = validated.codEstagioAtual;
+      console.log('  - cod_estagio_atual (snake_case):', dadosParaAtualizar.cod_estagio_atual);
     }
     
     if (validated.estagioAtual !== undefined) {
-      console.log('  - estagioAtual:', validated.estagioAtual);
+      console.log('  - estagioAtual (camelCase):', validated.estagioAtual);
       dadosParaAtualizar.estagio_atual = validated.estagioAtual;
+      console.log('  - estagio_atual (snake_case):', dadosParaAtualizar.estagio_atual);
     }
     
     if (validated.codMaquinaAtual !== undefined) {
-      console.log('  - codMaquinaAtual:', validated.codMaquinaAtual);
+      console.log('  - codMaquinaAtual (camelCase):', validated.codMaquinaAtual);
       dadosParaAtualizar.cod_maquina_atual = validated.codMaquinaAtual;
+      console.log('  - cod_maquina_atual (snake_case):', dadosParaAtualizar.cod_maquina_atual);
     }
     
     if (validated.maquinaAtual !== undefined) {
-      console.log('  - maquinaAtual:', validated.maquinaAtual);
+      console.log('  - maquinaAtual (camelCase):', validated.maquinaAtual);
       dadosParaAtualizar.maquina_atual = validated.maquinaAtual;
+      console.log('  - maquina_atual (snake_case):', dadosParaAtualizar.maquina_atual);
     }
 
     // Sempre atualizar o updatedAt
     dadosParaAtualizar.updated_at = new Date();
+    console.log('  - updated_at:', dadosParaAtualizar.updated_at);
 
-    console.log('💾 Dados para atualizar (com nomes das colunas):', JSON.stringify(dadosParaAtualizar, null, 2));
+    console.log('💾 Dados finais para atualizar:', JSON.stringify(dadosParaAtualizar, null, 2));
 
-    const [updated] = await db
-      .update(ops)
-      .set(dadosParaAtualizar)
-      .where(eq(ops.op, opId))
-      .returning();
+    // Executar o update
+    console.log('🔍 Executando update no banco...');
+    let updated;
+    try {
+      [updated] = await db
+        .update(ops)
+        .set(dadosParaAtualizar)
+        .where(eq(ops.op, opId))
+        .returning();
+      
+      console.log('✅ Update executado com sucesso');
+    } catch (dbError) {
+      console.error('❌ Erro no banco de dados:', dbError);
+      console.error('❌ Detalhes do erro:', JSON.stringify(dbError, null, 2));
+      throw dbError;
+    }
 
-    console.log('✅ OP atualizada com sucesso. Novos valores:', {
+    console.log('✅ OP atualizada. Novos valores:', {
       codMaquinaAtual: updated.codMaquinaAtual,
       maquinaAtual: updated.maquinaAtual,
       codEstagioAtual: updated.codEstagioAtual,
@@ -150,7 +206,15 @@ export async function PUT(
     return NextResponse.json(updated);
 
   } catch (error) {
-    console.error('❌ Erro detalhado:', error);
+    console.error('❌ ERRO CAPTURADO:', error);
+    console.error('❌ Tipo do erro:', typeof error);
+    console.error('❌ Constructor:', error instanceof Error ? error.constructor.name : 'N/A');
+    
+    if (error instanceof Error) {
+      console.error('❌ Mensagem:', error.message);
+      console.error('❌ Stack:', error.stack);
+      console.error('❌ Name:', error.name);
+    }
     
     if (error instanceof z.ZodError) {
       console.error('❌ Erros de validação:', JSON.stringify(error.errors, null, 2));
@@ -160,11 +224,22 @@ export async function PUT(
       );
     }
 
-    // Log do erro completo
-    console.error('❌ Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
-    
+    // Tentar extrair informações do erro
+    let errorMessage = 'Erro interno ao atualizar OP';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === 'object' && error !== null) {
+      try {
+        errorMessage = JSON.stringify(error);
+      } catch {
+        errorMessage = String(error);
+      }
+    } else {
+      errorMessage = String(error);
+    }
+
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Erro interno ao atualizar OP' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
