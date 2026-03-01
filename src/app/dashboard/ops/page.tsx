@@ -404,9 +404,9 @@ export default function OpsPage() {
       maquinaAtual: op.maquinaAtual,
     });
     
-    // Preencher os selects com os valores atuais
-    setEstagioSelecionado(op.codEstagioAtual);
-    setMaquinaSelecionada(op.codMaquinaAtual);
+    // Preencher os selects com os valores atuais (sempre como string)
+    setEstagioSelecionado(String(op.codEstagioAtual));
+    setMaquinaSelecionada(String(op.codMaquinaAtual));
     
     setEditMode(true);
     setModalOpen(true);
@@ -421,7 +421,7 @@ export default function OpsPage() {
   const handleEstagioChange = (codigo: string) => {
     setEstagioSelecionado(codigo);
     
-    // Buscar o estágio pelo código (incluindo código "00" se existir no banco)
+    // Buscar o estágio pelo código
     const estagio = estagios.find(e => e.codigo === codigo);
     if (estagio) {
       setFormData({
@@ -436,7 +436,7 @@ export default function OpsPage() {
   const handleMaquinaChange = (codigo: string) => {
     setMaquinaSelecionada(codigo);
     
-    // Buscar a máquina pelo código (incluindo código "00" se existir no banco)
+    // Buscar a máquina pelo código
     const maquina = maquinas.find(m => m.codigo === codigo);
     if (maquina) {
       setFormData({
@@ -444,8 +444,6 @@ export default function OpsPage() {
         codMaquinaAtual: codigo,
         maquinaAtual: maquina.nome,
       });
-    } else {
-      console.warn('Máquina não encontrada para o código:', codigo);
     }
   };
 
@@ -456,19 +454,19 @@ export default function OpsPage() {
       status: formData.status || 'ABERTA',
     };
 
-    // Campos de estágio - usar os valores do formData
-    if (formData.codEstagioAtual) {
-      data.codEstagioAtual = formData.codEstagioAtual;
+    // Campos de estágio - garantir que sejam strings
+    if (formData.codEstagioAtual !== undefined) {
+      data.codEstagioAtual = String(formData.codEstagioAtual);
     }
-    if (formData.estagioAtual) {
+    if (formData.estagioAtual !== undefined) {
       data.estagioAtual = formData.estagioAtual;
     }
 
-    // Campos de máquina - usar os valores do formData
-    if (formData.codMaquinaAtual) {
-      data.codMaquinaAtual = formData.codMaquinaAtual;
+    // Campos de máquina - garantir que sejam strings
+    if (formData.codMaquinaAtual !== undefined) {
+      data.codMaquinaAtual = String(formData.codMaquinaAtual);
     }
-    if (formData.maquinaAtual) {
+    if (formData.maquinaAtual !== undefined) {
       data.maquinaAtual = formData.maquinaAtual;
     }
 
@@ -477,7 +475,7 @@ export default function OpsPage() {
       data.op = Number(formData.op);
     }
 
-    // Quantidades (só enviar se tiver valor)
+    // Quantidades
     if (formData.qtdeProgramado !== undefined && formData.qtdeProgramado !== null) {
       data.qtdeProgramado = Number(formData.qtdeProgramado);
     }
@@ -498,6 +496,16 @@ export default function OpsPage() {
     console.log('📦 Dados preparados:', data);
     return data;
   };
+
+  // Ordenar estágios por código (numericamente)
+  const estagiosOrdenados = [...estagios].sort((a, b) => {
+    return parseInt(a.codigo) - parseInt(b.codigo);
+  });
+
+  // Ordenar máquinas por código (numericamente)
+  const maquinasOrdenadas = [...maquinas].sort((a, b) => {
+    return parseInt(a.codigo) - parseInt(b.codigo);
+  });
 
   return (
     <div className="space-y-6">
@@ -813,9 +821,9 @@ export default function OpsPage() {
                   <SelectValue placeholder="Selecione um estágio" />
                 </SelectTrigger>
                 <SelectContent>
-                  {estagios.map((estagio) => (
+                  {estagiosOrdenados.map((estagio) => (
                     <SelectItem key={estagio.id} value={estagio.codigo}>
-                      {estagio.codigo} - {estagio.nome}
+                      {estagio.codigo.padStart(2, '0')} - {estagio.nome}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -830,9 +838,9 @@ export default function OpsPage() {
                   <SelectValue placeholder="Selecione uma máquina" />
                 </SelectTrigger>
                 <SelectContent>
-                  {maquinas.map((maquina) => (
+                  {maquinasOrdenadas.map((maquina) => (
                     <SelectItem key={maquina.id} value={maquina.codigo}>
-                      {maquina.codigo} - {maquina.nome}
+                      {maquina.codigo.padStart(3, '0')} - {maquina.nome}
                     </SelectItem>
                   ))}
                 </SelectContent>
