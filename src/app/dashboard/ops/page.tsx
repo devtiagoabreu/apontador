@@ -476,21 +476,13 @@ export default function OpsPage() {
       status: formData.status || 'ABERTA',
     };
 
-    // Campos de estágio
-    if (formData.codEstagioAtual) {
-      data.codEstagioAtual = formData.codEstagioAtual;
-    }
-    if (formData.estagioAtual) {
-      data.estagioAtual = formData.estagioAtual;
-    }
+    // Campos de estágio - garantir que sempre tenham valores
+    data.codEstagioAtual = formData.codEstagioAtual || '00';
+    data.estagioAtual = formData.estagioAtual || 'NENHUM';
 
-    // Campos de máquina
-    if (formData.codMaquinaAtual) {
-      data.codMaquinaAtual = formData.codMaquinaAtual;
-    }
-    if (formData.maquinaAtual) {
-      data.maquinaAtual = formData.maquinaAtual;
-    }
+    // Campos de máquina - garantir que sempre tenham valores
+    data.codMaquinaAtual = formData.codMaquinaAtual || '00';
+    data.maquinaAtual = formData.maquinaAtual || 'NENHUMA';
 
     // Na criação, incluir o op
     if (!editMode && formData.op) {
