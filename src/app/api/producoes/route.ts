@@ -395,17 +395,23 @@ export async function POST(request: Request) {
     console.log('📦 Máquina selecionada:', maquina.nome, '(Código:', maquina.codigo || 'N/A', ')');
 
     try {
-      // USAR OS NOMES DAS COLUNAS DO BANCO (SNAKE_CASE) NO OBJETO DE UPDATE
+      // Buscar OP antes
+      const opAntes = await db.query.ops.findFirst({
+        where: eq(ops.op, validated.opId),
+      });
+      console.log('📦 OP ANTES:', JSON.stringify(opAntes, null, 2));
+
+      // USAR CAMELCASE - O DRIZZLE CONVERTE AUTOMATICAMENTE PARA SNAKE_CASE
       const dadosParaAtualizar = {
         status: 'EM_ANDAMENTO',
-        cod_estagio_atual: String(estagio.codigo || '00'),
-        estagio_atual: String(estagio.nome),
-        cod_maquina_atual: String(maquina.codigo || '00'),
-        maquina_atual: String(maquina.nome),
-        data_ultimo_apontamento: agora,
+        codEstagioAtual: String(estagio.codigo || '00'),
+        estagioAtual: String(estagio.nome),
+        codMaquinaAtual: String(maquina.codigo || '00'),
+        maquinaAtual: String(maquina.nome),
+        dataUltimoApontamento: agora,
       };
       
-      console.log('📦 Dados para atualizar (snake_case):', JSON.stringify(dadosParaAtualizar, null, 2));
+      console.log('📦 Dados para atualizar (camelCase):', JSON.stringify(dadosParaAtualizar, null, 2));
 
       const updateResult = await db
         .update(ops)
@@ -419,7 +425,6 @@ export async function POST(request: Request) {
         console.error('❌ NENHUMA LINHA ATUALIZADA!');
       } else {
         console.log('✅ OP atualizada com sucesso!');
-        // O RETORNO VEM COM OS NOMES DO SCHEMA (CAMELCASE)
         console.log('📦 Novo estado:', {
           op: updateResult[0].op,
           status: updateResult[0].status,
@@ -429,6 +434,13 @@ export async function POST(request: Request) {
           maquinaAtual: updateResult[0].maquinaAtual,
         });
       }
+
+      // Buscar OP depois para confirmar
+      const opDepois = await db.query.ops.findFirst({
+        where: eq(ops.op, validated.opId),
+      });
+      console.log('📦 OP DEPOIS:', JSON.stringify(opDepois, null, 2));
+
     } catch (updateError) {
       console.error('❌ Erro ao atualizar OP:', updateError);
       console.error('❌ Stack:', updateError instanceof Error ? updateError.stack : 'N/A');
