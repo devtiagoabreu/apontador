@@ -69,13 +69,19 @@ interface Estagio {
   nome: string;
 }
 
+interface Maquina {
+  id: string;
+  codigo: string;
+  nome: string;
+}
+
 interface MotivoCancelamento {
   id: string;
   codigo: string;
   descricao: string;
 }
 
-// Schema para criação/edição de OP - CORRIGIDO para aceitar strings
+// Schema para criação/edição de OP
 const opSchema = z.object({
   op: z.union([z.string(), z.number()])
     .transform(val => Number(val))
@@ -104,10 +110,11 @@ const opSchema = z.object({
   
   status: z.enum(['ABERTA', 'EM_ANDAMENTO', 'FINALIZADA', 'CANCELADA']),
   
+  // Campos de estágio - serão preenchidos automaticamente pelo select
   codEstagioAtual: z.string().optional().default('00'),
   estagioAtual: z.string().optional().default('NENHUM'),
   
-  // ✅ ADICIONAR CAMPOS DE MÁQUINA NO SCHEMA
+  // Campos de máquina - serão preenchidos automaticamente pelo select
   codMaquinaAtual: z.string().optional().default('00'),
   maquinaAtual: z.string().optional().default('NENHUMA'),
 });
@@ -180,6 +187,7 @@ interface PaginationInfo {
 export default function OpsPage() {
   const [ops, setOps] = useState<OP[]>([]);
   const [estagios, setEstagios] = useState<Estagio[]>([]);
+  const [maquinas, setMaquinas] = useState<Maquina[]>([]);
   const [motivosCancelamento, setMotivosCancelamento] = useState<MotivoCancelamento[]>([]);
   const [pagination, setPagination] = useState<PaginationInfo>({
     page: 1,
@@ -197,9 +205,14 @@ export default function OpsPage() {
   const [motivoCancelamento, setMotivoCancelamento] = useState('');
   const [formData, setFormData] = useState<Partial<OP>>({});
 
+  // Estados para os selects
+  const [estagioSelecionado, setEstagioSelecionado] = useState<string>('');
+  const [maquinaSelecionada, setMaquinaSelecionada] = useState<string>('');
+
   useEffect(() => {
     carregarOps(1);
     carregarEstagios();
+    carregarMaquinas();
     carregarMotivosCancelamento();
   }, []);
 
@@ -210,6 +223,16 @@ export default function OpsPage() {
       setEstagios(data);
     } catch (error) {
       console.error('Erro ao carregar estágios:', error);
+    }
+  }
+
+  async function carregarMaquinas() {
+    try {
+      const response = await fetch('/api/maquinas');
+      const data = await response.json();
+      setMaquinas(data);
+    } catch (error) {
+      console.error('Erro ao carregar máquinas:', error);
     }
   }
 
@@ -297,6 +320,8 @@ export default function OpsPage() {
       setModalOpen(false);
       setEditMode(false);
       setFormData({});
+      setEstagioSelecionado('');
+      setMaquinaSelecionada('');
       await carregarOps(1);
     } catch (error) {
       toast({
@@ -335,6 +360,8 @@ export default function OpsPage() {
       setEditMode(false);
       setSelectedOp(null);
       setFormData({});
+      setEstagioSelecionado('');
+      setMaquinaSelecionada('');
       await carregarOps(pagination.page);
     } catch (error) {
       toast({
@@ -418,12 +445,12 @@ export default function OpsPage() {
       narrativa: op.narrativa,
       obs: op.obs,
       status: op.status,
-      codEstagioAtual: op.codEstagioAtual,
-      estagioAtual: op.estagioAtual,
-      // ✅ ADICIONAR CAMPOS DE MÁQUINA NO FORM DATA
-      codMaquinaAtual: op.codMaquinaAtual,
-      maquinaAtual: op.maquinaAtual,
     });
+    
+    // Preencher os selects com os valores atuais
+    setEstagioSelecionado(op.codEstagioAtual);
+    setMaquinaSelecionada(op.codMaquinaAtual);
+    
     setEditMode(true);
     setModalOpen(true);
   };
@@ -433,50 +460,38 @@ export default function OpsPage() {
     setCancelModalOpen(true);
   };
 
-  // ✅ CAMPOS DO FORMULÁRIO CORRIGIDOS - ADICIONADOS CAMPOS DE MÁQUINA
-  const formFields = [
-    { name: 'op', label: 'Número da OP', type: 'number' as const, required: true },
-    { name: 'produto', label: 'Produto', type: 'text' as const, required: true },
-    { name: 'qtdeProgramado', label: 'Quantidade Programada', type: 'number' as const },
-    { name: 'qtdeCarregado', label: 'Quantidade Carregada', type: 'number' as const },
-    { name: 'qtdeProduzida', label: 'Quantidade Produzida', type: 'number' as const },
-    { name: 'um', label: 'Unidade de Medida', type: 'text' as const },
-    { name: 'narrativa', label: 'Narrativa', type: 'textarea' as const },
-    { name: 'obs', label: 'Observações', type: 'textarea' as const },
-    { 
-      name: 'status', 
-      label: 'Status', 
-      type: 'select' as const,
-      options: [
-        { value: 'ABERTA', label: 'Aberta' },
-        { value: 'EM_ANDAMENTO', label: 'Em Andamento' },
-        { value: 'FINALIZADA', label: 'Finalizada' },
-        { value: 'CANCELADA', label: 'Cancelada' },
-      ]
-    },
-    { 
-      name: 'codEstagioAtual', 
-      label: 'Código do Estágio', 
-      type: 'select' as const,
-      options: estagios.map(e => ({ value: e.codigo, label: `${e.codigo} - ${e.nome}` }))
-    },
-    { 
-      name: 'estagioAtual', 
-      label: 'Estágio Atual', 
-      type: 'text' as const,
-    },
-    // ✅ NOVOS CAMPOS DE MÁQUINA
-    { 
-      name: 'codMaquinaAtual', 
-      label: 'Código da Máquina', 
-      type: 'text' as const,
-    },
-    { 
-      name: 'maquinaAtual', 
-      label: 'Máquina Atual', 
-      type: 'text' as const,
-    },
-  ];
+  // Função para lidar com a mudança do estágio
+  const handleEstagioChange = (codigo: string) => {
+    setEstagioSelecionado(codigo);
+    const estagio = estagios.find(e => e.codigo === codigo);
+    setFormData({
+      ...formData,
+      codEstagioAtual: codigo,
+      estagioAtual: estagio?.nome || 'NENHUM',
+    });
+  };
+
+  // Função para lidar com a mudança da máquina
+  const handleMaquinaChange = (codigo: string) => {
+    setMaquinaSelecionada(codigo);
+    const maquina = maquinas.find(m => m.codigo === codigo);
+    setFormData({
+      ...formData,
+      codMaquinaAtual: codigo,
+      maquinaAtual: maquina?.nome || 'NENHUMA',
+    });
+  };
+
+  // Preparar os dados antes de enviar
+  const prepareSubmitData = () => {
+    return {
+      ...formData,
+      codEstagioAtual: formData.codEstagioAtual || '00',
+      estagioAtual: formData.estagioAtual || 'NENHUM',
+      codMaquinaAtual: formData.codMaquinaAtual || '00',
+      maquinaAtual: formData.maquinaAtual || 'NENHUMA',
+    };
+  };
 
   return (
     <div className="space-y-6">
@@ -489,6 +504,8 @@ export default function OpsPage() {
               setEditMode(false);
               setSelectedOp(null);
               setFormData({});
+              setEstagioSelecionado('');
+              setMaquinaSelecionada('');
               setModalOpen(true);
             }}
           >
@@ -654,21 +671,200 @@ export default function OpsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Criação/Edição */}
-      <FormModal
-        open={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          setEditMode(false);
-          setSelectedOp(null);
-          setFormData({});
-        }}
-        onSubmit={editMode ? handleUpdateOp : handleCreateOp}
-        title={editMode ? `Editar OP ${selectedOp?.op}` : 'Nova OP'}
-        fields={formFields}
-        initialData={formData}
-        schema={opSchema}
-      />
+      {/* Modal de Criação/Edição Customizado */}
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editMode ? `Editar OP ${selectedOp?.op}` : 'Nova OP'}</DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const submitData = prepareSubmitData();
+            if (editMode) {
+              handleUpdateOp(submitData);
+            } else {
+              handleCreateOp(submitData);
+            }
+          }} className="space-y-4">
+            {/* OP */}
+            <div className="space-y-2">
+              <Label htmlFor="op">Número da OP *</Label>
+              <Input
+                id="op"
+                type="number"
+                value={formData.op ?? ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setFormData({ 
+                    ...formData, 
+                    op: value === '' ? undefined : Number(value)
+                  });
+                }}
+                required
+              />
+            </div>
+
+            {/* Produto */}
+            <div className="space-y-2">
+              <Label htmlFor="produto">Produto *</Label>
+              <Input
+                id="produto"
+                value={formData.produto || ''}
+                onChange={(e) => setFormData({ ...formData, produto: e.target.value })}
+                required
+              />
+            </div>
+
+            {/* Quantidades */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="qtdeProgramado">Programado</Label>
+                <Input
+                  id="qtdeProgramado"
+                  type="number"
+                  step="0.01"
+                  value={formData.qtdeProgramado ?? ''}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setFormData({ 
+                      ...formData, 
+                      qtdeProgramado: value === '' ? null : Number(value)
+                    });
+                  }}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="qtdeCarregado">Carregado</Label>
+                <Input
+                  id="qtdeCarregado"
+                  type="number"
+                  step="0.01"
+                  value={formData.qtdeCarregado ?? ''}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setFormData({ 
+                      ...formData, 
+                      qtdeCarregado: value === '' ? null : Number(value)
+                    });
+                  }}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="qtdeProduzida">Produzido</Label>
+                <Input
+                  id="qtdeProduzida"
+                  type="number"
+                  step="0.01"
+                  value={formData.qtdeProduzida ?? ''}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setFormData({ 
+                      ...formData, 
+                      qtdeProduzida: value === '' ? null : Number(value)
+                    });
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* UM e Status */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="um">Unidade de Medida</Label>
+                <Input
+                  id="um"
+                  value={formData.um || ''}
+                  onChange={(e) => setFormData({ ...formData, um: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="status">Status</Label>
+                <Select 
+                  value={formData.status || 'ABERTA'} 
+                  onValueChange={(value) => setFormData({ ...formData, status: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ABERTA">Aberta</SelectItem>
+                    <SelectItem value="EM_ANDAMENTO">Em Andamento</SelectItem>
+                    <SelectItem value="FINALIZADA">Finalizada</SelectItem>
+                    <SelectItem value="CANCELADA">Cancelada</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Estágio - Select Único */}
+            <div className="space-y-2">
+              <Label htmlFor="estagio">Estágio Atual</Label>
+              <Select value={estagioSelecionado} onValueChange={handleEstagioChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um estágio" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="00">NENHUM</SelectItem>
+                  {estagios.map((estagio) => (
+                    <SelectItem key={estagio.id} value={estagio.codigo}>
+                      {estagio.codigo} - {estagio.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Máquina - Select Único */}
+            <div className="space-y-2">
+              <Label htmlFor="maquina">Máquina Atual</Label>
+              <Select value={maquinaSelecionada} onValueChange={handleMaquinaChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione uma máquina" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="00">NENHUMA</SelectItem>
+                  {maquinas.map((maquina) => (
+                    <SelectItem key={maquina.id} value={maquina.codigo}>
+                      {maquina.codigo} - {maquina.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Narrativa e Observações */}
+            <div className="space-y-2">
+              <Label htmlFor="narrativa">Narrativa</Label>
+              <Textarea
+                id="narrativa"
+                value={formData.narrativa || ''}
+                onChange={(e) => setFormData({ ...formData, narrativa: e.target.value })}
+                rows={3}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="obs">Observações</Label>
+              <Textarea
+                id="obs"
+                value={formData.obs || ''}
+                onChange={(e) => setFormData({ ...formData, obs: e.target.value })}
+                rows={2}
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4">
+              <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit">
+                {editMode ? 'Atualizar' : 'Criar'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal de Cancelamento */}
       <Dialog open={cancelModalOpen} onOpenChange={setCancelModalOpen}>
