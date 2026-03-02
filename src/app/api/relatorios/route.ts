@@ -48,6 +48,7 @@ export async function GET(request: Request) {
             operador: usuarios.nome,
             metragem: producoesTable.metragemProcessada,
             estagio: estagios.nome,
+            tempoProdução: sql<number>`EXTRACT(EPOCH FROM (${producoesTable.dataFim} - ${producoesTable.dataInicio}))/60`,
           })
           .from(producoesTable)
           .innerJoin(ops, eq(producoesTable.opId, ops.op))
@@ -66,7 +67,6 @@ export async function GET(request: Request) {
 
       case 'paradas':
         // Relatório de paradas usando a tabela paradas_maquina
-        // Calcular duração da parada em minutos
         const paradas = await db
           .select({
             motivo: motivosParada.descricao,
@@ -98,18 +98,18 @@ export async function GET(request: Request) {
             paradasMaquina.observacoes
           );
 
-        // Para o gráfico de pizza, precisamos agrupar por motivo
+        // Para o gráfico, agrupar por motivo
         const paradasPorMotivo = paradas.reduce((acc: any[], item) => {
           const existente = acc.find(m => m.motivo === item.motivo);
           if (existente) {
             existente.quantidade += item.quantidade;
-            existente.minutos += item.minutos;
+            existente.minutos = Math.round((existente.minutos + item.minutos) * 100) / 100;
           } else {
             acc.push({
               motivo: item.motivo,
               codigo: item.motivoCodigo,
               quantidade: item.quantidade,
-              minutos: Math.round(item.minutos || 0),
+              minutos: Math.round((item.minutos || 0) * 100) / 100,
             });
           }
           return acc;
@@ -127,12 +127,12 @@ export async function GET(request: Request) {
             totalMetragem: sql<number>`COALESCE(SUM(${producoesTable.metragemProcessada}), 0)`,
             tempoTotal: sql<number>`COALESCE(SUM(EXTRACT(EPOCH FROM (${producoesTable.dataFim} - ${producoesTable.dataInicio}))/60), 0)`,
             quantidadeProducoes: sql<number>`COUNT(${producoesTable.id})`,
-            eficiencia: sql<number>`
+            metrosPorMinuto: sql<number>`
               CASE 
                 WHEN SUM(EXTRACT(EPOCH FROM (${producoesTable.dataFim} - ${producoesTable.dataInicio}))/60) > 0 
                 THEN ROUND(
-                  (COALESCE(SUM(${producoesTable.metragemProcessada}), 0) / 
-                  SUM(EXTRACT(EPOCH FROM (${producoesTable.dataFim} - ${producoesTable.dataInicio}))/60)) * 60, 2
+                  COALESCE(SUM(${producoesTable.metragemProcessada}), 0) / 
+                  SUM(EXTRACT(EPOCH FROM (${producoesTable.dataFim} - ${producoesTable.dataInicio}))/60), 2
                 )
                 ELSE 0 
               END
@@ -153,14 +153,14 @@ export async function GET(request: Request) {
         break;
 
       case 'maquinas':
-        // Relatório por máquina combinando producoes e paradas_maquina
+        // Buscar dados de produção por máquina
         const producoesMaquinas = await db
           .select({
             maquinaId: maquinas.id,
             nome: maquinas.nome,
             codigo: maquinas.codigo,
-            totalMetragem: sql<number>`COALESCE(SUM(${producoesTable.metragemProcessada}), 0)`,
-            tempoProducao: sql<number>`COALESCE(SUM(EXTRACT(EPOCH FROM (${producoesTable.dataFim} - ${producoesTable.dataInicio}))/60), 0)`,
+            totalMetragem: sql<number>`COALESCE(ROUND(SUM(${producoesTable.metragemProcessada})::numeric, 2), 0)`,
+            tempoProducao: sql<number>`COALESCE(ROUND(SUM(EXTRACT(EPOCH FROM (${producoesTable.dataFim} - ${producoesTable.dataInicio}))/60)::numeric, 2), 0)`,
           })
           .from(maquinas)
           .leftJoin(
@@ -174,10 +174,11 @@ export async function GET(request: Request) {
           )
           .groupBy(maquinas.id, maquinas.nome, maquinas.codigo);
 
+        // Buscar dados de paradas por máquina
         const paradasMaquinas = await db
           .select({
             maquinaId: maquinas.id,
-            tempoParada: sql<number>`COALESCE(SUM(EXTRACT(EPOCH FROM (${paradasMaquina.dataFim} - ${paradasMaquina.dataInicio}))/60), 0)`,
+            tempoParada: sql<number>`COALESCE(ROUND(SUM(EXTRACT(EPOCH FROM (${paradasMaquina.dataFim} - ${paradasMaquina.dataInicio}))/60)::numeric, 2), 0)`,
           })
           .from(maquinas)
           .leftJoin(
@@ -191,23 +192,50 @@ export async function GET(request: Request) {
           )
           .groupBy(maquinas.id);
 
-        // Combinar os dados
+        // Combinar e calcular métricas
         dados = producoesMaquinas.map(p => {
           const parada = paradasMaquinas.find(pm => pm.maquinaId === p.maquinaId);
           const tempoParada = parada?.tempoParada || 0;
           const tempoTotal = p.tempoProducao + tempoParada;
           
+          // Disponibilidade = tempo produzindo / tempo total
+          let disponibilidade = 100;
+          if (tempoTotal > 0) {
+            disponibilidade = Math.round((p.tempoProducao / tempoTotal) * 10000) / 100;
+          } else if (p.tempoProducao === 0 && tempoParada === 0) {
+            disponibilidade = 100; // Máquina não utilizada no período
+          }
+          
+          // Eficiência (taxa de produção por minuto)
+          let metrosPorMinuto = 0;
+          if (p.tempoProducao > 0) {
+            metrosPorMinuto = Math.round((p.totalMetragem / p.tempoProducao) * 100) / 100;
+          }
+          
+          // Calcular eficiência relativa (comparada com a média da própria máquina)
+          // Como não temos velocidade padrão, usamos a média do período como referência
+          let eficiencia = 100;
+          if (p.tempoProducao > 0) {
+            // Se a máquina produziu, eficiência é 100% (referência ela mesma)
+            eficiencia = 100;
+          } else if (p.totalMetragem === 0 && tempoParada > 0) {
+            eficiencia = 0; // Só teve paradas
+          }
+          
           return {
             nome: p.nome,
             codigo: p.codigo,
-            totalMetragem: Math.round(p.totalMetragem * 100) / 100,
-            tempoProducao: Math.round(p.tempoProducao),
-            tempoParada: Math.round(tempoParada),
-            disponibilidade: tempoTotal > 0 
-              ? Math.round((p.tempoProducao / tempoTotal) * 100 * 100) / 100
-              : 100,
+            totalMetragem: p.totalMetragem,
+            tempoProducao: p.tempoProducao,
+            tempoParada,
+            disponibilidade,
+            eficiencia,
+            metrosPorMinuto,
           };
         }).filter(m => m.totalMetragem > 0 || m.tempoParada > 0);
+        
+        // Ordenar por nome
+        dados.sort((a, b) => a.nome.localeCompare(b.nome));
         break;
 
       default:
