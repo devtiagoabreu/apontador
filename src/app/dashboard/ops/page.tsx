@@ -8,7 +8,7 @@ import {
   Download, 
   RefreshCw, 
   Plus, 
-  Edit, 
+  Eye, 
   XCircle, 
   ChevronLeft, 
   ChevronRight,
@@ -79,7 +79,7 @@ interface MotivoCancelamento {
   descricao: string;
 }
 
-// Schema para validação local
+// Schema para validação local (apenas para criação)
 const opSchema = z.object({
   op: z.number().optional(),
   produto: z.string().min(1).optional(),
@@ -178,11 +178,10 @@ export default function OpsPage() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
-  const [editMode, setEditMode] = useState(false);
   const [motivoCancelamento, setMotivoCancelamento] = useState('');
   const [formData, setFormData] = useState<Partial<OP>>({});
 
-  // Estados para os selects
+  // Estados para os selects (apenas para criação)
   const [estagioSelecionado, setEstagioSelecionado] = useState<string>('');
   const [maquinaSelecionada, setMaquinaSelecionada] = useState<string>('');
 
@@ -294,7 +293,6 @@ export default function OpsPage() {
       });
 
       setModalOpen(false);
-      setEditMode(false);
       setFormData({});
       setEstagioSelecionado('');
       setMaquinaSelecionada('');
@@ -303,52 +301,6 @@ export default function OpsPage() {
       toast({
         title: 'Erro',
         description: error instanceof Error ? error.message : 'Erro ao criar OP',
-        variant: 'destructive',
-      });
-    }
-  }
-
-  async function handleUpdateOp(data: any) {
-    if (!selectedOp) return;
-
-    try {
-      console.log('📦 Dados para atualização:', data);
-      
-      // Remover o campo 'op' do body (já está na URL)
-      const { op, ...dadosParaEnviar } = data;
-      
-      console.log('📦 Enviando para API:', dadosParaEnviar);
-      
-      const response = await fetch(`/api/ops/${selectedOp.op}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dadosParaEnviar),
-      });
-
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        console.error('❌ Erro da API:', responseData);
-        throw new Error(responseData.error || 'Erro ao atualizar OP');
-      }
-
-      toast({
-        title: 'Sucesso',
-        description: `OP ${selectedOp.op} atualizada com sucesso`,
-      });
-
-      setModalOpen(false);
-      setEditMode(false);
-      setSelectedOp(null);
-      setFormData({});
-      setEstagioSelecionado('');
-      setMaquinaSelecionada('');
-      await carregarOps(pagination.page);
-    } catch (error) {
-      console.error('❌ Erro detalhado:', error);
-      toast({
-        title: 'Erro',
-        description: error instanceof Error ? error.message : 'Erro ao atualizar OP',
         variant: 'destructive',
       });
     }
@@ -387,37 +339,7 @@ export default function OpsPage() {
     }
   }
 
-  const openEditModal = (op: OP) => {
-    setSelectedOp(op);
-    setFormData({
-      produto: op.produto,
-      qtdeProgramado: op.qtdeProgramado,
-      qtdeCarregado: op.qtdeCarregado,
-      qtdeProduzida: op.qtdeProduzida,
-      um: op.um,
-      narrativa: op.narrativa,
-      obs: op.obs,
-      status: op.status,
-      codEstagioAtual: op.codEstagioAtual,
-      estagioAtual: op.estagioAtual,
-      codMaquinaAtual: op.codMaquinaAtual,
-      maquinaAtual: op.maquinaAtual,
-    });
-    
-    // Preencher os selects com os valores atuais (sempre como string)
-    setEstagioSelecionado(String(op.codEstagioAtual));
-    setMaquinaSelecionada(String(op.codMaquinaAtual));
-    
-    setEditMode(true);
-    setModalOpen(true);
-  };
-
-  const openCancelModal = (op: OP) => {
-    setSelectedOp(op);
-    setCancelModalOpen(true);
-  };
-
-  // Função para lidar com a mudança do estágio
+  // Função para lidar com a mudança do estágio (apenas criação)
   const handleEstagioChange = (codigo: string) => {
     setEstagioSelecionado(codigo);
     
@@ -432,7 +354,7 @@ export default function OpsPage() {
     }
   };
 
-  // Função para lidar com a mudança da máquina
+  // Função para lidar com a mudança da máquina (apenas criação)
   const handleMaquinaChange = (codigo: string) => {
     setMaquinaSelecionada(codigo);
     
@@ -447,14 +369,14 @@ export default function OpsPage() {
     }
   };
 
-  // Preparar os dados antes de enviar
+  // Preparar os dados antes de enviar (apenas criação)
   const prepareSubmitData = () => {
     const data: any = {
       produto: formData.produto,
       status: formData.status || 'ABERTA',
     };
 
-    // Campos de estágio - garantir que sejam strings
+    // Campos de estágio
     if (formData.codEstagioAtual !== undefined) {
       data.codEstagioAtual = String(formData.codEstagioAtual);
     }
@@ -462,7 +384,7 @@ export default function OpsPage() {
       data.estagioAtual = formData.estagioAtual;
     }
 
-    // Campos de máquina - garantir que sejam strings
+    // Campos de máquina
     if (formData.codMaquinaAtual !== undefined) {
       data.codMaquinaAtual = String(formData.codMaquinaAtual);
     }
@@ -470,8 +392,8 @@ export default function OpsPage() {
       data.maquinaAtual = formData.maquinaAtual;
     }
 
-    // Na criação, incluir o op
-    if (!editMode && formData.op) {
+    // Incluir o op
+    if (formData.op) {
       data.op = Number(formData.op);
     }
 
@@ -497,12 +419,12 @@ export default function OpsPage() {
     return data;
   };
 
-  // Ordenar estágios por código (numericamente)
+  // Ordenar estágios por código
   const estagiosOrdenados = [...estagios].sort((a, b) => {
     return parseInt(a.codigo) - parseInt(b.codigo);
   });
 
-  // Ordenar máquinas por código (numericamente)
+  // Ordenar máquinas por código
   const maquinasOrdenadas = [...maquinas].sort((a, b) => {
     return parseInt(a.codigo) - parseInt(b.codigo);
   });
@@ -515,7 +437,6 @@ export default function OpsPage() {
           <Button 
             variant="outline"
             onClick={() => {
-              setEditMode(false);
               setSelectedOp(null);
               setFormData({});
               setEstagioSelecionado('');
@@ -593,12 +514,13 @@ export default function OpsPage() {
               size="icon"
               onClick={(e) => {
                 e.stopPropagation();
-                openEditModal(op);
+                setSelectedOp(op);
+                setDetailsOpen(true);
               }}
               className="h-8 w-8"
-              title="Editar OP"
+              title="Visualizar OP"
             >
-              <Edit className="h-4 w-4" />
+              <Eye className="h-4 w-4" />
             </Button>
             {op.status !== 'CANCELADA' && op.status !== 'FINALIZADA' && (
               <Button
@@ -606,7 +528,8 @@ export default function OpsPage() {
                 size="icon"
                 onClick={(e) => {
                   e.stopPropagation();
-                  openCancelModal(op);
+                  setSelectedOp(op);
+                  setCancelModalOpen(true);
                 }}
                 className="h-8 w-8 text-red-600 hover:text-red-700"
                 title="Cancelar OP"
@@ -685,41 +608,35 @@ export default function OpsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Criação/Edição */}
+      {/* Modal de Criação */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editMode ? `Editar OP ${selectedOp?.op}` : 'Nova OP'}</DialogTitle>
+            <DialogTitle>Nova OP</DialogTitle>
           </DialogHeader>
 
           <form onSubmit={(e) => {
             e.preventDefault();
             const submitData = prepareSubmitData();
-            if (editMode) {
-              handleUpdateOp(submitData);
-            } else {
-              handleCreateOp(submitData);
-            }
+            handleCreateOp(submitData);
           }} className="space-y-4">
-            {/* OP - só aparece na criação */}
-            {!editMode && (
-              <div className="space-y-2">
-                <Label htmlFor="op">Número da OP *</Label>
-                <Input
-                  id="op"
-                  type="number"
-                  value={formData.op ?? ''}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setFormData({ 
-                      ...formData, 
-                      op: value === '' ? undefined : Number(value)
-                    });
-                  }}
-                  required
-                />
-              </div>
-            )}
+            {/* OP */}
+            <div className="space-y-2">
+              <Label htmlFor="op">Número da OP *</Label>
+              <Input
+                id="op"
+                type="number"
+                value={formData.op ?? ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setFormData({ 
+                    ...formData, 
+                    op: value === '' ? undefined : Number(value)
+                  });
+                }}
+                required
+              />
+            </div>
 
             {/* Produto */}
             <div className="space-y-2">
@@ -873,7 +790,7 @@ export default function OpsPage() {
                 Cancelar
               </Button>
               <Button type="submit">
-                {editMode ? 'Atualizar' : 'Criar'}
+                Criar
               </Button>
             </div>
           </form>
