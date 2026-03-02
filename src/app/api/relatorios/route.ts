@@ -2,12 +2,14 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { apontamentos } from '@/lib/db/schema/apontamentos';
+import { producoesTable } from '@/lib/db/schema/producoes';
+import { paradasMaquina } from '@/lib/db/schema/paradas-maquina';
 import { ops } from '@/lib/db/schema/ops';
 import { maquinas } from '@/lib/db/schema/maquinas';
 import { usuarios } from '@/lib/db/schema/usuarios';
 import { motivosParada } from '@/lib/db/schema/motivos-parada';
-import { sql, and, gte, lte, eq } from 'drizzle-orm';
+import { estagios } from '@/lib/db/schema/estagios';
+import { sql, and, gte, lte, eq, isNotNull } from 'drizzle-orm';
 
 export async function GET(request: Request) {
   try {
@@ -36,103 +38,176 @@ export async function GET(request: Request) {
 
     switch (tipo) {
       case 'producao':
+        // Relatório de produção usando a tabela producoes
         dados = await db
           .select({
-            data: sql<string>`DATE(${apontamentos.dataFim})`,
+            data: sql<string>`DATE(${producoesTable.dataFim})`,
             op: ops.op,
             produto: ops.produto,
             maquina: maquinas.nome,
             operador: usuarios.nome,
-            metragem: apontamentos.metragemProcessada,
+            metragem: producoesTable.metragemProcessada,
+            estagio: estagios.nome,
           })
-          .from(apontamentos)
-          .leftJoin(ops, eq(apontamentos.opId, ops.op))
-          .leftJoin(maquinas, eq(apontamentos.maquinaId, maquinas.id))
-          .leftJoin(usuarios, eq(apontamentos.operadorFimId, usuarios.id))
+          .from(producoesTable)
+          .innerJoin(ops, eq(producoesTable.opId, ops.op))
+          .innerJoin(maquinas, eq(producoesTable.maquinaId, maquinas.id))
+          .innerJoin(usuarios, eq(producoesTable.operadorFimId, usuarios.id))
+          .leftJoin(estagios, eq(producoesTable.estagioId, estagios.id))
           .where(
             and(
-              gte(apontamentos.dataFim, dataInicio),
-              lte(apontamentos.dataFim, dataFim),
-              eq(apontamentos.tipo, 'PRODUCAO'),
-              eq(apontamentos.status, 'CONCLUIDO')
+              isNotNull(producoesTable.dataFim),
+              gte(producoesTable.dataFim, dataInicio),
+              lte(producoesTable.dataFim, dataFim)
             )
           )
-          .orderBy(sql`DATE(${apontamentos.dataFim})`);
+          .orderBy(sql`DATE(${producoesTable.dataFim})`);
         break;
 
       case 'paradas':
-        // Calcular duração da parada (dataFim - dataInicio)
-        dados = await db
+        // Relatório de paradas usando a tabela paradas_maquina
+        // Calcular duração da parada em minutos
+        const paradas = await db
           .select({
             motivo: motivosParada.descricao,
+            motivoCodigo: motivosParada.codigo,
             quantidade: sql<number>`COUNT(*)`,
-            minutos: sql<number>`SUM(EXTRACT(EPOCH FROM (${apontamentos.dataFim} - ${apontamentos.dataInicio}))/60)`,
+            minutos: sql<number>`SUM(EXTRACT(EPOCH FROM (${paradasMaquina.dataFim} - ${paradasMaquina.dataInicio}))/60)`,
+            maquina: maquinas.nome,
+            operador: usuarios.nome,
+            data: sql<string>`DATE(${paradasMaquina.dataInicio})`,
+            observacoes: paradasMaquina.observacoes,
           })
-          .from(apontamentos)
-          .leftJoin(motivosParada, eq(apontamentos.motivoParadaId, motivosParada.id))
+          .from(paradasMaquina)
+          .innerJoin(maquinas, eq(paradasMaquina.maquinaId, maquinas.id))
+          .innerJoin(usuarios, eq(paradasMaquina.operadorId, usuarios.id))
+          .innerJoin(motivosParada, eq(paradasMaquina.motivoParadaId, motivosParada.id))
           .where(
             and(
-              gte(apontamentos.dataInicio, dataInicio),
-              lte(apontamentos.dataFim, dataFim),
-              eq(apontamentos.tipo, 'PARADA'),
-              eq(apontamentos.status, 'CONCLUIDO')
+              isNotNull(paradasMaquina.dataFim),
+              gte(paradasMaquina.dataInicio, dataInicio),
+              lte(paradasMaquina.dataFim, dataFim)
             )
           )
-          .groupBy(motivosParada.descricao);
+          .groupBy(
+            motivosParada.descricao, 
+            motivosParada.codigo,
+            maquinas.nome,
+            usuarios.nome,
+            sql`DATE(${paradasMaquina.dataInicio})`,
+            paradasMaquina.observacoes
+          );
+
+        // Para o gráfico de pizza, precisamos agrupar por motivo
+        const paradasPorMotivo = paradas.reduce((acc: any[], item) => {
+          const existente = acc.find(m => m.motivo === item.motivo);
+          if (existente) {
+            existente.quantidade += item.quantidade;
+            existente.minutos += item.minutos;
+          } else {
+            acc.push({
+              motivo: item.motivo,
+              codigo: item.motivoCodigo,
+              quantidade: item.quantidade,
+              minutos: Math.round(item.minutos || 0),
+            });
+          }
+          return acc;
+        }, []);
+
+        dados = paradasPorMotivo;
         break;
 
       case 'operadores':
+        // Relatório por operador usando a tabela producoes
         dados = await db
           .select({
             nome: usuarios.nome,
             matricula: usuarios.matricula,
-            totalMetragem: sql<number>`SUM(${apontamentos.metragemProcessada})`,
-            tempoTotal: sql<number>`SUM(EXTRACT(EPOCH FROM (${apontamentos.dataFim} - ${apontamentos.dataInicio}))/60)`,
-            eficiencia: sql<number>`AVG((${apontamentos.metragemProcessada} / NULLIF(${ops.qtdeProgramado}, 0)) * 100)`,
+            totalMetragem: sql<number>`COALESCE(SUM(${producoesTable.metragemProcessada}), 0)`,
+            tempoTotal: sql<number>`COALESCE(SUM(EXTRACT(EPOCH FROM (${producoesTable.dataFim} - ${producoesTable.dataInicio}))/60), 0)`,
+            quantidadeProducoes: sql<number>`COUNT(${producoesTable.id})`,
+            eficiencia: sql<number>`
+              CASE 
+                WHEN SUM(EXTRACT(EPOCH FROM (${producoesTable.dataFim} - ${producoesTable.dataInicio}))/60) > 0 
+                THEN ROUND(
+                  (COALESCE(SUM(${producoesTable.metragemProcessada}), 0) / 
+                  SUM(EXTRACT(EPOCH FROM (${producoesTable.dataFim} - ${producoesTable.dataInicio}))/60)) * 60, 2
+                )
+                ELSE 0 
+              END
+            `,
           })
-          .from(apontamentos)
-          .leftJoin(usuarios, eq(apontamentos.operadorFimId, usuarios.id))
-          .leftJoin(ops, eq(apontamentos.opId, ops.op))
-          .where(
+          .from(usuarios)
+          .leftJoin(
+            producoesTable, 
             and(
-              gte(apontamentos.dataFim, dataInicio),
-              lte(apontamentos.dataFim, dataFim),
-              eq(apontamentos.tipo, 'PRODUCAO'),
-              eq(apontamentos.status, 'CONCLUIDO')
+              eq(producoesTable.operadorFimId, usuarios.id),
+              isNotNull(producoesTable.dataFim),
+              gte(producoesTable.dataFim, dataInicio),
+              lte(producoesTable.dataFim, dataFim)
             )
           )
-          .groupBy(usuarios.nome, usuarios.matricula);
+          .groupBy(usuarios.nome, usuarios.matricula)
+          .having(sql`COUNT(${producoesTable.id}) > 0 OR COALESCE(SUM(${producoesTable.metragemProcessada}), 0) > 0`);
         break;
 
       case 'maquinas':
-        dados = await db
+        // Relatório por máquina combinando producoes e paradas_maquina
+        const producoesMaquinas = await db
           .select({
+            maquinaId: maquinas.id,
             nome: maquinas.nome,
             codigo: maquinas.codigo,
-            totalMetragem: sql<number>`SUM(${apontamentos.metragemProcessada})`,
-            tempoProducao: sql<number>`SUM(CASE WHEN ${apontamentos.tipo} = 'PRODUCAO' THEN EXTRACT(EPOCH FROM (${apontamentos.dataFim} - ${apontamentos.dataInicio}))/60 ELSE 0 END)`,
-            tempoParada: sql<number>`SUM(CASE WHEN ${apontamentos.tipo} = 'PARADA' THEN EXTRACT(EPOCH FROM (${apontamentos.dataFim} - ${apontamentos.dataInicio}))/60 ELSE 0 END)`,
-            disponibilidade: sql<number>`
-              100 * (1 - (
-                SUM(CASE WHEN ${apontamentos.tipo} = 'PARADA' THEN EXTRACT(EPOCH FROM (${apontamentos.dataFim} - ${apontamentos.dataInicio}))/60 ELSE 0 END) 
-                / 
-                NULLIF(
-                  SUM(EXTRACT(EPOCH FROM (${apontamentos.dataFim} - ${apontamentos.dataInicio}))/60), 
-                  0
-                )
-              ))
-            `,
+            totalMetragem: sql<number>`COALESCE(SUM(${producoesTable.metragemProcessada}), 0)`,
+            tempoProducao: sql<number>`COALESCE(SUM(EXTRACT(EPOCH FROM (${producoesTable.dataFim} - ${producoesTable.dataInicio}))/60), 0)`,
           })
-          .from(apontamentos)
-          .leftJoin(maquinas, eq(apontamentos.maquinaId, maquinas.id))
-          .where(
+          .from(maquinas)
+          .leftJoin(
+            producoesTable,
             and(
-              gte(apontamentos.dataFim, dataInicio),
-              lte(apontamentos.dataFim, dataFim),
-              eq(apontamentos.status, 'CONCLUIDO')
+              eq(producoesTable.maquinaId, maquinas.id),
+              isNotNull(producoesTable.dataFim),
+              gte(producoesTable.dataFim, dataInicio),
+              lte(producoesTable.dataFim, dataFim)
             )
           )
-          .groupBy(maquinas.nome, maquinas.codigo);
+          .groupBy(maquinas.id, maquinas.nome, maquinas.codigo);
+
+        const paradasMaquinas = await db
+          .select({
+            maquinaId: maquinas.id,
+            tempoParada: sql<number>`COALESCE(SUM(EXTRACT(EPOCH FROM (${paradasMaquina.dataFim} - ${paradasMaquina.dataInicio}))/60), 0)`,
+          })
+          .from(maquinas)
+          .leftJoin(
+            paradasMaquina,
+            and(
+              eq(paradasMaquina.maquinaId, maquinas.id),
+              isNotNull(paradasMaquina.dataFim),
+              gte(paradasMaquina.dataInicio, dataInicio),
+              lte(paradasMaquina.dataFim, dataFim)
+            )
+          )
+          .groupBy(maquinas.id);
+
+        // Combinar os dados
+        dados = producoesMaquinas.map(p => {
+          const parada = paradasMaquinas.find(pm => pm.maquinaId === p.maquinaId);
+          const tempoParada = parada?.tempoParada || 0;
+          const tempoTotal = p.tempoProducao + tempoParada;
+          
+          return {
+            nome: p.nome,
+            codigo: p.codigo,
+            totalMetragem: Math.round(p.totalMetragem * 100) / 100,
+            tempoProducao: Math.round(p.tempoProducao),
+            tempoParada: Math.round(tempoParada),
+            disponibilidade: tempoTotal > 0 
+              ? Math.round((p.tempoProducao / tempoTotal) * 100 * 100) / 100
+              : 100,
+          };
+        }).filter(m => m.totalMetragem > 0 || m.tempoParada > 0);
         break;
 
       default:
