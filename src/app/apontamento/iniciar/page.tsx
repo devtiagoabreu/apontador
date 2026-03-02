@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useSession } from 'next-auth/react';
 
 interface Estagio {
   id: string;
@@ -28,6 +29,7 @@ interface Estagio {
 function IniciarContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session, status } = useSession();
   const machineId = searchParams.get('machine');
   const opNumero = searchParams.get('op');
   
@@ -90,11 +92,22 @@ function IniciarContent() {
       return;
     }
 
+    // Verificar se o usuário está logado
+    if (!session?.user?.id) {
+      toast({
+        title: 'Erro',
+        description: 'Usuário não autenticado',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      // 🔴 MUDANÇA AQUI: Usar a API NOVA de produções
-      // ID fixo do Douglas (você pode substituir pelo session.user.id depois)
-      const operadorId = '5ee971b6-be6b-4b1e-9313-f0abf755ba94';
+      // ✅ USAR O ID DO USUÁRIO LOGADO DA SESSÃO
+      const operadorId = session.user.id;
+      
+      console.log('📦 Iniciando produção com operador:', operadorId);
       
       const response = await fetch('/api/producoes', {
         method: 'POST',
@@ -135,7 +148,7 @@ function IniciarContent() {
     }
   }
 
-  if (carregandoDados) {
+  if (status === 'loading' || carregandoDados) {
     return (
       <div className="p-4">
         <div className="flex items-center gap-3">
@@ -145,6 +158,21 @@ function IniciarContent() {
             </Button>
           </Link>
           <h1 className="text-xl font-semibold">Carregando...</h1>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="p-4">
+        <div className="flex items-center gap-3">
+          <Link href="/apontamento">
+            <Button variant="ghost" size="icon" className="h-10 w-10">
+              <ArrowLeft className="h-6 w-6" />
+            </Button>
+          </Link>
+          <h1 className="text-xl font-semibold">Usuário não autenticado</h1>
         </div>
       </div>
     );
@@ -199,6 +227,12 @@ function IniciarContent() {
               <p className="text-xs text-gray-400 mt-1">
                 Programado: {Number(op.qtdeProgramado).toLocaleString('pt-BR')} {op.um}
               </p>
+            </div>
+
+            <div>
+              <p className="text-sm text-gray-500">Operador</p>
+              <p className="font-medium">{session.user.nome}</p>
+              <p className="text-xs text-gray-400">Matrícula: {session.user.matricula}</p>
             </div>
 
             {/* Seleção de Estágio */}
