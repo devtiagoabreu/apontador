@@ -16,6 +16,8 @@ const opSchema = z.object({
   status: z.enum(['ABERTA', 'EM_ANDAMENTO', 'FINALIZADA', 'CANCELADA']),
   codEstagioAtual: z.string().default('00'),
   estagioAtual: z.string().default('NENHUM'),
+  codMaquinaAtual: z.string().optional().default('00'),
+  maquinaAtual: z.string().optional().default('NENHUMA'),
 });
 
 export async function GET(request: Request) {
@@ -26,27 +28,52 @@ export async function GET(request: Request) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = (page - 1) * limit;
+    const status = searchParams.get('status');
 
-    console.log(`📊 Buscando OPs - página ${page}, limite ${limit}`);
+    console.log(`📊 Buscando OPs - página ${page}, limite ${limit}, status: ${status}`);
 
-    const allOps = await db.select()
-      .from(ops)
-      .orderBy(desc(ops.dataImportacao))
-      .limit(limit)
-      .offset(offset);
+    let allOps;
+    let totalCount;
 
-    const totalResult = await db.execute(sql`SELECT COUNT(*) as count FROM ops`);
-    const total = parseInt(String(totalResult.rows[0]?.count || '0'));
+    if (status) {
+      // Se tiver filtro de status, usar SQL raw
+      const statusList = status.split(',').map(s => `'${s}'`).join(',');
+      
+      const result = await db.execute(sql`
+        SELECT * FROM ops 
+        WHERE status IN (${sql.raw(statusList)})
+        ORDER BY data_importacao DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `);
+      allOps = result.rows;
 
-    console.log(`✅ Retornando ${allOps.length} OPs de ${total} total`);
+      const countResult = await db.execute(sql`
+        SELECT COUNT(*) as count 
+        FROM ops 
+        WHERE status IN (${sql.raw(statusList)})
+      `);
+      totalCount = parseInt(String(countResult.rows[0]?.count || '0'));
+    } else {
+      // Sem filtro, usar o ORM normal
+      allOps = await db.select()
+        .from(ops)
+        .orderBy(desc(ops.dataImportacao))
+        .limit(limit)
+        .offset(offset);
+
+      const totalResult = await db.execute(sql`SELECT COUNT(*) as count FROM ops`);
+      totalCount = parseInt(String(totalResult.rows[0]?.count || '0'));
+    }
+
+    console.log(`✅ Retornando ${allOps.length} OPs de ${totalCount} total`);
 
     return NextResponse.json({
       data: allOps,
       pagination: {
         page,
         limit,
-        total,
-        totalPages: Math.ceil(total / limit)
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limit)
       }
     });
   } catch (error) {
@@ -83,7 +110,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // 🔥 CONVERTER NÚMEROS PARA STRING ANTES DE INSERIR
+    // CONVERTER NÚMEROS PARA STRING ANTES DE INSERIR
     const dadosParaInserir = {
       op: validated.op,
       produto: validated.produto,
@@ -96,6 +123,8 @@ export async function POST(request: Request) {
       status: validated.status,
       codEstagioAtual: validated.codEstagioAtual,
       estagioAtual: validated.estagioAtual,
+      codMaquinaAtual: validated.codMaquinaAtual,
+      maquinaAtual: validated.maquinaAtual,
       dataImportacao: new Date(),
     };
 
