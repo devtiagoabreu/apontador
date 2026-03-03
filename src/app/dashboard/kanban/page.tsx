@@ -481,6 +481,11 @@ export default function KanbanPage() {
             <div className="bg-gray-50 p-3 rounded-lg">
               <p className="text-sm font-medium">OP {movimento?.op.op}</p>
               <p className="text-xs text-gray-500 mt-1">{movimento?.op.produto}</p>
+              {movimento?.estagioDestino && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Estágio atual: {movimento.estagioDestino.nome}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="metragem">Metragem Processada (m) *</Label>
@@ -513,7 +518,7 @@ export default function KanbanPage() {
       <Dialog open={movimento?.etapa === 'iniciar'} onOpenChange={() => setMovimento(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Iniciar {movimento?.estagioDestino?.nome}</DialogTitle>
+            <DialogTitle>Iniciar {movimento?.estagioDestino?.nome || 'Novo Estágio'}</DialogTitle>
             <DialogDescription>
               Selecione a máquina e informe se é reprocesso
             </DialogDescription>
@@ -522,6 +527,11 @@ export default function KanbanPage() {
             <div className="bg-gray-50 p-3 rounded-lg">
               <p className="text-sm font-medium">OP {movimento?.op.op}</p>
               <p className="text-xs text-gray-500">{movimento?.op.produto}</p>
+              {movimento?.estagioDestino && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Próximo estágio: {movimento.estagioDestino.nome}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Máquina *</Label>
