@@ -146,8 +146,10 @@ export default function KanbanPage() {
       opsEmAndamento.forEach((op: OP, index: number) => {
         console.log(`  ${index + 1}. OP ${op.op}:`);
         console.log(`     - codEstagioAtual: "${op.codEstagioAtual}" (tipo: ${typeof op.codEstagioAtual})`);
-        console.log(`     - estagioAtual: "${op.estagioAtual}"`);
-        console.log(`     - caracteres: [${op.codEstagioAtual.split('').map(c => `${c} (${c.charCodeAt(0)})`).join(', ')}]`);
+        console.log(`     - estagioAtual: "${op.estagioAtual || 'undefined'}"`);
+        if (op.estagioAtual) {
+          console.log(`     - caracteres: [${op.estagioAtual.split('').map(c => `${c} (${c.charCodeAt(0)})`).join(', ')}]`);
+        }
         console.log(`     - como número: ${parseInt(op.codEstagioAtual, 10)}`);
         console.log(`     - com padding: "${op.codEstagioAtual.padStart(2, '0')}"`);
       });
@@ -158,18 +160,22 @@ export default function KanbanPage() {
       opsEmAndamento.forEach((op: OP) => {
         const codigoOp = String(op.codEstagioAtual).trim();
         let encontrado = false;
+        let motivo = '';
         
         estagiosData.forEach((e: Estagio) => {
           // Comparações possíveis
           const matchExato = e.codigo === codigoOp;
           const matchPad = e.codigo.padStart(2, '0') === codigoOp.padStart(2, '0');
           const matchNumero = parseInt(e.codigo, 10) === parseInt(codigoOp, 10);
-          const matchNome = e.nome.includes(`(${codigoOp})`) || e.nome.includes(codigoOp);
-          const matchNomeInvertido = op.estagioAtual.includes(e.nome);
+          const matchNome = op.estagioAtual ? op.estagioAtual.includes(e.nome) : false;
           
-          if (matchExato || matchPad || matchNumero || matchNome || matchNomeInvertido) {
-            console.log(`  ✅ OP ${op.op} -> ${e.nome} (código: ${e.codigo})`);
-            console.log(`     Motivo: ${matchExato ? 'exato' : ''} ${matchPad ? 'padding' : ''} ${matchNumero ? 'número' : ''} ${matchNome ? 'nome' : ''}`);
+          if (matchExato) motivo = 'exato';
+          else if (matchPad) motivo = 'padding';
+          else if (matchNumero) motivo = 'número';
+          else if (matchNome) motivo = 'nome';
+          
+          if (matchExato || matchPad || matchNumero || matchNome) {
+            console.log(`  ✅ OP ${op.op} -> ${e.nome} (código: ${e.codigo}) - Motivo: ${motivo}`);
             encontrado = true;
           }
         });
@@ -177,7 +183,7 @@ export default function KanbanPage() {
         if (!encontrado) {
           console.log(`  ❌ OP ${op.op} -> NENHUM ESTÁGIO ENCONTRADO`);
           console.log(`     Código na OP: "${op.codEstagioAtual}"`);
-          console.log(`     Estágio na OP: "${op.estagioAtual}"`);
+          console.log(`     Estágio na OP: "${op.estagioAtual || 'undefined'}"`);
         }
       });
 
@@ -267,8 +273,8 @@ export default function KanbanPage() {
             }
           }
           
-          // Tentar pelo nome do estágio na OP
-          if (op.estagioAtual && op.estagioAtual.includes(e.nome)) {
+          // Tentar pelo nome do estágio na OP (com segurança)
+          if (op.estagioAtual && e.nome && op.estagioAtual.includes(e.nome)) {
             opsAlocadas.add(op.op);
             return true;
           }
@@ -293,7 +299,7 @@ export default function KanbanPage() {
         console.warn('⚠️ OPs em andamento não alocadas:', opsNaoAlocadas.map((op: OP) => ({
           op: op.op,
           codEstagioAtual: op.codEstagioAtual,
-          estagioAtual: op.estagioAtual
+          estagioAtual: op.estagioAtual || 'undefined'
         })));
         
         colunasKanban.push({
