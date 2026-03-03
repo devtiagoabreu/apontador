@@ -19,7 +19,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { KanbanColumn } from './components/kanban-column';
 import { KanbanCard } from './components/kanban-card';
-import { MachineSelector } from './components/machine-selector';
 import { toast } from '@/components/ui/use-toast';
 import { RefreshCw, LayoutDashboard } from 'lucide-react';
 import {
@@ -88,6 +87,7 @@ export default function KanbanPage() {
   const [carregando, setCarregando] = useState(true);
   const [movimento, setMovimento] = useState<Movimento | null>(null);
   const [metragemTemp, setMetragemTemp] = useState<number>(0);
+  const [erro, setErro] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -102,70 +102,110 @@ export default function KanbanPage() {
 
   async function carregarDados() {
     setCarregando(true);
+    setErro(null);
+    
     try {
-      // Buscar estágios ativos para o Kanban
-      const estagiosRes = await fetch('/api/estagios?kanban=true&ativos=true');
-      if (!estagiosRes.ok) throw new Error('Erro ao carregar estágios');
-      const estagiosData = await estagiosRes.json();
+      console.log('🔍 Iniciando carregamento do Kanban...');
+      console.log('📡 Buscando estágios...');
       
-      // Buscar OPs com status relevantes (ABERTA e EM_ANDAMENTO)
-      const opsRes = await fetch('/api/ops?status=ABERTA,EM_ANDAMENTO&limit=1000');
-      if (!opsRes.ok) throw new Error('Erro ao carregar OPs');
+      const estagiosRes = await fetch('/api/estagios?kanban=true&ativos=true');
+      if (!estagiosRes.ok) {
+        const errorText = await estagiosRes.text();
+        throw new Error(`Erro ao carregar estágios: ${estagiosRes.status} - ${errorText}`);
+      }
+      const estagiosData = await estagiosRes.json();
+      console.log('✅ Estágios carregados:', estagiosData.length);
+      console.log('📋 Lista de estágios:', estagiosData.map((e: Estagio) => ({ codigo: e.codigo, nome: e.nome })));
+      
+      console.log('📡 Buscando OPs...');
+      const opsRes = await fetch('/api/ops?status=ABERTA,EM_ANDAMENTO,FINALIZADA,CANCELADA&limit=1000');
+      if (!opsRes.ok) {
+        const errorText = await opsRes.text();
+        throw new Error(`Erro ao carregar OPs: ${opsRes.status} - ${errorText}`);
+      }
       const opsResult = await opsRes.json();
       const opsData = opsResult.data || [];
-
-      console.log('📦 Estágios carregados:', estagiosData.length);
-      console.log('📦 OPs carregadas:', opsData.length);
+      console.log('✅ OPs carregadas:', opsData.length);
+      console.log('📊 Status das OPs:', {
+        ABERTA: opsData.filter((o: OP) => o.status === 'ABERTA').length,
+        EM_ANDAMENTO: opsData.filter((o: OP) => o.status === 'EM_ANDAMENTO').length,
+        FINALIZADA: opsData.filter((o: OP) => o.status === 'FINALIZADA').length,
+        CANCELADA: opsData.filter((o: OP) => o.status === 'CANCELADA').length,
+      });
 
       setEstagios(estagiosData);
+      setOps(opsData);
       
       // Construir colunas
-      const colunasKanban = [
-        { 
+      console.log('🏗️ Construindo colunas...');
+      
+      const colunasKanban = [];
+      
+      // Coluna de não iniciadas
+      const naoIniciadas = opsData.filter((op: OP) => 
+        op.status === 'ABERTA' && 
+        op.codEstagioAtual === '00'
+      );
+      console.log('📋 Não iniciadas:', naoIniciadas.length);
+      if (naoIniciadas.length > 0) {
+        colunasKanban.push({ 
           id: 'nao-iniciadas', 
           titulo: '📋 NÃO INICIADAS', 
           cor: '#6b7280', 
-          cards: opsData.filter((op: OP) => 
-            op.status === 'ABERTA' && 
-            op.codEstagioAtual === '00'
-          ) 
-        },
-        ...estagiosData.map((e: Estagio) => ({
-          id: e.id,
-          titulo: e.nome,
-          cor: e.cor,
-          cards: opsData.filter((op: OP) => 
-            op.codEstagioAtual === e.codigo && 
-            op.status === 'EM_ANDAMENTO'
-          )
-        })),
-        { 
+          cards: naoIniciadas 
+        });
+      }
+      
+      // Colunas de estágios
+      estagiosData.forEach((e: Estagio) => {
+        const cardsEstagio = opsData.filter((op: OP) => 
+          op.codEstagioAtual === e.codigo && 
+          op.status === 'EM_ANDAMENTO'
+        );
+        console.log(`📌 Estágio ${e.nome} (${e.codigo}):`, cardsEstagio.length);
+        if (cardsEstagio.length > 0) {
+          colunasKanban.push({
+            id: e.id,
+            titulo: e.nome,
+            cor: e.cor,
+            cards: cardsEstagio
+          });
+        }
+      });
+      
+      // Coluna de finalizadas
+      const finalizadas = opsData.filter((op: OP) => op.status === 'FINALIZADA');
+      console.log('✅ Finalizadas:', finalizadas.length);
+      if (finalizadas.length > 0) {
+        colunasKanban.push({ 
           id: 'finalizadas', 
           titulo: '✅ FINALIZADAS', 
           cor: '#10b981', 
-          cards: opsData.filter((op: OP) => 
-            op.status === 'FINALIZADA'
-          ) 
-        },
-        { 
+          cards: finalizadas 
+        });
+      }
+      
+      // Coluna de canceladas
+      const canceladas = opsData.filter((op: OP) => op.status === 'CANCELADA');
+      console.log('❌ Canceladas:', canceladas.length);
+      if (canceladas.length > 0) {
+        colunasKanban.push({ 
           id: 'canceladas', 
           titulo: '❌ CANCELADAS', 
           cor: '#ef4444', 
-          cards: opsData.filter((op: OP) => 
-            op.status === 'CANCELADA'
-          ) 
-        }
-      ];
+          cards: canceladas 
+        });
+      }
 
-      // Filtrar colunas vazias
-      const colunasComCards = colunasKanban.filter(col => col.cards.length > 0);
+      console.log('📊 Total de colunas construídas:', colunasKanban.length);
+      console.log('📊 Colunas:', colunasKanban.map(c => ({ id: c.id, titulo: c.titulo, count: c.cards.length })));
       
-      setColunas(colunasComCards);
-      setOps(opsData);
+      setColunas(colunasKanban);
       
-      console.log('📦 Colunas construídas:', colunasComCards.length);
+      console.log('✅ Kanban carregado com sucesso!');
     } catch (error) {
       console.error('❌ Erro ao carregar Kanban:', error);
+      setErro(error instanceof Error ? error.message : 'Erro desconhecido');
       toast({
         title: 'Erro',
         description: error instanceof Error ? error.message : 'Não foi possível carregar o Kanban',
@@ -205,6 +245,8 @@ export default function KanbanPage() {
 
     const op = ops.find(o => o.op === opId);
     if (!op) return;
+
+    console.log('🎯 Drag end:', { opId, overId, op });
 
     // Encontrar coluna de destino
     const colunaDestino = colunas.find(col => col.id === overId);
@@ -276,12 +318,12 @@ export default function KanbanPage() {
     if (!movimento) return;
 
     try {
-      // Finalizar o estágio atual
-      const response = await fetch(`/api/ops/${movimento.op.op}/finalizar-estagio`, {
+      const response = await fetch(`/api/producoes/${movimento.op.op}/finalizar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          metragemProcessada: metragemTemp
+          metragemProcessada: metragemTemp,
+          operadorFimId: session?.user?.id,
         }),
       });
 
@@ -290,10 +332,8 @@ export default function KanbanPage() {
         throw new Error(error.error || 'Erro ao finalizar estágio');
       }
       
-      // Carregar máquinas para o próximo estágio
       await carregarMaquinasDisponiveis(movimento.estagioDestino.id);
       
-      // Avançar para iniciar
       setMovimento({
         ...movimento,
         etapa: 'iniciar',
@@ -328,7 +368,6 @@ export default function KanbanPage() {
     }
 
     try {
-      // Iniciar novo estágio
       const response = await fetch(`/api/producoes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -367,6 +406,20 @@ export default function KanbanPage() {
     return (
       <div className="flex items-center justify-center h-96">
         <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
+        <span className="ml-2 text-gray-500">Carregando Kanban...</span>
+      </div>
+    );
+  }
+
+  if (erro) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 space-y-4">
+        <div className="text-red-500 text-lg font-semibold">Erro ao carregar</div>
+        <div className="text-gray-600 max-w-md text-center">{erro}</div>
+        <Button onClick={carregarDados} variant="outline">
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Tentar novamente
+        </Button>
       </div>
     );
   }
@@ -390,6 +443,22 @@ export default function KanbanPage() {
           <p className="text-sm text-gray-400 mt-2">
             Verifique se existem estágios configurados e OPs cadastradas
           </p>
+          <div className="mt-4 text-left max-w-md mx-auto bg-white p-4 rounded-lg border">
+            <p className="font-medium mb-2">📊 Diagnóstico:</p>
+            <p>Estágios encontrados: {estagios.length}</p>
+            <p>OPs encontradas: {ops.length}</p>
+            {ops.length > 0 && (
+              <div className="mt-2">
+                <p className="font-medium">Status das OPs:</p>
+                <ul className="list-disc list-inside text-sm">
+                  <li>ABERTA: {ops.filter(o => o.status === 'ABERTA').length}</li>
+                  <li>EM_ANDAMENTO: {ops.filter(o => o.status === 'EM_ANDAMENTO').length}</li>
+                  <li>FINALIZADA: {ops.filter(o => o.status === 'FINALIZADA').length}</li>
+                  <li>CANCELADA: {ops.filter(o => o.status === 'CANCELADA').length}</li>
+                </ul>
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         <DndContext
@@ -458,7 +527,7 @@ export default function KanbanPage() {
                 placeholder="0,00"
               />
               <p className="text-xs text-gray-500">
-                Programado: {Number(movimento?.op.qtdeProgramado).toLocaleString('pt-BR')} m
+                Programado: {Number(movimento?.op.qtdeProgramado || 0).toLocaleString('pt-BR')} m
               </p>
             </div>
           </div>
