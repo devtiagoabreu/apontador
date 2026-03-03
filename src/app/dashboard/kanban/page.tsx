@@ -116,7 +116,11 @@ export default function KanbanPage() {
       }
       const estagiosData = await estagiosRes.json();
       console.log('✅ Estágios carregados:', estagiosData.length);
-      console.log('📋 Lista de estágios:', estagiosData.map((e: Estagio) => ({ codigo: e.codigo, nome: e.nome, id: e.id })));
+      console.log('📋 Lista de estágios:', estagiosData.map((e: Estagio) => ({ 
+        codigo: e.codigo, 
+        nome: e.nome, 
+        id: e.id 
+      })));
       
       // Buscar OPs com status relevantes
       console.log('📡 Buscando OPs...');
@@ -137,6 +141,16 @@ export default function KanbanPage() {
         CANCELADA: opsData.filter((o: OP) => o.status === 'CANCELADA').length,
       });
 
+      // Log de todas as OPs em andamento com seus códigos
+      const opsEmAndamento = opsData.filter((o: OP) => o.status === 'EM_ANDAMENTO');
+      console.log('🔍 OPs EM ANDAMENTO:', opsEmAndamento.map((op: OP) => ({
+        op: op.op,
+        codEstagioAtual: op.codEstagioAtual,
+        estagioAtual: op.estagioAtual,
+        codEstagioAtual_type: typeof op.codEstagioAtual,
+        estagioAtual_completo: op.estagioAtual
+      })));
+
       setEstagios(estagiosData);
       setOps(opsData);
       
@@ -145,21 +159,7 @@ export default function KanbanPage() {
       
       const colunasKanban = [];
       
-      // 1. PRIMEIRO: Criar um mapa de estágios por código (normalizado)
-      const estagioPorCodigo = new Map();
-      estagiosData.forEach((e: Estagio) => {
-        // Guardar com o código original
-        estagioPorCodigo.set(e.codigo, e);
-        // Guardar com padding de 2 dígitos (se for número)
-        const codigoPad = String(e.codigo).padStart(2, '0');
-        estagioPorCodigo.set(codigoPad, e);
-        // Guardar sem padding (se tiver padding)
-        const codigoSemPad = String(parseInt(e.codigo, 10));
-        estagioPorCodigo.set(codigoSemPad, e);
-        console.log(`📌 Mapa: "${e.codigo}" / "${codigoPad}" / "${codigoSemPad}" -> ${e.nome}`);
-      });
-      
-      // 2. Coluna de não iniciadas (sempre)
+      // 1. Coluna de não iniciadas
       const naoIniciadas = opsData.filter((op: OP) => 
         op.status === 'ABERTA' && 
         op.codEstagioAtual === '00'
@@ -172,29 +172,89 @@ export default function KanbanPage() {
         cards: naoIniciadas 
       });
       
-      // 3. Colunas para CADA estágio (mesmo sem OPs)
+      // 2. Criar um mapa de estágios com múltiplas chaves
+      const estagioMap = new Map();
+      
+      // Mapear estágios por várias formas de código
+      estagiosData.forEach((e: Estagio) => {
+        // Código original
+        estagioMap.set(e.codigo, e);
+        
+        // Código como número (sem padding)
+        const codigoNum = parseInt(e.codigo, 10);
+        if (!isNaN(codigoNum)) {
+          estagioMap.set(codigoNum.toString(), e);
+          estagioMap.set(codigoNum, e); // como número também
+        }
+        
+        // Código com padding (2 dígitos)
+        const codigoPad = e.codigo.padStart(2, '0');
+        estagioMap.set(codigoPad, e);
+        
+        // Extrair código do nome (se tiver parênteses)
+        const matchNome = e.nome.match(/\((\d+)\)/);
+        if (matchNome) {
+          estagioMap.set(matchNome[1], e);
+        }
+        
+        console.log(`📌 Mapeando estágio: ${e.nome} -> códigos:`, {
+          original: e.codigo,
+          numero: codigoNum,
+          pad: codigoPad,
+          doNome: matchNome ? matchNome[1] : null
+        });
+      });
+      
+      // 3. Colunas para CADA estágio
       console.log('📌 Criando colunas para todos os estágios...');
       
       // Organizar estágios por ordem
       const estagiosOrdenados = [...estagiosData].sort((a, b) => a.ordem - b.ordem);
       
+      // Mapa para rastrear OPs já alocadas
+      const opsAlocadas = new Set();
+      
       estagiosOrdenados.forEach((e: Estagio) => {
-        // Buscar OPs para este estágio (usando múltiplas formas de comparar)
-        const cardsEstagio = opsData.filter((op: OP) => {
-          if (op.status !== 'EM_ANDAMENTO') return false;
+        // Buscar OPs para este estágio
+        const cardsEstagio = opsEmAndamento.filter((op: OP) => {
+          // Já foi alocada?
+          if (opsAlocadas.has(op.op)) return false;
           
           const codigoOp = String(op.codEstagioAtual).trim();
-          const codigoEstagio = String(e.codigo).trim();
           
-          // Comparações possíveis
-          const matchExato = codigoOp === codigoEstagio;
-          const matchPad = codigoOp.padStart(2, '0') === codigoEstagio.padStart(2, '0');
-          const matchSemPad = parseInt(codigoOp, 10) === parseInt(codigoEstagio, 10);
+          // Verificar se o código da OP corresponde a este estágio
+          const estagioCorrespondente = estagioMap.get(codigoOp);
           
-          if (matchExato || matchPad || matchSemPad) {
-            console.log(`✅ OP ${op.op} (${codigoOp}) corresponde ao estágio ${e.nome} (${codigoEstagio})`);
+          if (estagioCorrespondente && estagioCorrespondente.id === e.id) {
+            console.log(`✅ OP ${op.op} (${codigoOp}) -> Estágio ${e.nome}`);
+            opsAlocadas.add(op.op);
             return true;
           }
+          
+          // Tentar como número
+          const codigoOpNum = parseInt(codigoOp, 10);
+          if (!isNaN(codigoOpNum)) {
+            const estagioPorNum = estagioMap.get(codigoOpNum);
+            if (estagioPorNum && estagioPorNum.id === e.id) {
+              console.log(`✅ OP ${op.op} (${codigoOpNum}) -> Estágio ${e.nome}`);
+              opsAlocadas.add(op.op);
+              return true;
+            }
+          }
+          
+          // Tentar extrair código do nome do estágio na OP
+          if (op.estagioAtual) {
+            const match = op.estagioAtual.match(/\((\d+)\)/);
+            if (match) {
+              const codigoExtraido = match[1];
+              if (codigoExtraido === e.codigo || parseInt(codigoExtraido, 10) === parseInt(e.codigo, 10)) {
+                console.log(`✅ OP ${op.op} (extraído ${codigoExtraido}) -> Estágio ${e.nome}`);
+                opsAlocadas.add(op.op);
+                return true;
+              }
+            }
+          }
+          
           return false;
         });
         
@@ -208,23 +268,15 @@ export default function KanbanPage() {
         });
       });
       
-      // 4. Verificar OPs em andamento que não foram alocadas a nenhum estágio
-      const opsEmAndamento = opsData.filter((op: OP) => op.status === 'EM_ANDAMENTO');
-      const opsAlocadas = new Set();
-      
-      colunasKanban.forEach(coluna => {
-        if (coluna.id !== 'nao-iniciadas' && coluna.id !== 'finalizadas' && coluna.id !== 'canceladas') {
-          coluna.cards.forEach((op: OP) => opsAlocadas.add(op.op));
-        }
-      });
-      
+      // 4. OPs não alocadas (estágio inválido)
       const opsNaoAlocadas = opsEmAndamento.filter((op: OP) => !opsAlocadas.has(op.op));
       
       if (opsNaoAlocadas.length > 0) {
         console.warn('⚠️ OPs em andamento não alocadas:', opsNaoAlocadas.map((op: OP) => ({
           op: op.op,
           codEstagioAtual: op.codEstagioAtual,
-          estagioAtual: op.estagioAtual
+          estagioAtual: op.estagioAtual,
+          tipoCodigo: typeof op.codEstagioAtual
         })));
         
         colunasKanban.push({
@@ -555,7 +607,7 @@ export default function KanbanPage() {
         </DndContext>
       )}
 
-      {/* MODAL 1: Finalizar estágio atual */}
+      {/* MODAIS (mantidos iguais) */}
       <Dialog open={movimento?.etapa === 'finalizar'} onOpenChange={() => setMovimento(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -596,7 +648,6 @@ export default function KanbanPage() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL 2: Iniciar novo estágio */}
       <Dialog open={movimento?.etapa === 'iniciar'} onOpenChange={() => setMovimento(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
