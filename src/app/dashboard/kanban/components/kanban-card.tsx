@@ -12,6 +12,7 @@ import { Clock, MoreVertical, Edit, Undo, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { EditTimesModal } from './edit-times-modal';
+import { toast } from '@/components/ui/use-toast';
 
 interface KanbanCardProps {
   op: any;
@@ -38,36 +39,74 @@ export function KanbanCard({
     setNodeRef,
     transform,
     transition,
+    isDragging: isSortableDragging,
   } = useSortable({ id: op.op });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging || isSortableDragging ? 0.5 : 1,
     zIndex: isOverlay ? 999 : 'auto',
   };
 
-  // Determinar cor do cronômetro baseado na eficiência
-  function getCronometroCor() {
-    if (!op.tempoDecorrido || !op.eficienciaEsperada) return 'text-gray-600';
-    const percentual = (op.tempoDecorrido / op.eficienciaEsperada) * 100;
-    if (percentual > 100) return 'text-red-600';
-    if (percentual > 80) return 'text-yellow-600';
-    return 'text-green-600';
+  // Formatar tempo desde o último apontamento
+  function getTempoDecorrido() {
+    if (!op.dataUltimoApontamento) return null;
+    
+    const inicio = new Date(op.dataUltimoApontamento);
+    const agora = new Date();
+    const diffMs = agora.getTime() - inicio.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    const diffHoras = Math.floor(diffMin / 60);
+    const diffMinResto = diffMin % 60;
+    
+    return `${diffHoras}h ${diffMinResto}m`;
   }
 
-  // Formatar tempo
-  function formatTempo(minutos?: number) {
-    if (!minutos) return '00:00:00';
-    const horas = Math.floor(minutos / 60);
-    const mins = Math.floor(minutos % 60);
-    const segs = Math.floor((minutos * 60) % 60);
-    return `${horas.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${segs.toString().padStart(2, '0')}`;
+  // Determinar cor do cronômetro
+  function getCronometroCor() {
+    const tempo = getTempoDecorrido();
+    if (!tempo) return 'text-gray-400';
+    
+    const horas = parseInt(tempo.split('h')[0]);
+    if (horas > 4) return 'text-red-600';
+    if (horas > 2) return 'text-yellow-600';
+    return 'text-green-600';
   }
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     // O menu será aberto pelo DropdownMenu
+  };
+
+  const handleCancel = async () => {
+    if (!confirm(`Tem certeza que deseja cancelar a OP ${op.op}?`)) return;
+    
+    try {
+      const response = await fetch(`/api/ops/${op.op}/cancelar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Erro ao cancelar OP');
+      }
+
+      toast({
+        title: 'Sucesso',
+        description: `OP ${op.op} cancelada com sucesso`,
+      });
+
+      if (onCancel) onCancel();
+      window.location.reload(); // Recarregar para atualizar o Kanban
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: error instanceof Error ? error.message : 'Erro ao cancelar OP',
+        variant: 'destructive',
+      });
+    }
   };
 
   return (
@@ -102,7 +141,7 @@ export function KanbanCard({
                 <Undo className="mr-2 h-4 w-4" />
                 Desfazer Processo
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={onCancel} className="text-red-600">
+              <DropdownMenuItem onClick={handleCancel} className="text-red-600">
                 <XCircle className="mr-2 h-4 w-4" />
                 Cancelar OP
               </DropdownMenuItem>
@@ -115,21 +154,21 @@ export function KanbanCard({
 
         {/* Metragem */}
         <div className="text-xs text-gray-500 mb-2">
-          Metros: {op.qtdeCarregado} {op.um}
+          Metros: {Number(op.qtdeCarregado).toLocaleString('pt-BR')} {op.um}
         </div>
 
         {/* Máquina atual */}
-        {op.maquinaAtual !== 'NENHUMA' && (
+        {op.maquinaAtual && op.maquinaAtual !== 'NENHUMA' && (
           <div className="text-xs text-gray-500 mb-2">
             Máquina: {op.maquinaAtual}
           </div>
         )}
 
         {/* Cronômetro */}
-        {op.dataInicio && (
+        {op.dataUltimoApontamento && op.status === 'EM_ANDAMENTO' && (
           <div className={cn('flex items-center gap-1 text-sm font-mono', getCronometroCor())}>
             <Clock className="h-4 w-4" />
-            <span>{formatTempo(op.tempoDecorrido)}</span>
+            <span>{getTempoDecorrido()}</span>
           </div>
         )}
       </div>

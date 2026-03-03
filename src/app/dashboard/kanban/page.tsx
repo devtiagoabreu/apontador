@@ -36,6 +36,7 @@ import {
   RadioGroup,
   RadioGroupItem,
 } from '@/components/ui/radio-group';
+import { useSession } from 'next-auth/react';
 
 interface Estagio {
   id: string;
@@ -50,16 +51,15 @@ interface Estagio {
 interface OP {
   op: number;
   produto: string;
-  qtdeCarregado: number;
+  qtdeCarregado: number | string;
+  qtdeProgramado: number | string;
   um: string;
   codEstagioAtual: string;
   estagioAtual: string;
   codMaquinaAtual: string;
   maquinaAtual: string;
   status: string;
-  dataInicio?: Date;
-  tempoDecorrido?: number;
-  eficienciaEsperada?: number;
+  dataUltimoApontamento?: string;
 }
 
 interface Maquina {
@@ -79,6 +79,7 @@ interface Movimento {
 }
 
 export default function KanbanPage() {
+  const { data: session } = useSession();
   const [estagios, setEstagios] = useState<Estagio[]>([]);
   const [ops, setOps] = useState<OP[]>([]);
   const [maquinasDisponiveis, setMaquinasDisponiveis] = useState<Maquina[]>([]);
@@ -97,38 +98,37 @@ export default function KanbanPage() {
 
   useEffect(() => {
     carregarDados();
-    // Atualizar cronômetros a cada segundo
-    const interval = setInterval(() => {
-      setOps(prev => prev.map(op => ({
-        ...op,
-        tempoDecorrido: op.dataInicio 
-          ? (new Date().getTime() - new Date(op.dataInicio).getTime()) / 60000 
-          : undefined
-      })));
-    }, 1000);
-
-    return () => clearInterval(interval);
   }, []);
 
   async function carregarDados() {
+    setCarregando(true);
     try {
-      const [estagiosRes, opsRes] = await Promise.all([
-        fetch('/api/estagios?kanban=true'),
-        fetch('/api/ops?status=ABERTA,EM_ANDAMENTO,PARADA'),
-      ]);
-
+      // Buscar estágios ativos para o Kanban
+      const estagiosRes = await fetch('/api/estagios?kanban=true&ativos=true');
+      if (!estagiosRes.ok) throw new Error('Erro ao carregar estágios');
       const estagiosData = await estagiosRes.json();
-      const opsData = await opsRes.json();
+      
+      // Buscar OPs com status relevantes (ABERTA e EM_ANDAMENTO)
+      const opsRes = await fetch('/api/ops?status=ABERTA,EM_ANDAMENTO&limit=1000');
+      if (!opsRes.ok) throw new Error('Erro ao carregar OPs');
+      const opsResult = await opsRes.json();
+      const opsData = opsResult.data || [];
+
+      console.log('📦 Estágios carregados:', estagiosData.length);
+      console.log('📦 OPs carregadas:', opsData.length);
 
       setEstagios(estagiosData);
       
       // Construir colunas
       const colunasKanban = [
         { 
-          id: 'paradas', 
-          titulo: '⏸️ PARADAS', 
-          cor: '#ef4444', 
-          cards: opsData.filter((op: OP) => op.status === 'PARADA') 
+          id: 'nao-iniciadas', 
+          titulo: '📋 NÃO INICIADAS', 
+          cor: '#6b7280', 
+          cards: opsData.filter((op: OP) => 
+            op.status === 'ABERTA' && 
+            op.codEstagioAtual === '00'
+          ) 
         },
         ...estagiosData.map((e: Estagio) => ({
           id: e.id,
@@ -136,9 +136,7 @@ export default function KanbanPage() {
           cor: e.cor,
           cards: opsData.filter((op: OP) => 
             op.codEstagioAtual === e.codigo && 
-            op.status !== 'PARADA' && 
-            op.status !== 'FINALIZADA' && 
-            op.status !== 'CANCELADA'
+            op.status === 'EM_ANDAMENTO'
           )
         })),
         { 
@@ -146,17 +144,31 @@ export default function KanbanPage() {
           titulo: '✅ FINALIZADAS', 
           cor: '#10b981', 
           cards: opsData.filter((op: OP) => 
-            op.status === 'FINALIZADA' || op.status === 'CANCELADA'
+            op.status === 'FINALIZADA'
+          ) 
+        },
+        { 
+          id: 'canceladas', 
+          titulo: '❌ CANCELADAS', 
+          cor: '#ef4444', 
+          cards: opsData.filter((op: OP) => 
+            op.status === 'CANCELADA'
           ) 
         }
       ];
 
-      setColunas(colunasKanban);
+      // Filtrar colunas vazias
+      const colunasComCards = colunasKanban.filter(col => col.cards.length > 0);
+      
+      setColunas(colunasComCards);
       setOps(opsData);
+      
+      console.log('📦 Colunas construídas:', colunasComCards.length);
     } catch (error) {
+      console.error('❌ Erro ao carregar Kanban:', error);
       toast({
         title: 'Erro',
-        description: 'Não foi possível carregar o Kanban',
+        description: error instanceof Error ? error.message : 'Não foi possível carregar o Kanban',
         variant: 'destructive',
       });
     } finally {
@@ -167,10 +179,16 @@ export default function KanbanPage() {
   async function carregarMaquinasDisponiveis(estagioId: string) {
     try {
       const response = await fetch(`/api/maquinas/disponiveis?estagioId=${estagioId}`);
+      if (!response.ok) throw new Error('Erro ao carregar máquinas');
       const data = await response.json();
       setMaquinasDisponiveis(data);
     } catch (error) {
       console.error('Erro ao carregar máquinas:', error);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível carregar máquinas disponíveis',
+        variant: 'destructive',
+      });
     }
   }
 
@@ -189,37 +207,22 @@ export default function KanbanPage() {
     if (!op) return;
 
     // Encontrar coluna de destino
-    const colunaDestino = colunas.find(col => 
-      col.id === overId || col.cards.some((c: any) => c.op === opId)
-    );
-
+    const colunaDestino = colunas.find(col => col.id === overId);
     if (!colunaDestino) return;
-
-    // Se for a mesma coluna, apenas reordenar
-    const colunaOrigem = colunas.find(col => 
-      col.cards.some((c: any) => c.op === opId)
-    );
-
-    if (colunaOrigem?.id === colunaDestino.id) {
-      // Reordenar cards
-      const novosCards = [...colunaOrigem.cards];
-      const oldIndex = novosCards.findIndex((c: any) => c.op === opId);
-      const newIndex = colunaDestino.cards.findIndex((c: any) => c.op === Number(overId));
-      
-      if (oldIndex !== newIndex && newIndex !== -1) {
-        const [movedCard] = novosCards.splice(oldIndex, 1);
-        novosCards.splice(newIndex, 0, movedCard);
-        setColunas(prev => prev.map(col => 
-          col.id === colunaOrigem.id ? { ...col, cards: novosCards } : col
-        ));
-      }
-      return;
-    }
 
     // Se for coluna finalizadas
     if (colunaDestino.id === 'finalizadas') {
       try {
-        await fetch(`/api/ops/${op.op}/finalizar`, { method: 'POST' });
+        const response = await fetch(`/api/ops/${op.op}/finalizar`, { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Erro ao finalizar OP');
+        }
+        
         toast({
           title: 'Sucesso',
           description: `OP ${op.op} finalizada com sucesso`,
@@ -228,45 +231,44 @@ export default function KanbanPage() {
       } catch (error) {
         toast({
           title: 'Erro',
-          description: 'Erro ao finalizar OP',
+          description: error instanceof Error ? error.message : 'Erro ao finalizar OP',
           variant: 'destructive',
         });
       }
       return;
     }
 
-    // Se for coluna paradas
-    if (colunaDestino.id === 'paradas') {
-      try {
-        await fetch(`/api/ops/${op.op}/parada`, { 
-          method: 'POST',
-          body: JSON.stringify({ opId: op.op }) // Vincula a OP!
-        });
-        toast({
-          title: 'Sucesso',
-          description: `OP ${op.op} movida para paradas`,
-        });
-        await carregarDados();
-      } catch (error) {
-        toast({
-          title: 'Erro',
-          description: 'Erro ao registrar parada',
-          variant: 'destructive',
-        });
-      }
+    // Se for coluna canceladas
+    if (colunaDestino.id === 'canceladas') {
+      toast({
+        title: 'Ação não permitida',
+        description: 'Para cancelar uma OP, use o menu de contexto do card',
+        variant: 'destructive',
+      });
       return;
     }
 
     // Se for um estágio normal
     const estagioDestino = estagios.find(e => e.id === colunaDestino.id);
     if (estagioDestino) {
-      // PASSO 1: Abrir modal para finalizar
-      setMetragemTemp(op.qtdeCarregado || 0);
-      setMovimento({
-        op,
-        estagioDestino,
-        etapa: 'finalizar'
-      });
+      // Se a OP já está em algum estágio, precisa finalizar primeiro
+      if (op.codEstagioAtual !== '00') {
+        setMetragemTemp(Number(op.qtdeCarregado) || 0);
+        setMovimento({
+          op,
+          estagioDestino,
+          etapa: 'finalizar'
+        });
+      } else {
+        // OP não iniciada, pode começar direto
+        await carregarMaquinasDisponiveis(estagioDestino.id);
+        setMovimento({
+          op,
+          estagioDestino,
+          etapa: 'iniciar',
+          metragem: 0
+        });
+      }
     }
   }
 
@@ -274,13 +276,24 @@ export default function KanbanPage() {
     if (!movimento) return;
 
     try {
-      // Aqui você chamaria a API para finalizar o apontamento atual
-      // Por enquanto, vamos apenas avançar para o próximo passo
+      // Finalizar o estágio atual
+      const response = await fetch(`/api/ops/${movimento.op.op}/finalizar-estagio`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          metragemProcessada: metragemTemp
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Erro ao finalizar estágio');
+      }
       
-      // Carregar máquinas disponíveis para o próximo estágio
+      // Carregar máquinas para o próximo estágio
       await carregarMaquinasDisponiveis(movimento.estagioDestino.id);
       
-      // PASSO 2: Avançar para modal de iniciar
+      // Avançar para iniciar
       setMovimento({
         ...movimento,
         etapa: 'iniciar',
@@ -289,7 +302,7 @@ export default function KanbanPage() {
     } catch (error) {
       toast({
         title: 'Erro',
-        description: 'Erro ao finalizar estágio',
+        description: error instanceof Error ? error.message : 'Erro ao finalizar estágio',
         variant: 'destructive',
       });
     }
@@ -305,27 +318,38 @@ export default function KanbanPage() {
       return;
     }
 
+    if (!session?.user?.id) {
+      toast({
+        title: 'Erro',
+        description: 'Usuário não autenticado',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
-      // Chamar API para mover a OP (finaliza atual e inicia nova)
-      const response = await fetch(`/api/ops/${movimento.op.op}/mover`, {
+      // Iniciar novo estágio
+      const response = await fetch(`/api/producoes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          estagioId: movimento.estagioDestino.id,
+          opId: movimento.op.op,
           maquinaId: movimento.maquinaId,
+          estagioId: movimento.estagioDestino.id,
+          operadorInicioId: session.user.id,
           isReprocesso: movimento.isReprocesso || false,
-          metragemFinalizada: movimento.metragem
+          observacoes: '',
         }),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Erro ao mover OP');
+        throw new Error(error.error || 'Erro ao iniciar produção');
       }
 
       toast({
         title: 'Sucesso',
-        description: `OP ${movimento.op.op} movida para ${movimento.estagioDestino.nome}`,
+        description: `OP ${movimento.op.op} iniciada em ${movimento.estagioDestino.nome}`,
       });
 
       setMovimento(null);
@@ -333,7 +357,7 @@ export default function KanbanPage() {
     } catch (error) {
       toast({
         title: 'Erro',
-        description: error instanceof Error ? error.message : 'Erro ao mover OP',
+        description: error instanceof Error ? error.message : 'Erro ao iniciar produção',
         variant: 'destructive',
       });
     }
@@ -360,42 +384,51 @@ export default function KanbanPage() {
         </Button>
       </div>
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCorners}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="flex gap-4 overflow-x-auto pb-4 min-h-[600px]">
-          {colunas.map((coluna) => (
-            <KanbanColumn
-              key={coluna.id}
-              id={coluna.id}
-              titulo={coluna.titulo}
-              cor={coluna.cor}
-              cards={coluna.cards}
-            >
-              {coluna.cards.map((op: OP) => (
-                <KanbanCard
-                  key={op.op}
-                  op={op}
-                  isDragging={activeId === op.op.toString()}
-                />
-              ))}
-            </KanbanColumn>
-          ))}
+      {colunas.length === 0 ? (
+        <div className="text-center py-12 bg-gray-50 rounded-lg">
+          <p className="text-gray-500">Nenhuma coluna para exibir</p>
+          <p className="text-sm text-gray-400 mt-2">
+            Verifique se existem estágios configurados e OPs cadastradas
+          </p>
         </div>
+      ) : (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="flex gap-4 overflow-x-auto pb-4 min-h-[600px]">
+            {colunas.map((coluna) => (
+              <KanbanColumn
+                key={coluna.id}
+                id={coluna.id}
+                titulo={coluna.titulo}
+                cor={coluna.cor}
+                cards={coluna.cards}
+              >
+                {coluna.cards.map((op: OP) => (
+                  <KanbanCard
+                    key={op.op}
+                    op={op}
+                    isDragging={activeId === op.op.toString()}
+                  />
+                ))}
+              </KanbanColumn>
+            ))}
+          </div>
 
-        <DragOverlay>
-          {activeId ? (
-            <KanbanCard
-              op={ops.find(o => o.op === Number(activeId))!}
-              isDragging={true}
-              isOverlay
-            />
-          ) : null}
-        </DragOverlay>
-      </DndContext>
+          <DragOverlay>
+            {activeId ? (
+              <KanbanCard
+                op={ops.find(o => o.op === Number(activeId))!}
+                isDragging={true}
+                isOverlay
+              />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      )}
 
       {/* MODAL 1: Finalizar estágio atual */}
       <Dialog open={movimento?.etapa === 'finalizar'} onOpenChange={() => setMovimento(null)}>
@@ -425,7 +458,7 @@ export default function KanbanPage() {
                 placeholder="0,00"
               />
               <p className="text-xs text-gray-500">
-                Carregado na OP: {movimento?.op.qtdeCarregado} m
+                Programado: {Number(movimento?.op.qtdeProgramado).toLocaleString('pt-BR')} m
               </p>
             </div>
           </div>
@@ -459,22 +492,28 @@ export default function KanbanPage() {
 
             <div className="space-y-2">
               <Label>Máquina *</Label>
-              <RadioGroup 
-                value={movimento?.maquinaId} 
-                onValueChange={(value) => setMovimento(prev => prev ? {...prev, maquinaId: value} : null)}
-              >
-                <div className="space-y-2">
-                  {maquinasDisponiveis.map((maquina) => (
-                    <div key={maquina.id} className="flex items-center space-x-2 border rounded-lg p-3">
-                      <RadioGroupItem value={maquina.id} id={maquina.id} />
-                      <Label htmlFor={maquina.id} className="flex-1 cursor-pointer">
-                        <div className="font-medium">{maquina.nome}</div>
-                        <div className="text-xs text-gray-500">Código: {maquina.codigo}</div>
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </RadioGroup>
+              {maquinasDisponiveis.length === 0 ? (
+                <p className="text-sm text-yellow-600 bg-yellow-50 p-3 rounded-lg">
+                  Nenhuma máquina disponível para este estágio
+                </p>
+              ) : (
+                <RadioGroup 
+                  value={movimento?.maquinaId} 
+                  onValueChange={(value) => setMovimento(prev => prev ? {...prev, maquinaId: value} : null)}
+                >
+                  <div className="space-y-2">
+                    {maquinasDisponiveis.map((maquina) => (
+                      <div key={maquina.id} className="flex items-center space-x-2 border rounded-lg p-3">
+                        <RadioGroupItem value={maquina.id} id={maquina.id} />
+                        <Label htmlFor={maquina.id} className="flex-1 cursor-pointer">
+                          <div className="font-medium">{maquina.nome}</div>
+                          <div className="text-xs text-gray-500">Código: {maquina.codigo}</div>
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </RadioGroup>
+              )}
             </div>
 
             <div className="flex items-start space-x-2 pt-2">
@@ -501,7 +540,10 @@ export default function KanbanPage() {
             <Button variant="outline" onClick={() => setMovimento(null)}>
               Cancelar
             </Button>
-            <Button onClick={handleConfirmarInicio}>
+            <Button 
+              onClick={handleConfirmarInicio}
+              disabled={!movimento?.maquinaId || maquinasDisponiveis.length === 0}
+            >
               Iniciar Produção
             </Button>
           </div>

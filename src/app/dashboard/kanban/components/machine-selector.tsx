@@ -42,6 +42,9 @@ export function MachineSelector({
   useEffect(() => {
     if (open && estagioId) {
       carregarMaquinas();
+    } else {
+      setSelectedMaquina('');
+      setError(null);
     }
   }, [open, estagioId]);
 
@@ -103,6 +106,7 @@ export function MachineSelector({
                     <Label htmlFor={maquina.id} className="flex-1 cursor-pointer">
                       <div className="font-medium">{maquina.nome}</div>
                       <div className="text-sm text-gray-500">Código: {maquina.codigo}</div>
+                      <div className="text-xs text-gray-400">Status: {maquina.status}</div>
                     </Label>
                   </div>
                 ))}

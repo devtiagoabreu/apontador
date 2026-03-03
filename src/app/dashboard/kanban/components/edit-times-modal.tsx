@@ -31,8 +31,11 @@ export function EditTimesModal({ open, onClose, op }: EditTimesModalProps) {
 
   async function carregarApontamentos() {
     try {
-      const response = await fetch(`/api/apontamentos?opId=${op.op}`);
-      const data = await response.json();
+      const response = await fetch(`/api/producoes?opId=${op.op}`);
+      if (!response.ok) throw new Error('Erro ao carregar apontamentos');
+      const result = await response.json();
+      const data = result.data || [];
+      
       setApontamentos(data);
       
       // Inicializar dados de edição
@@ -40,6 +43,7 @@ export function EditTimesModal({ open, onClose, op }: EditTimesModalProps) {
       data.forEach((ap: any, index: number) => {
         initialData[`inicio_${index}`] = ap.dataInicio ? new Date(ap.dataInicio).toISOString().slice(0, 16) : '';
         initialData[`fim_${index}`] = ap.dataFim ? new Date(ap.dataFim).toISOString().slice(0, 16) : '';
+        initialData[`metragem_${index}`] = ap.metragemProcessada || '';
       });
       setEditData(initialData);
     } catch (error) {
@@ -81,14 +85,25 @@ export function EditTimesModal({ open, onClose, op }: EditTimesModalProps) {
         }
       }
 
+      // Preparar dados para envio
+      const apontamentosAtualizados = apontamentos.map((ap, index) => ({
+        id: ap.id,
+        dataInicio: editData[`inicio_${index}`] ? new Date(editData[`inicio_${index}`]).toISOString() : null,
+        dataFim: editData[`fim_${index}`] ? new Date(editData[`fim_${index}`]).toISOString() : null,
+        metragemProcessada: editData[`metragem_${index}`] ? Number(editData[`metragem_${index}`]) : null,
+      }));
+
       // Enviar alterações
       const response = await fetch(`/api/ops/${op.op}/editar-tempos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apontamentos: editData }),
+        body: JSON.stringify({ apontamentos: apontamentosAtualizados }),
       });
 
-      if (!response.ok) throw new Error('Erro ao salvar');
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Erro ao salvar');
+      }
 
       toast({
         title: 'Sucesso',
@@ -96,16 +111,19 @@ export function EditTimesModal({ open, onClose, op }: EditTimesModalProps) {
       });
 
       onClose();
+      window.location.reload(); // Recarregar para atualizar o Kanban
     } catch (error) {
       toast({
         title: 'Erro',
-        description: 'Erro ao salvar alterações',
+        description: error instanceof Error ? error.message : 'Erro ao salvar alterações',
         variant: 'destructive',
       });
     } finally {
       setLoading(false);
     }
   }
+
+  if (!op) return null;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -115,51 +133,72 @@ export function EditTimesModal({ open, onClose, op }: EditTimesModalProps) {
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {apontamentos.map((ap, index) => (
-            <div key={ap.id} className="border rounded-lg p-4 space-y-3">
-              <h3 className="font-medium">
-                Apontamento {index + 1} - {ap.estagio}
-              </h3>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Data Início</Label>
-                  <Input
-                    type="datetime-local"
-                    value={editData[`inicio_${index}`] || ''}
-                    onChange={(e) => setEditData(prev => ({
-                      ...prev,
-                      [`inicio_${index}`]: e.target.value
-                    }))}
-                  />
+          {apontamentos.length === 0 ? (
+            <p className="text-center text-gray-500 py-8">
+              Nenhum apontamento encontrado para esta OP
+            </p>
+          ) : (
+            apontamentos.map((ap, index) => (
+              <div key={ap.id} className="border rounded-lg p-4 space-y-3">
+                <h3 className="font-medium">
+                  Apontamento {index + 1} - {ap.estagio?.nome || 'Estágio'}
+                </h3>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Data Início</Label>
+                    <Input
+                      type="datetime-local"
+                      value={editData[`inicio_${index}`] || ''}
+                      onChange={(e) => setEditData(prev => ({
+                        ...prev,
+                        [`inicio_${index}`]: e.target.value
+                      }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Data Fim</Label>
+                    <Input
+                      type="datetime-local"
+                      value={editData[`fim_${index}`] || ''}
+                      onChange={(e) => setEditData(prev => ({
+                        ...prev,
+                        [`fim_${index}`]: e.target.value
+                      }))}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Data Fim</Label>
-                  <Input
-                    type="datetime-local"
-                    value={editData[`fim_${index}`] || ''}
-                    onChange={(e) => setEditData(prev => ({
-                      ...prev,
-                      [`fim_${index}`]: e.target.value
-                    }))}
-                  />
-                </div>
-              </div>
 
-              {ap.maquina && (
-                <p className="text-sm text-gray-500">
-                  Máquina: {ap.maquina}
-                </p>
-              )}
-            </div>
-          ))}
+                <div className="space-y-2">
+                  <Label>Metragem Processada (m)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editData[`metragem_${index}`] || ''}
+                    onChange={(e) => setEditData(prev => ({
+                      ...prev,
+                      [`metragem_${index}`]: e.target.value
+                    }))}
+                    placeholder="0,00"
+                  />
+                </div>
+
+                {ap.maquina && (
+                  <p className="text-sm text-gray-500">
+                    Máquina: {ap.maquina.nome} ({ap.maquina.codigo})
+                  </p>
+                )}
+              </div>
+            ))
+          )}
         </div>
 
         <div className="flex justify-end gap-3 pt-4 border-t">
           <Button variant="outline" onClick={onClose}>
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={loading}>
+          <Button onClick={handleSave} disabled={loading || apontamentos.length === 0}>
             {loading ? 'Salvando...' : 'Salvar Alterações'}
           </Button>
         </div>
