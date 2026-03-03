@@ -105,96 +105,32 @@ export default function KanbanPage() {
     setErro(null);
     
     try {
-      console.log('🔍 Iniciando carregamento do Kanban...');
+      console.log('1️⃣ Iniciando carregamento do Kanban...');
       
       // Buscar estágios ativos para o Kanban
-      console.log('📡 Buscando estágios...');
+      console.log('2️⃣ Buscando estágios...');
       const estagiosRes = await fetch('/api/estagios?kanban=true&ativos=true');
       if (!estagiosRes.ok) {
-        const errorText = await estagiosRes.text();
-        throw new Error(`Erro ao carregar estágios: ${estagiosRes.status} - ${errorText}`);
+        throw new Error(`Erro ao carregar estágios: ${estagiosRes.status}`);
       }
       const estagiosData = await estagiosRes.json();
+      console.log('3️⃣ Estágios carregados:', estagiosData.length);
       
       // Buscar OPs com status relevantes
-      console.log('📡 Buscando OPs...');
+      console.log('4️⃣ Buscando OPs...');
       const opsRes = await fetch('/api/ops?status=ABERTA,EM_ANDAMENTO,FINALIZADA,CANCELADA&limit=1000');
       if (!opsRes.ok) {
-        const errorText = await opsRes.text();
-        throw new Error(`Erro ao carregar OPs: ${opsRes.status} - ${errorText}`);
+        throw new Error(`Erro ao carregar OPs: ${opsRes.status}`);
       }
       const opsResult = await opsRes.json();
       const opsData = opsResult.data || [];
-
-      // ============================================
-      // 🔍 DEBUG DETALHADO DE ESTÁGIOS
-      // ============================================
-      console.log('='.repeat(80));
-      console.log('🔍 DEBUG DE ESTÁGIOS');
-      console.log('='.repeat(80));
-
-      // 1. Mostrar todos os estágios do banco
-      console.log('📋 ESTÁGIOS DO BANCO:');
-      estagiosData.forEach((e: Estagio, index: number) => {
-        console.log(`  ${index + 1}. [${e.codigo}] ${e.nome} (ID: ${e.id}) - Ordem: ${e.ordem}`);
-      });
-
-      // 2. Mostrar todas as OPs EM ANDAMENTO com detalhes
-      console.log('\n📋 OPs EM ANDAMENTO:');
-      const opsEmAndamento = opsData.filter((op: OP) => op.status === 'EM_ANDAMENTO');
-      
-      opsEmAndamento.forEach((op: OP, index: number) => {
-        console.log(`  ${index + 1}. OP ${op.op}:`);
-        console.log(`     - codEstagioAtual: "${op.codEstagioAtual}" (tipo: ${typeof op.codEstagioAtual})`);
-        console.log(`     - estagioAtual: "${op.estagioAtual || 'undefined'}"`);
-        if (op.estagioAtual) {
-          console.log(`     - caracteres: [${op.estagioAtual.split('').map(c => `${c} (${c.charCodeAt(0)})`).join(', ')}]`);
-        }
-        console.log(`     - como número: ${parseInt(op.codEstagioAtual, 10)}`);
-        console.log(`     - com padding: "${op.codEstagioAtual.padStart(2, '0')}"`);
-      });
-
-      // 3. Tentar匹配 manualmente
-      console.log('\n🔍 TENTANDO CORRESPONDÊNCIA MANUAL:');
-      
-      opsEmAndamento.forEach((op: OP) => {
-        const codigoOp = String(op.codEstagioAtual).trim();
-        let encontrado = false;
-        let motivo = '';
-        
-        estagiosData.forEach((e: Estagio) => {
-          // Comparações possíveis
-          const matchExato = e.codigo === codigoOp;
-          const matchPad = e.codigo.padStart(2, '0') === codigoOp.padStart(2, '0');
-          const matchNumero = parseInt(e.codigo, 10) === parseInt(codigoOp, 10);
-          const matchNome = op.estagioAtual ? op.estagioAtual.includes(e.nome) : false;
-          
-          if (matchExato) motivo = 'exato';
-          else if (matchPad) motivo = 'padding';
-          else if (matchNumero) motivo = 'número';
-          else if (matchNome) motivo = 'nome';
-          
-          if (matchExato || matchPad || matchNumero || matchNome) {
-            console.log(`  ✅ OP ${op.op} -> ${e.nome} (código: ${e.codigo}) - Motivo: ${motivo}`);
-            encontrado = true;
-          }
-        });
-        
-        if (!encontrado) {
-          console.log(`  ❌ OP ${op.op} -> NENHUM ESTÁGIO ENCONTRADO`);
-          console.log(`     Código na OP: "${op.codEstagioAtual}"`);
-          console.log(`     Estágio na OP: "${op.estagioAtual || 'undefined'}"`);
-        }
-      });
-
-      console.log('='.repeat(80));
-      // ============================================
+      console.log('5️⃣ OPs carregadas:', opsData.length);
 
       setEstagios(estagiosData);
       setOps(opsData);
       
       // Construir colunas
-      console.log('🏗️ Construindo colunas...');
+      console.log('6️⃣ Construindo colunas...');
       
       const colunasKanban = [];
       
@@ -203,7 +139,7 @@ export default function KanbanPage() {
         op.status === 'ABERTA' && 
         op.codEstagioAtual === '00'
       );
-      console.log('📋 Não iniciadas:', naoIniciadas.length);
+      console.log('   📋 Não iniciadas:', naoIniciadas.length);
       colunasKanban.push({ 
         id: 'nao-iniciadas', 
         titulo: '📋 NÃO INICIADAS', 
@@ -211,78 +147,22 @@ export default function KanbanPage() {
         cards: naoIniciadas 
       });
       
-      // 2. Criar um mapa de estágios com múltiplas chaves
-      const estagioMap = new Map();
+      // 2. Separar OPs em andamento
+      const opsEmAndamento = opsData.filter((op: OP) => op.status === 'EM_ANDAMENTO');
+      console.log('   🔄 Em andamento:', opsEmAndamento.length);
       
-      // Mapear estágios por várias formas de código
-      estagiosData.forEach((e: Estagio) => {
-        // Código original
-        estagioMap.set(e.codigo, e);
-        
-        // Código como número (sem padding)
-        const codigoNum = parseInt(e.codigo, 10);
-        if (!isNaN(codigoNum)) {
-          estagioMap.set(codigoNum.toString(), e);
-          estagioMap.set(codigoNum, e); // como número também
-        }
-        
-        // Código com padding (2 dígitos)
-        const codigoPad = e.codigo.padStart(2, '0');
-        estagioMap.set(codigoPad, e);
-        
-        // Nome do estágio
-        estagioMap.set(e.nome, e);
-        
-        // Parte do nome (primeira palavra)
-        const primeiraPalavra = e.nome.split(' ')[0];
-        estagioMap.set(primeiraPalavra, e);
-      });
+      // 3. Para cada estágio, buscar OPs correspondentes
+      console.log('   📌 Processando estágios...');
       
-      // 3. Colunas para CADA estágio
-      console.log('📌 Criando colunas para todos os estágios...');
-      
-      // Organizar estágios por ordem
-      const estagiosOrdenados = [...estagiosData].sort((a, b) => a.ordem - b.ordem);
-      
-      // Mapa para rastrear OPs já alocadas
-      const opsAlocadas = new Set();
-      
-      estagiosOrdenados.forEach((e: Estagio) => {
-        // Buscar OPs para este estágio
+      estagiosData.forEach((e: Estagio, index: number) => {
+        // Buscar OPs para este estágio comparando códigos com padding
         const cardsEstagio = opsEmAndamento.filter((op: OP) => {
-          // Já foi alocada?
-          if (opsAlocadas.has(op.op)) return false;
-          
-          const codigoOp = String(op.codEstagioAtual).trim();
-          
-          // Verificar se o código da OP corresponde a este estágio
-          const estagioCorrespondente = estagioMap.get(codigoOp);
-          
-          if (estagioCorrespondente && estagioCorrespondente.id === e.id) {
-            opsAlocadas.add(op.op);
-            return true;
-          }
-          
-          // Tentar como número
-          const codigoOpNum = parseInt(codigoOp, 10);
-          if (!isNaN(codigoOpNum)) {
-            const estagioPorNum = estagioMap.get(codigoOpNum);
-            if (estagioPorNum && estagioPorNum.id === e.id) {
-              opsAlocadas.add(op.op);
-              return true;
-            }
-          }
-          
-          // Tentar pelo nome do estágio na OP (com segurança)
-          if (op.estagioAtual && e.nome && op.estagioAtual.includes(e.nome)) {
-            opsAlocadas.add(op.op);
-            return true;
-          }
-          
-          return false;
+          const codigoOp = String(op.codEstagioAtual).padStart(2, '0');
+          const codigoEstagio = String(e.codigo).padStart(2, '0');
+          return codigoOp === codigoEstagio;
         });
         
-        console.log(`📌 Estágio ${e.nome} (${e.codigo}): ${cardsEstagio.length} OPs`);
+        console.log(`   📍 Estágio ${index + 1}: ${e.nome} (${e.codigo}) -> ${cardsEstagio.length} OPs`);
         
         colunasKanban.push({
           id: e.id,
@@ -292,15 +172,21 @@ export default function KanbanPage() {
         });
       });
       
-      // 4. OPs não alocadas (estágio inválido)
+      // 4. Verificar OPs em andamento não alocadas
+      const opsAlocadas = new Set();
+      colunasKanban.forEach(coluna => {
+        if (coluna.id !== 'nao-iniciadas') {
+          coluna.cards.forEach((op: OP) => opsAlocadas.add(op.op));
+        }
+      });
+      
       const opsNaoAlocadas = opsEmAndamento.filter((op: OP) => !opsAlocadas.has(op.op));
       
       if (opsNaoAlocadas.length > 0) {
-        console.warn('⚠️ OPs em andamento não alocadas:', opsNaoAlocadas.map((op: OP) => ({
-          op: op.op,
-          codEstagioAtual: op.codEstagioAtual,
-          estagioAtual: op.estagioAtual || 'undefined'
-        })));
+        console.log('   ⚠️ OPs não alocadas:', opsNaoAlocadas.length);
+        opsNaoAlocadas.forEach((op: OP) => {
+          console.log(`      - OP ${op.op}: código "${op.codEstagioAtual}", estágio "${op.estagioAtual}"`);
+        });
         
         colunasKanban.push({
           id: 'estagio-invalido',
@@ -312,7 +198,7 @@ export default function KanbanPage() {
       
       // 5. Coluna de finalizadas
       const finalizadas = opsData.filter((op: OP) => op.status === 'FINALIZADA');
-      console.log('✅ Finalizadas:', finalizadas.length);
+      console.log('   ✅ Finalizadas:', finalizadas.length);
       if (finalizadas.length > 0) {
         colunasKanban.push({ 
           id: 'finalizadas', 
@@ -324,7 +210,7 @@ export default function KanbanPage() {
       
       // 6. Coluna de canceladas
       const canceladas = opsData.filter((op: OP) => op.status === 'CANCELADA');
-      console.log('❌ Canceladas:', canceladas.length);
+      console.log('   ❌ Canceladas:', canceladas.length);
       if (canceladas.length > 0) {
         colunasKanban.push({ 
           id: 'canceladas', 
@@ -334,12 +220,10 @@ export default function KanbanPage() {
         });
       }
 
-      console.log('📊 Total de colunas construídas:', colunasKanban.length);
-      console.log('📊 Colunas:', colunasKanban.map(c => ({ id: c.id, titulo: c.titulo, count: c.cards.length })));
-      
+      console.log('7️⃣ Total de colunas construídas:', colunasKanban.length);
       setColunas(colunasKanban);
       
-      console.log('✅ Kanban carregado com sucesso!');
+      console.log('8️⃣ Kanban carregado com sucesso!');
     } catch (error) {
       console.error('❌ Erro ao carregar Kanban:', error);
       setErro(error instanceof Error ? error.message : 'Erro desconhecido');
