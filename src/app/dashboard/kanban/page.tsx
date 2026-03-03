@@ -116,7 +116,7 @@ export default function KanbanPage() {
       }
       const estagiosData = await estagiosRes.json();
       console.log('✅ Estágios carregados:', estagiosData.length);
-      console.log('📋 Lista de estágios:', estagiosData.map((e: Estagio) => ({ codigo: e.codigo, nome: e.nome })));
+      console.log('📋 Lista de estágios:', estagiosData.map((e: Estagio) => ({ codigo: e.codigo, nome: e.nome, id: e.id })));
       
       // Buscar OPs com status relevantes
       console.log('📡 Buscando OPs...');
@@ -137,18 +137,6 @@ export default function KanbanPage() {
         CANCELADA: opsData.filter((o: OP) => o.status === 'CANCELADA').length,
       });
 
-      // Log da OP em andamento
-      const opEmAndamento = opsData.find((o: OP) => o.status === 'EM_ANDAMENTO');
-      if (opEmAndamento) {
-        console.log('🔍 OP em andamento:', {
-          op: opEmAndamento.op,
-          codEstagioAtual: opEmAndamento.codEstagioAtual,
-          estagioAtual: opEmAndamento.estagioAtual,
-          codMaquinaAtual: opEmAndamento.codMaquinaAtual,
-          maquinaAtual: opEmAndamento.maquinaAtual,
-        });
-      }
-
       setEstagios(estagiosData);
       setOps(opsData);
       
@@ -157,87 +145,97 @@ export default function KanbanPage() {
       
       const colunasKanban = [];
       
-      // Criar um mapa de estágios por código para busca rápida (comparação como string)
+      // 1. PRIMEIRO: Criar um mapa de estágios por código (normalizado)
       const estagioPorCodigo = new Map();
       estagiosData.forEach((e: Estagio) => {
-        // Garantir que o código seja string e fazer padding se necessário
+        // Guardar com o código original
+        estagioPorCodigo.set(e.codigo, e);
+        // Guardar com padding de 2 dígitos (se for número)
         const codigoPad = String(e.codigo).padStart(2, '0');
         estagioPorCodigo.set(codigoPad, e);
-        estagioPorCodigo.set(e.codigo, e); // Manter também o original
-        console.log(`📌 Mapa: ${e.codigo} / ${codigoPad} -> ${e.nome}`);
+        // Guardar sem padding (se tiver padding)
+        const codigoSemPad = String(parseInt(e.codigo, 10));
+        estagioPorCodigo.set(codigoSemPad, e);
+        console.log(`📌 Mapa: "${e.codigo}" / "${codigoPad}" / "${codigoSemPad}" -> ${e.nome}`);
       });
       
-      // Coluna de não iniciadas
+      // 2. Coluna de não iniciadas (sempre)
       const naoIniciadas = opsData.filter((op: OP) => 
         op.status === 'ABERTA' && 
         op.codEstagioAtual === '00'
       );
       console.log('📋 Não iniciadas:', naoIniciadas.length);
-      if (naoIniciadas.length > 0) {
-        colunasKanban.push({ 
-          id: 'nao-iniciadas', 
-          titulo: '📋 NÃO INICIADAS', 
-          cor: '#6b7280', 
-          cards: naoIniciadas 
+      colunasKanban.push({ 
+        id: 'nao-iniciadas', 
+        titulo: '📋 NÃO INICIADAS', 
+        cor: '#6b7280', 
+        cards: naoIniciadas 
+      });
+      
+      // 3. Colunas para CADA estágio (mesmo sem OPs)
+      console.log('📌 Criando colunas para todos os estágios...');
+      
+      // Organizar estágios por ordem
+      const estagiosOrdenados = [...estagiosData].sort((a, b) => a.ordem - b.ordem);
+      
+      estagiosOrdenados.forEach((e: Estagio) => {
+        // Buscar OPs para este estágio (usando múltiplas formas de comparar)
+        const cardsEstagio = opsData.filter((op: OP) => {
+          if (op.status !== 'EM_ANDAMENTO') return false;
+          
+          const codigoOp = String(op.codEstagioAtual).trim();
+          const codigoEstagio = String(e.codigo).trim();
+          
+          // Comparações possíveis
+          const matchExato = codigoOp === codigoEstagio;
+          const matchPad = codigoOp.padStart(2, '0') === codigoEstagio.padStart(2, '0');
+          const matchSemPad = parseInt(codigoOp, 10) === parseInt(codigoEstagio, 10);
+          
+          if (matchExato || matchPad || matchSemPad) {
+            console.log(`✅ OP ${op.op} (${codigoOp}) corresponde ao estágio ${e.nome} (${codigoEstagio})`);
+            return true;
+          }
+          return false;
+        });
+        
+        console.log(`📌 Estágio ${e.nome} (${e.codigo}): ${cardsEstagio.length} OPs`);
+        
+        colunasKanban.push({
+          id: e.id,
+          titulo: e.nome,
+          cor: e.cor || '#3b82f6',
+          cards: cardsEstagio
+        });
+      });
+      
+      // 4. Verificar OPs em andamento que não foram alocadas a nenhum estágio
+      const opsEmAndamento = opsData.filter((op: OP) => op.status === 'EM_ANDAMENTO');
+      const opsAlocadas = new Set();
+      
+      colunasKanban.forEach(coluna => {
+        if (coluna.id !== 'nao-iniciadas' && coluna.id !== 'finalizadas' && coluna.id !== 'canceladas') {
+          coluna.cards.forEach((op: OP) => opsAlocadas.add(op.op));
+        }
+      });
+      
+      const opsNaoAlocadas = opsEmAndamento.filter((op: OP) => !opsAlocadas.has(op.op));
+      
+      if (opsNaoAlocadas.length > 0) {
+        console.warn('⚠️ OPs em andamento não alocadas:', opsNaoAlocadas.map(op => ({
+          op: op.op,
+          codEstagioAtual: op.codEstagioAtual,
+          estagioAtual: op.estagioAtual
+        })));
+        
+        colunasKanban.push({
+          id: 'estagio-invalido',
+          titulo: '⚠️ ESTÁGIO INVÁLIDO',
+          cor: '#f59e0b',
+          cards: opsNaoAlocadas
         });
       }
       
-      // Colunas de estágios
-      // Primeiro, vamos agrupar as OPs em andamento por código de estágio
-      const opsEmAndamento = opsData.filter((op: OP) => op.status === 'EM_ANDAMENTO');
-      
-      // Mapa para agrupar OPs por estágio
-      const opsPorEstagio = new Map();
-      
-      opsEmAndamento.forEach((op: OP) => {
-        const codigoOp = String(op.codEstagioAtual).padStart(2, '0');
-        const estagio = estagioPorCodigo.get(codigoOp) || estagioPorCodigo.get(op.codEstagioAtual);
-        
-        if (estagio) {
-          console.log(`✅ OP ${op.op} -> Estágio ${estagio.nome} (${estagio.codigo})`);
-          if (!opsPorEstagio.has(estagio.id)) {
-            opsPorEstagio.set(estagio.id, {
-              estagio,
-              cards: []
-            });
-          }
-          opsPorEstagio.get(estagio.id).cards.push(op);
-        } else {
-          console.warn(`⚠️ OP ${op.op} com código de estágio inválido: "${op.codEstagioAtual}" (convertido: "${codigoOp}")`);
-          if (!opsPorEstagio.has('invalido')) {
-            opsPorEstagio.set('invalido', {
-              estagio: null,
-              cards: []
-            });
-          }
-          opsPorEstagio.get('invalido').cards.push(op);
-        }
-      });
-      
-      // Adicionar colunas para cada estágio com OPs
-      opsPorEstagio.forEach((valor, chave) => {
-        if (chave === 'invalido') {
-          // Coluna de estágios inválidos
-          console.log('⚠️ Criando coluna de estágios inválidos com', valor.cards.length, 'OPs');
-          colunasKanban.push({
-            id: 'estagio-invalido',
-            titulo: '⚠️ ESTÁGIO INVÁLIDO',
-            cor: '#f59e0b',
-            cards: valor.cards
-          });
-        } else {
-          // Coluna de estágio normal
-          console.log(`📌 Coluna ${valor.estagio.nome}:`, valor.cards.length);
-          colunasKanban.push({
-            id: valor.estagio.id,
-            titulo: valor.estagio.nome,
-            cor: valor.estagio.cor,
-            cards: valor.cards
-          });
-        }
-      });
-      
-      // Coluna de finalizadas
+      // 5. Coluna de finalizadas
       const finalizadas = opsData.filter((op: OP) => op.status === 'FINALIZADA');
       console.log('✅ Finalizadas:', finalizadas.length);
       if (finalizadas.length > 0) {
@@ -249,7 +247,7 @@ export default function KanbanPage() {
         });
       }
       
-      // Coluna de canceladas
+      // 6. Coluna de canceladas
       const canceladas = opsData.filter((op: OP) => op.status === 'CANCELADA');
       console.log('❌ Canceladas:', canceladas.length);
       if (canceladas.length > 0) {
@@ -517,22 +515,6 @@ export default function KanbanPage() {
           <p className="text-sm text-gray-400 mt-2">
             Verifique se existem estágios configurados e OPs cadastradas
           </p>
-          <div className="mt-4 text-left max-w-md mx-auto bg-white p-4 rounded-lg border">
-            <p className="font-medium mb-2">📊 Diagnóstico:</p>
-            <p>Estágios encontrados: {estagios.length}</p>
-            <p>OPs encontradas: {ops.length}</p>
-            {ops.length > 0 && (
-              <div className="mt-2">
-                <p className="font-medium">Status das OPs:</p>
-                <ul className="list-disc list-inside text-sm">
-                  <li>ABERTA: {ops.filter(o => o.status === 'ABERTA').length}</li>
-                  <li>EM_ANDAMENTO: {ops.filter(o => o.status === 'EM_ANDAMENTO').length}</li>
-                  <li>FINALIZADA: {ops.filter(o => o.status === 'FINALIZADA').length}</li>
-                  <li>CANCELADA: {ops.filter(o => o.status === 'CANCELADA').length}</li>
-                </ul>
-              </div>
-            )}
-          </div>
         </div>
       ) : (
         <DndContext
@@ -573,7 +555,7 @@ export default function KanbanPage() {
         </DndContext>
       )}
 
-      {/* MODAL 1: Finalizar estágio atual */}
+      {/* MODAIS (mantidos iguais) */}
       <Dialog open={movimento?.etapa === 'finalizar'} onOpenChange={() => setMovimento(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -582,13 +564,11 @@ export default function KanbanPage() {
               Informe a metragem processada neste estágio
             </DialogDescription>
           </DialogHeader>
-
           <div className="space-y-4 py-4">
             <div className="bg-gray-50 p-3 rounded-lg">
               <p className="text-sm font-medium">OP {movimento?.op.op}</p>
               <p className="text-xs text-gray-500 mt-1">{movimento?.op.produto}</p>
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="metragem">Metragem Processada (m) *</Label>
               <Input
@@ -605,7 +585,6 @@ export default function KanbanPage() {
               </p>
             </div>
           </div>
-
           <div className="flex justify-end gap-3">
             <Button variant="outline" onClick={() => setMovimento(null)}>
               Cancelar
@@ -617,7 +596,6 @@ export default function KanbanPage() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL 2: Iniciar novo estágio */}
       <Dialog open={movimento?.etapa === 'iniciar'} onOpenChange={() => setMovimento(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -626,13 +604,11 @@ export default function KanbanPage() {
               Selecione a máquina e informe se é reprocesso
             </DialogDescription>
           </DialogHeader>
-
           <div className="space-y-4 py-4">
             <div className="bg-gray-50 p-3 rounded-lg">
               <p className="text-sm font-medium">OP {movimento?.op.op}</p>
               <p className="text-xs text-gray-500">{movimento?.op.produto}</p>
             </div>
-
             <div className="space-y-2">
               <Label>Máquina *</Label>
               {maquinasDisponiveis.length === 0 ? (
@@ -658,7 +634,6 @@ export default function KanbanPage() {
                 </RadioGroup>
               )}
             </div>
-
             <div className="flex items-start space-x-2 pt-2">
               <Checkbox
                 id="reprocesso"
@@ -678,7 +653,6 @@ export default function KanbanPage() {
               </div>
             </div>
           </div>
-
           <div className="flex justify-end gap-3">
             <Button variant="outline" onClick={() => setMovimento(null)}>
               Cancelar
