@@ -221,7 +221,7 @@ export default function KanbanPage() {
       const opsNaoAlocadas = opsEmAndamento.filter((op: OP) => !opsAlocadas.has(op.op));
       
       if (opsNaoAlocadas.length > 0) {
-        console.warn('⚠️ OPs em andamento não alocadas:', opsNaoAlocadas.map(op => ({
+        console.warn('⚠️ OPs em andamento não alocadas:', opsNaoAlocadas.map((op: OP) => ({
           op: op.op,
           codEstagioAtual: op.codEstagioAtual,
           estagioAtual: op.estagioAtual
@@ -555,7 +555,7 @@ export default function KanbanPage() {
         </DndContext>
       )}
 
-      {/* MODAIS (mantidos iguais) */}
+      {/* MODAL 1: Finalizar estágio atual */}
       <Dialog open={movimento?.etapa === 'finalizar'} onOpenChange={() => setMovimento(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -596,6 +596,7 @@ export default function KanbanPage() {
         </DialogContent>
       </Dialog>
 
+      {/* MODAL 2: Iniciar novo estágio */}
       <Dialog open={movimento?.etapa === 'iniciar'} onOpenChange={() => setMovimento(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
