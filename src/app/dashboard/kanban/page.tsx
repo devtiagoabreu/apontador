@@ -106,8 +106,9 @@ export default function KanbanPage() {
     
     try {
       console.log('🔍 Iniciando carregamento do Kanban...');
-      console.log('📡 Buscando estágios...');
       
+      // Buscar estágios ativos para o Kanban
+      console.log('📡 Buscando estágios...');
       const estagiosRes = await fetch('/api/estagios?kanban=true&ativos=true');
       if (!estagiosRes.ok) {
         const errorText = await estagiosRes.text();
@@ -117,6 +118,7 @@ export default function KanbanPage() {
       console.log('✅ Estágios carregados:', estagiosData.length);
       console.log('📋 Lista de estágios:', estagiosData.map((e: Estagio) => ({ codigo: e.codigo, nome: e.nome })));
       
+      // Buscar OPs com status relevantes
       console.log('📡 Buscando OPs...');
       const opsRes = await fetch('/api/ops?status=ABERTA,EM_ANDAMENTO,FINALIZADA,CANCELADA&limit=1000');
       if (!opsRes.ok) {
@@ -126,12 +128,26 @@ export default function KanbanPage() {
       const opsResult = await opsRes.json();
       const opsData = opsResult.data || [];
       console.log('✅ OPs carregadas:', opsData.length);
+      
+      // Log detalhado das OPs
       console.log('📊 Status das OPs:', {
         ABERTA: opsData.filter((o: OP) => o.status === 'ABERTA').length,
         EM_ANDAMENTO: opsData.filter((o: OP) => o.status === 'EM_ANDAMENTO').length,
         FINALIZADA: opsData.filter((o: OP) => o.status === 'FINALIZADA').length,
         CANCELADA: opsData.filter((o: OP) => o.status === 'CANCELADA').length,
       });
+
+      // Log da OP em andamento
+      const opEmAndamento = opsData.find((o: OP) => o.status === 'EM_ANDAMENTO');
+      if (opEmAndamento) {
+        console.log('🔍 OP em andamento:', {
+          op: opEmAndamento.op,
+          codEstagioAtual: opEmAndamento.codEstagioAtual,
+          estagioAtual: opEmAndamento.estagioAtual,
+          codMaquinaAtual: opEmAndamento.codMaquinaAtual,
+          maquinaAtual: opEmAndamento.maquinaAtual,
+        });
+      }
 
       setEstagios(estagiosData);
       setOps(opsData);
@@ -140,6 +156,16 @@ export default function KanbanPage() {
       console.log('🏗️ Construindo colunas...');
       
       const colunasKanban = [];
+      
+      // Criar um mapa de estágios por código para busca rápida (comparação como string)
+      const estagioPorCodigo = new Map();
+      estagiosData.forEach((e: Estagio) => {
+        // Garantir que o código seja string e fazer padding se necessário
+        const codigoPad = String(e.codigo).padStart(2, '0');
+        estagioPorCodigo.set(codigoPad, e);
+        estagioPorCodigo.set(e.codigo, e); // Manter também o original
+        console.log(`📌 Mapa: ${e.codigo} / ${codigoPad} -> ${e.nome}`);
+      });
       
       // Coluna de não iniciadas
       const naoIniciadas = opsData.filter((op: OP) => 
@@ -157,18 +183,56 @@ export default function KanbanPage() {
       }
       
       // Colunas de estágios
-      estagiosData.forEach((e: Estagio) => {
-        const cardsEstagio = opsData.filter((op: OP) => 
-          op.codEstagioAtual === e.codigo && 
-          op.status === 'EM_ANDAMENTO'
-        );
-        console.log(`📌 Estágio ${e.nome} (${e.codigo}):`, cardsEstagio.length);
-        if (cardsEstagio.length > 0) {
+      // Primeiro, vamos agrupar as OPs em andamento por código de estágio
+      const opsEmAndamento = opsData.filter((op: OP) => op.status === 'EM_ANDAMENTO');
+      
+      // Mapa para agrupar OPs por estágio
+      const opsPorEstagio = new Map();
+      
+      opsEmAndamento.forEach((op: OP) => {
+        const codigoOp = String(op.codEstagioAtual).padStart(2, '0');
+        const estagio = estagioPorCodigo.get(codigoOp) || estagioPorCodigo.get(op.codEstagioAtual);
+        
+        if (estagio) {
+          console.log(`✅ OP ${op.op} -> Estágio ${estagio.nome} (${estagio.codigo})`);
+          if (!opsPorEstagio.has(estagio.id)) {
+            opsPorEstagio.set(estagio.id, {
+              estagio,
+              cards: []
+            });
+          }
+          opsPorEstagio.get(estagio.id).cards.push(op);
+        } else {
+          console.warn(`⚠️ OP ${op.op} com código de estágio inválido: "${op.codEstagioAtual}" (convertido: "${codigoOp}")`);
+          if (!opsPorEstagio.has('invalido')) {
+            opsPorEstagio.set('invalido', {
+              estagio: null,
+              cards: []
+            });
+          }
+          opsPorEstagio.get('invalido').cards.push(op);
+        }
+      });
+      
+      // Adicionar colunas para cada estágio com OPs
+      opsPorEstagio.forEach((valor, chave) => {
+        if (chave === 'invalido') {
+          // Coluna de estágios inválidos
+          console.log('⚠️ Criando coluna de estágios inválidos com', valor.cards.length, 'OPs');
           colunasKanban.push({
-            id: e.id,
-            titulo: e.nome,
-            cor: e.cor,
-            cards: cardsEstagio
+            id: 'estagio-invalido',
+            titulo: '⚠️ ESTÁGIO INVÁLIDO',
+            cor: '#f59e0b',
+            cards: valor.cards
+          });
+        } else {
+          // Coluna de estágio normal
+          console.log(`📌 Coluna ${valor.estagio.nome}:`, valor.cards.length);
+          colunasKanban.push({
+            id: valor.estagio.id,
+            titulo: valor.estagio.nome,
+            cor: valor.estagio.cor,
+            cards: valor.cards
           });
         }
       });
@@ -285,6 +349,16 @@ export default function KanbanPage() {
       toast({
         title: 'Ação não permitida',
         description: 'Para cancelar uma OP, use o menu de contexto do card',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Se for coluna de estágio inválido
+    if (colunaDestino.id === 'estagio-invalido') {
+      toast({
+        title: 'Ação não permitida',
+        description: 'Esta OP está com estágio inválido. Corrija manualmente.',
         variant: 'destructive',
       });
       return;
