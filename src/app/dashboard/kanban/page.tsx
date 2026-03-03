@@ -4,12 +4,16 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
 
+console.log('🔥 ARQUIVO FOI CARREGADO!');
+
 export default function KanbanPage() {
+  console.log('🔥 COMPONENTE RENDERIZOU');
+  
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('🔍 TESTE: useEffect executou');
+    console.log('🔥 useEffect EXECUTOU');
     testarAPI();
   }, []);
 
