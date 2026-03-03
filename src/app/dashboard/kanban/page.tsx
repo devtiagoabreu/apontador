@@ -4,37 +4,37 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
 
-console.log('🔥 ARQUIVO FOI CARREGADO!');
+alert('🚨 ALERTA: O código está executando!');
 
 export default function KanbanPage() {
-  console.log('🔥 COMPONENTE RENDERIZOU');
+  alert('🚨 ALERTA: O componente renderizou!');
   
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('🔥 useEffect EXECUTOU');
+    alert('🚨 ALERTA: useEffect executou!');
     testarAPI();
   }, []);
 
   async function testarAPI() {
-    console.log('1️⃣ Iniciando teste...');
+    alert('1️⃣ Iniciando teste...');
     
     try {
-      console.log('2️⃣ Tentando buscar estágios...');
+      alert('2️⃣ Tentando buscar estágios...');
       const estagiosRes = await fetch('/api/estagios?kanban=true&ativos=true');
-      console.log('3️⃣ Status da resposta:', estagiosRes.status);
+      alert(`3️⃣ Status da resposta: ${estagiosRes.status}`);
       
       if (!estagiosRes.ok) {
         throw new Error(`Erro ${estagiosRes.status}`);
       }
       
       const estagiosData = await estagiosRes.json();
-      console.log('4️⃣ Estágios carregados:', estagiosData);
+      alert(`4️⃣ Estágios carregados: ${estagiosData.length} estágios`);
       
-      console.log('5️⃣ Teste concluído com sucesso!');
+      alert('5️⃣ Teste concluído com sucesso!');
     } catch (error) {
-      console.error('❌ Erro no teste:', error);
+      alert(`❌ Erro: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
       setErro(error instanceof Error ? error.message : 'Erro desconhecido');
     } finally {
       setCarregando(false);
