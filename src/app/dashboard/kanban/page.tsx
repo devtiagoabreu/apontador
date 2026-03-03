@@ -56,6 +56,10 @@ interface Producao {
   metragemProgramada: number;
   metragemProcessada: number | null;
   isReprocesso: boolean;
+  maquina?: {
+    nome: string;
+    codigo: string;
+  };
 }
 
 interface OP {
@@ -468,7 +472,7 @@ export default function KanbanPage() {
       <Dialog open={movimento?.etapa === 'finalizar'} onOpenChange={() => setMovimento(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Finalizar {movimento?.op.estagioAtual}</DialogTitle>
+            <DialogTitle>Finalizar {movimento?.estagioDestino?.nome || 'Estágio'}</DialogTitle>
             <DialogDescription>
               Informe a metragem processada neste estágio
             </DialogDescription>
@@ -509,7 +513,7 @@ export default function KanbanPage() {
       <Dialog open={movimento?.etapa === 'iniciar'} onOpenChange={() => setMovimento(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Iniciar {movimento?.estagioDestino.nome}</DialogTitle>
+            <DialogTitle>Iniciar {movimento?.estagioDestino?.nome}</DialogTitle>
             <DialogDescription>
               Selecione a máquina e informe se é reprocesso
             </DialogDescription>
