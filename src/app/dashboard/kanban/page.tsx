@@ -115,12 +115,6 @@ export default function KanbanPage() {
         throw new Error(`Erro ao carregar estágios: ${estagiosRes.status} - ${errorText}`);
       }
       const estagiosData = await estagiosRes.json();
-      console.log('✅ Estágios carregados:', estagiosData.length);
-      console.log('📋 Lista de estágios:', estagiosData.map((e: Estagio) => ({ 
-        codigo: e.codigo, 
-        nome: e.nome, 
-        id: e.id 
-      })));
       
       // Buscar OPs com status relevantes
       console.log('📡 Buscando OPs...');
@@ -131,25 +125,64 @@ export default function KanbanPage() {
       }
       const opsResult = await opsRes.json();
       const opsData = opsResult.data || [];
-      console.log('✅ OPs carregadas:', opsData.length);
-      
-      // Log detalhado das OPs
-      console.log('📊 Status das OPs:', {
-        ABERTA: opsData.filter((o: OP) => o.status === 'ABERTA').length,
-        EM_ANDAMENTO: opsData.filter((o: OP) => o.status === 'EM_ANDAMENTO').length,
-        FINALIZADA: opsData.filter((o: OP) => o.status === 'FINALIZADA').length,
-        CANCELADA: opsData.filter((o: OP) => o.status === 'CANCELADA').length,
+
+      // ============================================
+      // 🔍 DEBUG DETALHADO DE ESTÁGIOS
+      // ============================================
+      console.log('='.repeat(80));
+      console.log('🔍 DEBUG DE ESTÁGIOS');
+      console.log('='.repeat(80));
+
+      // 1. Mostrar todos os estágios do banco
+      console.log('📋 ESTÁGIOS DO BANCO:');
+      estagiosData.forEach((e: Estagio, index: number) => {
+        console.log(`  ${index + 1}. [${e.codigo}] ${e.nome} (ID: ${e.id}) - Ordem: ${e.ordem}`);
       });
 
-      // Log de todas as OPs em andamento com seus códigos
-      const opsEmAndamento = opsData.filter((o: OP) => o.status === 'EM_ANDAMENTO');
-      console.log('🔍 OPs EM ANDAMENTO:', opsEmAndamento.map((op: OP) => ({
-        op: op.op,
-        codEstagioAtual: op.codEstagioAtual,
-        estagioAtual: op.estagioAtual,
-        codEstagioAtual_type: typeof op.codEstagioAtual,
-        estagioAtual_completo: op.estagioAtual
-      })));
+      // 2. Mostrar todas as OPs EM ANDAMENTO com detalhes
+      console.log('\n📋 OPs EM ANDAMENTO:');
+      const opsEmAndamento = opsData.filter((op: OP) => op.status === 'EM_ANDAMENTO');
+      
+      opsEmAndamento.forEach((op: OP, index: number) => {
+        console.log(`  ${index + 1}. OP ${op.op}:`);
+        console.log(`     - codEstagioAtual: "${op.codEstagioAtual}" (tipo: ${typeof op.codEstagioAtual})`);
+        console.log(`     - estagioAtual: "${op.estagioAtual}"`);
+        console.log(`     - caracteres: [${op.codEstagioAtual.split('').map(c => `${c} (${c.charCodeAt(0)})`).join(', ')}]`);
+        console.log(`     - como número: ${parseInt(op.codEstagioAtual, 10)}`);
+        console.log(`     - com padding: "${op.codEstagioAtual.padStart(2, '0')}"`);
+      });
+
+      // 3. Tentar匹配 manualmente
+      console.log('\n🔍 TENTANDO CORRESPONDÊNCIA MANUAL:');
+      
+      opsEmAndamento.forEach((op: OP) => {
+        const codigoOp = String(op.codEstagioAtual).trim();
+        let encontrado = false;
+        
+        estagiosData.forEach((e: Estagio) => {
+          // Comparações possíveis
+          const matchExato = e.codigo === codigoOp;
+          const matchPad = e.codigo.padStart(2, '0') === codigoOp.padStart(2, '0');
+          const matchNumero = parseInt(e.codigo, 10) === parseInt(codigoOp, 10);
+          const matchNome = e.nome.includes(`(${codigoOp})`) || e.nome.includes(codigoOp);
+          const matchNomeInvertido = op.estagioAtual.includes(e.nome);
+          
+          if (matchExato || matchPad || matchNumero || matchNome || matchNomeInvertido) {
+            console.log(`  ✅ OP ${op.op} -> ${e.nome} (código: ${e.codigo})`);
+            console.log(`     Motivo: ${matchExato ? 'exato' : ''} ${matchPad ? 'padding' : ''} ${matchNumero ? 'número' : ''} ${matchNome ? 'nome' : ''}`);
+            encontrado = true;
+          }
+        });
+        
+        if (!encontrado) {
+          console.log(`  ❌ OP ${op.op} -> NENHUM ESTÁGIO ENCONTRADO`);
+          console.log(`     Código na OP: "${op.codEstagioAtual}"`);
+          console.log(`     Estágio na OP: "${op.estagioAtual}"`);
+        }
+      });
+
+      console.log('='.repeat(80));
+      // ============================================
 
       setEstagios(estagiosData);
       setOps(opsData);
@@ -191,18 +224,12 @@ export default function KanbanPage() {
         const codigoPad = e.codigo.padStart(2, '0');
         estagioMap.set(codigoPad, e);
         
-        // Extrair código do nome (se tiver parênteses)
-        const matchNome = e.nome.match(/\((\d+)\)/);
-        if (matchNome) {
-          estagioMap.set(matchNome[1], e);
-        }
+        // Nome do estágio
+        estagioMap.set(e.nome, e);
         
-        console.log(`📌 Mapeando estágio: ${e.nome} -> códigos:`, {
-          original: e.codigo,
-          numero: codigoNum,
-          pad: codigoPad,
-          doNome: matchNome ? matchNome[1] : null
-        });
+        // Parte do nome (primeira palavra)
+        const primeiraPalavra = e.nome.split(' ')[0];
+        estagioMap.set(primeiraPalavra, e);
       });
       
       // 3. Colunas para CADA estágio
@@ -226,7 +253,6 @@ export default function KanbanPage() {
           const estagioCorrespondente = estagioMap.get(codigoOp);
           
           if (estagioCorrespondente && estagioCorrespondente.id === e.id) {
-            console.log(`✅ OP ${op.op} (${codigoOp}) -> Estágio ${e.nome}`);
             opsAlocadas.add(op.op);
             return true;
           }
@@ -236,23 +262,15 @@ export default function KanbanPage() {
           if (!isNaN(codigoOpNum)) {
             const estagioPorNum = estagioMap.get(codigoOpNum);
             if (estagioPorNum && estagioPorNum.id === e.id) {
-              console.log(`✅ OP ${op.op} (${codigoOpNum}) -> Estágio ${e.nome}`);
               opsAlocadas.add(op.op);
               return true;
             }
           }
           
-          // Tentar extrair código do nome do estágio na OP
-          if (op.estagioAtual) {
-            const match = op.estagioAtual.match(/\((\d+)\)/);
-            if (match) {
-              const codigoExtraido = match[1];
-              if (codigoExtraido === e.codigo || parseInt(codigoExtraido, 10) === parseInt(e.codigo, 10)) {
-                console.log(`✅ OP ${op.op} (extraído ${codigoExtraido}) -> Estágio ${e.nome}`);
-                opsAlocadas.add(op.op);
-                return true;
-              }
-            }
+          // Tentar pelo nome do estágio na OP
+          if (op.estagioAtual && op.estagioAtual.includes(e.nome)) {
+            opsAlocadas.add(op.op);
+            return true;
           }
           
           return false;
@@ -275,8 +293,7 @@ export default function KanbanPage() {
         console.warn('⚠️ OPs em andamento não alocadas:', opsNaoAlocadas.map((op: OP) => ({
           op: op.op,
           codEstagioAtual: op.codEstagioAtual,
-          estagioAtual: op.estagioAtual,
-          tipoCodigo: typeof op.codEstagioAtual
+          estagioAtual: op.estagioAtual
         })));
         
         colunasKanban.push({
@@ -607,7 +624,7 @@ export default function KanbanPage() {
         </DndContext>
       )}
 
-      {/* MODAIS (mantidos iguais) */}
+      {/* MODAL 1: Finalizar estágio atual */}
       <Dialog open={movimento?.etapa === 'finalizar'} onOpenChange={() => setMovimento(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -648,6 +665,7 @@ export default function KanbanPage() {
         </DialogContent>
       </Dialog>
 
+      {/* MODAL 2: Iniciar novo estágio */}
       <Dialog open={movimento?.etapa === 'iniciar'} onOpenChange={() => setMovimento(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
