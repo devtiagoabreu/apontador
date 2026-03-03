@@ -69,8 +69,8 @@ interface OP {
 
 interface ItemKanban {
   op: OP;
-  producao: Producao;
-  estagio: Estagio;
+  producao: Producao | null;
+  estagio: Estagio | null;
 }
 
 interface Maquina {
@@ -194,14 +194,14 @@ export default function KanbanPage() {
         id: 'nao-iniciadas', 
         titulo: '📋 NÃO INICIADAS', 
         cor: '#6b7280', 
-        cards: opsAbertas.map(op => ({ op, producao: null, estagio: null }))
+        cards: opsAbertas.map((op: OP) => ({ op, producao: null, estagio: null }))
       });
       
       // Colunas para cada estágio
       const estagiosOrdenados = [...estagiosData].sort((a, b) => a.ordem - b.ordem);
       
       estagiosOrdenados.forEach((estagio: Estagio) => {
-        const cardsEstagio = itens.filter(item => item.estagio.id === estagio.id);
+        const cardsEstagio = itens.filter(item => item.estagio?.id === estagio.id);
         
         console.log(`   📍 Estágio ${estagio.nome}: ${cardsEstagio.length} itens`);
         
@@ -257,7 +257,7 @@ export default function KanbanPage() {
     const overId = over.id as string;
 
     const item = itensKanban.find(i => i.op.op === opId);
-    if (!item) return;
+    if (!item || !item.producao || !item.estagio) return;
 
     console.log('🎯 Drag end:', { opId, overId, item });
 
@@ -437,7 +437,7 @@ export default function KanbanPage() {
                 cor={coluna.cor}
                 cards={coluna.cards}
               >
-                {coluna.cards.map((item: any) => (
+                {coluna.cards.map((item: ItemKanban) => (
                   <KanbanCard
                     key={item.op.op}
                     op={item.op}
@@ -464,7 +464,118 @@ export default function KanbanPage() {
         </DndContext>
       )}
 
-      {/* MODAIS... */}
+      {/* MODAL 1: Finalizar estágio atual */}
+      <Dialog open={movimento?.etapa === 'finalizar'} onOpenChange={() => setMovimento(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Finalizar {movimento?.op.estagioAtual}</DialogTitle>
+            <DialogDescription>
+              Informe a metragem processada neste estágio
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <p className="text-sm font-medium">OP {movimento?.op.op}</p>
+              <p className="text-xs text-gray-500 mt-1">{movimento?.op.produto}</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="metragem">Metragem Processada (m) *</Label>
+              <Input
+                id="metragem"
+                type="number"
+                step="0.01"
+                min="0"
+                value={metragemTemp}
+                onChange={(e) => setMetragemTemp(Number(e.target.value))}
+                placeholder="0,00"
+              />
+              <p className="text-xs text-gray-500">
+                Programado: {Number(movimento?.op.qtdeProgramado || 0).toLocaleString('pt-BR')} m
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setMovimento(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmarFinalizacao}>
+              Confirmar Finalização
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL 2: Iniciar novo estágio */}
+      <Dialog open={movimento?.etapa === 'iniciar'} onOpenChange={() => setMovimento(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Iniciar {movimento?.estagioDestino.nome}</DialogTitle>
+            <DialogDescription>
+              Selecione a máquina e informe se é reprocesso
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <p className="text-sm font-medium">OP {movimento?.op.op}</p>
+              <p className="text-xs text-gray-500">{movimento?.op.produto}</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Máquina *</Label>
+              {maquinasDisponiveis.length === 0 ? (
+                <p className="text-sm text-yellow-600 bg-yellow-50 p-3 rounded-lg">
+                  Nenhuma máquina disponível para este estágio
+                </p>
+              ) : (
+                <RadioGroup 
+                  value={movimento?.maquinaId} 
+                  onValueChange={(value) => setMovimento(prev => prev ? {...prev, maquinaId: value} : null)}
+                >
+                  <div className="space-y-2">
+                    {maquinasDisponiveis.map((maquina) => (
+                      <div key={maquina.id} className="flex items-center space-x-2 border rounded-lg p-3">
+                        <RadioGroupItem value={maquina.id} id={maquina.id} />
+                        <Label htmlFor={maquina.id} className="flex-1 cursor-pointer">
+                          <div className="font-medium">{maquina.nome}</div>
+                          <div className="text-xs text-gray-500">Código: {maquina.codigo}</div>
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </RadioGroup>
+              )}
+            </div>
+            <div className="flex items-start space-x-2 pt-2">
+              <Checkbox
+                id="reprocesso"
+                checked={movimento?.isReprocesso || false}
+                onCheckedChange={(checked) => 
+                  setMovimento(prev => prev ? {...prev, isReprocesso: checked as boolean} : null)
+                }
+                className="mt-1"
+              />
+              <div className="space-y-1">
+                <Label htmlFor="reprocesso" className="text-sm font-medium">
+                  🔄 É reprocesso?
+                </Label>
+                <p className="text-xs text-gray-500">
+                  Marque se este produto já passou por este estágio
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setMovimento(null)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleConfirmarInicio}
+              disabled={!movimento?.maquinaId || maquinasDisponiveis.length === 0}
+            >
+              Iniciar Produção
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
