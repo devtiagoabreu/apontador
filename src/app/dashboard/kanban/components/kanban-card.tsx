@@ -14,8 +14,44 @@ import { useState } from 'react';
 import { EditTimesModal } from './edit-times-modal';
 import { toast } from '@/components/ui/use-toast';
 
+interface Estagio {
+  id: string;
+  codigo: string;
+  nome: string;
+  ordem: number;
+  cor: string;
+  mostrarNoKanban: boolean;
+  ativo: boolean;
+}
+
+interface Producao {
+  id: string;
+  opId: number;
+  estagioId: string;
+  dataInicio: string;
+  dataFim: string | null;
+  metragemProgramada: number;
+  metragemProcessada: number | null;
+  isReprocesso: boolean;
+  maquina?: {
+    nome: string;
+    codigo: string;
+  };
+}
+
+interface OP {
+  op: number;
+  produto: string;
+  qtdeCarregado: number | string;
+  qtdeProgramado: number | string;
+  um: string;
+  status: string;
+}
+
 interface KanbanCardProps {
-  op: any;
+  op: OP;
+  producao?: Producao | null;
+  estagio?: Estagio | null;
   isDragging?: boolean;
   isOverlay?: boolean;
   onEdit?: () => void;
@@ -25,6 +61,8 @@ interface KanbanCardProps {
 
 export function KanbanCard({ 
   op, 
+  producao,
+  estagio,
   isDragging, 
   isOverlay,
   onEdit,
@@ -49,11 +87,11 @@ export function KanbanCard({
     zIndex: isOverlay ? 999 : 'auto',
   };
 
-  // Formatar tempo desde o último apontamento
+  // Formatar tempo desde o início da produção
   function getTempoDecorrido() {
-    if (!op.dataUltimoApontamento) return null;
+    if (!producao?.dataInicio) return null;
     
-    const inicio = new Date(op.dataUltimoApontamento);
+    const inicio = new Date(producao.dataInicio);
     const agora = new Date();
     const diffMs = agora.getTime() - inicio.getTime();
     const diffMin = Math.floor(diffMs / 60000);
@@ -76,7 +114,6 @@ export function KanbanCard({
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    // O menu será aberto pelo DropdownMenu
   };
 
   const handleCancel = async () => {
@@ -99,7 +136,7 @@ export function KanbanCard({
       });
 
       if (onCancel) onCancel();
-      window.location.reload(); // Recarregar para atualizar o Kanban
+      window.location.reload();
     } catch (error) {
       toast({
         title: 'Erro',
@@ -108,6 +145,10 @@ export function KanbanCard({
       });
     }
   };
+
+  // Metragem a ser exibida
+  const metragemExibida = producao?.metragemProcessada || op.qtdeCarregado || 0;
+  const metragemFormatada = Number(metragemExibida).toLocaleString('pt-BR');
 
   return (
     <>
@@ -154,18 +195,26 @@ export function KanbanCard({
 
         {/* Metragem */}
         <div className="text-xs text-gray-500 mb-2">
-          Metros: {Number(op.qtdeCarregado).toLocaleString('pt-BR')} {op.um}
+          Metros: {metragemFormatada} {op.um}
+          {producao && !producao.dataFim && producao.metragemProcessada ? ' (parcial)' : ''}
         </div>
 
-        {/* Máquina atual */}
-        {op.maquinaAtual && op.maquinaAtual !== 'NENHUMA' && (
+        {/* Estágio atual */}
+        {estagio && (
           <div className="text-xs text-gray-500 mb-2">
-            Máquina: {op.maquinaAtual}
+            Estágio: {estagio.nome}
           </div>
         )}
 
-        {/* Cronômetro */}
-        {op.dataUltimoApontamento && op.status === 'EM_ANDAMENTO' && (
+        {/* Máquina atual */}
+        {producao?.maquina && (
+          <div className="text-xs text-gray-500 mb-2">
+            Máquina: {producao.maquina.nome}
+          </div>
+        )}
+
+        {/* Cronômetro (só para produções ativas) */}
+        {producao && !producao.dataFim && (
           <div className={cn('flex items-center gap-1 text-sm font-mono', getCronometroCor())}>
             <Clock className="h-4 w-4" />
             <span>{getTempoDecorrido()}</span>

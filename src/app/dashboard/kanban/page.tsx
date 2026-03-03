@@ -47,18 +47,30 @@ interface Estagio {
   ativo: boolean;
 }
 
+interface Producao {
+  id: string;
+  opId: number;
+  estagioId: string;
+  dataInicio: string;
+  dataFim: string | null;
+  metragemProgramada: number;
+  metragemProcessada: number | null;
+  isReprocesso: boolean;
+}
+
 interface OP {
   op: number;
   produto: string;
   qtdeCarregado: number | string;
   qtdeProgramado: number | string;
   um: string;
-  codEstagioAtual: string;
-  estagioAtual: string;
-  codMaquinaAtual: string;
-  maquinaAtual: string;
   status: string;
-  dataUltimoApontamento?: string;
+}
+
+interface ItemKanban {
+  op: OP;
+  producao: Producao;
+  estagio: Estagio;
 }
 
 interface Maquina {
@@ -70,6 +82,7 @@ interface Maquina {
 
 interface Movimento {
   op: OP;
+  producao: Producao;
   estagioDestino: Estagio;
   etapa: 'finalizar' | 'iniciar';
   metragem?: number;
@@ -81,6 +94,8 @@ export default function KanbanPage() {
   const { data: session } = useSession();
   const [estagios, setEstagios] = useState<Estagio[]>([]);
   const [ops, setOps] = useState<OP[]>([]);
+  const [producoes, setProducoes] = useState<Producao[]>([]);
+  const [itensKanban, setItensKanban] = useState<ItemKanban[]>([]);
   const [maquinasDisponiveis, setMaquinasDisponiveis] = useState<Maquina[]>([]);
   const [colunas, setColunas] = useState<any[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -105,102 +120,104 @@ export default function KanbanPage() {
     setErro(null);
     
     try {
+      console.log('1️⃣ Iniciando carregamento do Kanban...');
+      
       // Buscar estágios ativos para o Kanban
+      console.log('2️⃣ Buscando estágios...');
       const estagiosRes = await fetch('/api/estagios?kanban=true&ativos=true');
       if (!estagiosRes.ok) {
         throw new Error(`Erro ao carregar estágios: ${estagiosRes.status}`);
       }
       const estagiosData = await estagiosRes.json();
+      console.log('3️⃣ Estágios carregados:', estagiosData.length);
       
-      // Buscar OPs com status relevantes
-      const opsRes = await fetch('/api/ops?status=ABERTA,EM_ANDAMENTO,FINALIZADA,CANCELADA&limit=1000');
+      // Buscar OPs com status EM_ANDAMENTO
+      console.log('4️⃣ Buscando OPs em andamento...');
+      const opsRes = await fetch('/api/ops?status=EM_ANDAMENTO&limit=1000');
       if (!opsRes.ok) {
         throw new Error(`Erro ao carregar OPs: ${opsRes.status}`);
       }
       const opsResult = await opsRes.json();
       const opsData = opsResult.data || [];
+      console.log('5️⃣ OPs em andamento carregadas:', opsData.length);
+      
+      // Buscar produções ativas (sem data_fim)
+      console.log('6️⃣ Buscando produções ativas...');
+      const producoesRes = await fetch('/api/producoes?ativas=true&limit=1000');
+      if (!producoesRes.ok) {
+        throw new Error(`Erro ao carregar produções: ${producoesRes.status}`);
+      }
+      const producoesResult = await producoesRes.json();
+      const producoesData = producoesResult.data || [];
+      console.log('7️⃣ Produções ativas carregadas:', producoesData.length);
 
       setEstagios(estagiosData);
       setOps(opsData);
+      setProducoes(producoesData);
+      
+      // Construir itens do Kanban (OP + Produção ativa)
+      console.log('8️⃣ Construindo itens do Kanban...');
+      
+      const itens: ItemKanban[] = [];
+      
+      // Para cada produção ativa, encontrar a OP correspondente
+      producoesData.forEach((producao: Producao) => {
+        const op = opsData.find((o: OP) => o.op === producao.opId);
+        const estagio = estagiosData.find((e: Estagio) => e.id === producao.estagioId);
+        
+        if (op && estagio) {
+          itens.push({
+            op,
+            producao,
+            estagio
+          });
+          console.log(`   ✅ OP ${op.op} -> Estágio ${estagio.nome}`);
+        } else {
+          console.log(`   ⚠️ Produção ${producao.id} sem OP ou estágio correspondente`);
+        }
+      });
+      
+      console.log('9️⃣ Total de itens construídos:', itens.length);
+      setItensKanban(itens);
       
       // Construir colunas
+      console.log('🔟 Construindo colunas...');
+      
       const colunasKanban = [];
       
-      // 1. Coluna de não iniciadas
-      const naoIniciadas = opsData.filter((op: OP) => 
-        op.status === 'ABERTA' && 
-        op.codEstagioAtual === '00'
+      // Coluna de não iniciadas (OPs abertas sem produção ativa)
+      const opsAbertas = opsData.filter((op: OP) => 
+        !itens.some(item => item.op.op === op.op)
       );
+      console.log('   📋 Não iniciadas:', opsAbertas.length);
       colunasKanban.push({ 
         id: 'nao-iniciadas', 
         titulo: '📋 NÃO INICIADAS', 
         cor: '#6b7280', 
-        cards: naoIniciadas 
+        cards: opsAbertas.map(op => ({ op, producao: null, estagio: null }))
       });
       
-      // 2. Separar OPs em andamento
-      const opsEmAndamento = opsData.filter((op: OP) => op.status === 'EM_ANDAMENTO');
+      // Colunas para cada estágio
+      const estagiosOrdenados = [...estagiosData].sort((a, b) => a.ordem - b.ordem);
       
-      // 3. Para cada estágio, buscar OPs correspondentes
-      estagiosData.forEach((e: Estagio) => {
-        const cardsEstagio = opsEmAndamento.filter((op: OP) => {
-          const codigoOp = String(op.codEstagioAtual).padStart(2, '0');
-          const codigoEstagio = String(e.codigo).padStart(2, '0');
-          return codigoOp === codigoEstagio;
-        });
+      estagiosOrdenados.forEach((estagio: Estagio) => {
+        const cardsEstagio = itens.filter(item => item.estagio.id === estagio.id);
+        
+        console.log(`   📍 Estágio ${estagio.nome}: ${cardsEstagio.length} itens`);
         
         colunasKanban.push({
-          id: e.id,
-          titulo: e.nome,
-          cor: e.cor || '#3b82f6',
+          id: estagio.id,
+          titulo: estagio.nome,
+          cor: estagio.cor || '#3b82f6',
           cards: cardsEstagio
         });
       });
       
-      // 4. Verificar OPs em andamento não alocadas
-      const opsAlocadas = new Set<number>();
-      colunasKanban.forEach(coluna => {
-        if (coluna.id !== 'nao-iniciadas') {
-          coluna.cards.forEach((op: OP) => opsAlocadas.add(op.op));
-        }
-      });
-      
-      const opsNaoAlocadas = opsEmAndamento.filter((op: OP) => !opsAlocadas.has(op.op));
-      
-      if (opsNaoAlocadas.length > 0) {
-        colunasKanban.push({
-          id: 'estagio-invalido',
-          titulo: '⚠️ ESTÁGIO INVÁLIDO',
-          cor: '#f59e0b',
-          cards: opsNaoAlocadas
-        });
-      }
-      
-      // 5. Coluna de finalizadas
-      const finalizadas = opsData.filter((op: OP) => op.status === 'FINALIZADA');
-      if (finalizadas.length > 0) {
-        colunasKanban.push({ 
-          id: 'finalizadas', 
-          titulo: '✅ FINALIZADAS', 
-          cor: '#10b981', 
-          cards: finalizadas 
-        });
-      }
-      
-      // 6. Coluna de canceladas
-      const canceladas = opsData.filter((op: OP) => op.status === 'CANCELADA');
-      if (canceladas.length > 0) {
-        colunasKanban.push({ 
-          id: 'canceladas', 
-          titulo: '❌ CANCELADAS', 
-          cor: '#ef4444', 
-          cards: canceladas 
-        });
-      }
-
       setColunas(colunasKanban);
+      
+      console.log('✅ Kanban carregado com sucesso!');
     } catch (error) {
-      console.error('Erro ao carregar Kanban:', error);
+      console.error('❌ Erro ao carregar Kanban:', error);
       setErro(error instanceof Error ? error.message : 'Erro desconhecido');
       toast({
         title: 'Erro',
@@ -239,80 +256,36 @@ export default function KanbanPage() {
     const opId = Number(active.id);
     const overId = over.id as string;
 
-    const op = ops.find(o => o.op === opId);
-    if (!op) return;
+    const item = itensKanban.find(i => i.op.op === opId);
+    if (!item) return;
+
+    console.log('🎯 Drag end:', { opId, overId, item });
 
     // Encontrar coluna de destino
     const colunaDestino = colunas.find(col => col.id === overId);
     if (!colunaDestino) return;
 
-    // Se for coluna finalizadas
-    if (colunaDestino.id === 'finalizadas') {
-      try {
-        const response = await fetch(`/api/ops/${op.op}/finalizar`, { 
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Erro ao finalizar OP');
-        }
-        
-        toast({
-          title: 'Sucesso',
-          description: `OP ${op.op} finalizada com sucesso`,
-        });
-        await carregarDados();
-      } catch (error) {
-        toast({
-          title: 'Erro',
-          description: error instanceof Error ? error.message : 'Erro ao finalizar OP',
-          variant: 'destructive',
-        });
-      }
-      return;
-    }
-
-    // Se for coluna canceladas
-    if (colunaDestino.id === 'canceladas') {
+    // Se for coluna não iniciadas
+    if (colunaDestino.id === 'nao-iniciadas') {
       toast({
         title: 'Ação não permitida',
-        description: 'Para cancelar uma OP, use o menu de contexto do card',
+        description: 'Para iniciar uma OP, use o botão "Iniciar" na lista de OPs',
         variant: 'destructive',
       });
       return;
     }
 
-    // Se for coluna de estágio inválido
-    if (colunaDestino.id === 'estagio-invalido') {
-      toast({
-        title: 'Ação não permitida',
-        description: 'Esta OP está com estágio inválido. Corrija manualmente.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    // Se for um estágio normal
+    // Se for um estágio
     const estagioDestino = estagios.find(e => e.id === colunaDestino.id);
     if (estagioDestino) {
-      if (op.codEstagioAtual !== '00') {
-        setMetragemTemp(Number(op.qtdeCarregado) || 0);
-        setMovimento({
-          op,
-          estagioDestino,
-          etapa: 'finalizar'
-        });
-      } else {
-        await carregarMaquinasDisponiveis(estagioDestino.id);
-        setMovimento({
-          op,
-          estagioDestino,
-          etapa: 'iniciar',
-          metragem: 0
-        });
-      }
+      // Abrir modal para finalizar estágio atual e iniciar novo
+      setMetragemTemp(item.producao.metragemProcessada || 0);
+      setMovimento({
+        op: item.op,
+        producao: item.producao,
+        estagioDestino,
+        etapa: 'finalizar'
+      });
     }
   }
 
@@ -320,7 +293,8 @@ export default function KanbanPage() {
     if (!movimento) return;
 
     try {
-      const response = await fetch(`/api/producoes/${movimento.op.op}/finalizar`, {
+      // Finalizar produção atual
+      const response = await fetch(`/api/producoes/${movimento.producao.id}/finalizar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -370,6 +344,7 @@ export default function KanbanPage() {
     }
 
     try {
+      // Iniciar nova produção
       const response = await fetch(`/api/producoes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -443,7 +418,7 @@ export default function KanbanPage() {
         <div className="text-center py-12 bg-gray-50 rounded-lg">
           <p className="text-gray-500">Nenhuma coluna para exibir</p>
           <p className="text-sm text-gray-400 mt-2">
-            Verifique se existem estágios configurados e OPs cadastradas
+            Verifique se existem estágios configurados e produções ativas
           </p>
         </div>
       ) : (
@@ -462,11 +437,13 @@ export default function KanbanPage() {
                 cor={coluna.cor}
                 cards={coluna.cards}
               >
-                {coluna.cards.map((op: OP) => (
+                {coluna.cards.map((item: any) => (
                   <KanbanCard
-                    key={op.op}
-                    op={op}
-                    isDragging={activeId === op.op.toString()}
+                    key={item.op.op}
+                    op={item.op}
+                    producao={item.producao}
+                    estagio={item.estagio}
+                    isDragging={activeId === item.op.op.toString()}
                   />
                 ))}
               </KanbanColumn>
@@ -476,7 +453,9 @@ export default function KanbanPage() {
           <DragOverlay>
             {activeId ? (
               <KanbanCard
-                op={ops.find((o: OP) => o.op === Number(activeId))!}
+                op={itensKanban.find(i => i.op.op === Number(activeId))?.op!}
+                producao={itensKanban.find(i => i.op.op === Number(activeId))?.producao!}
+                estagio={itensKanban.find(i => i.op.op === Number(activeId))?.estagio!}
                 isDragging={true}
                 isOverlay
               />
@@ -485,117 +464,7 @@ export default function KanbanPage() {
         </DndContext>
       )}
 
-      {/* MODAIS (mantidos iguais) */}
-      <Dialog open={movimento?.etapa === 'finalizar'} onOpenChange={() => setMovimento(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Finalizar {movimento?.op.estagioAtual}</DialogTitle>
-            <DialogDescription>
-              Informe a metragem processada neste estágio
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="bg-gray-50 p-3 rounded-lg">
-              <p className="text-sm font-medium">OP {movimento?.op.op}</p>
-              <p className="text-xs text-gray-500 mt-1">{movimento?.op.produto}</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="metragem">Metragem Processada (m) *</Label>
-              <Input
-                id="metragem"
-                type="number"
-                step="0.01"
-                min="0"
-                value={metragemTemp}
-                onChange={(e) => setMetragemTemp(Number(e.target.value))}
-                placeholder="0,00"
-              />
-              <p className="text-xs text-gray-500">
-                Programado: {Number(movimento?.op.qtdeProgramado || 0).toLocaleString('pt-BR')} m
-              </p>
-            </div>
-          </div>
-          <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => setMovimento(null)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleConfirmarFinalizacao}>
-              Confirmar Finalização
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={movimento?.etapa === 'iniciar'} onOpenChange={() => setMovimento(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Iniciar {movimento?.estagioDestino.nome}</DialogTitle>
-            <DialogDescription>
-              Selecione a máquina e informe se é reprocesso
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="bg-gray-50 p-3 rounded-lg">
-              <p className="text-sm font-medium">OP {movimento?.op.op}</p>
-              <p className="text-xs text-gray-500">{movimento?.op.produto}</p>
-            </div>
-            <div className="space-y-2">
-              <Label>Máquina *</Label>
-              {maquinasDisponiveis.length === 0 ? (
-                <p className="text-sm text-yellow-600 bg-yellow-50 p-3 rounded-lg">
-                  Nenhuma máquina disponível para este estágio
-                </p>
-              ) : (
-                <RadioGroup 
-                  value={movimento?.maquinaId} 
-                  onValueChange={(value) => setMovimento(prev => prev ? {...prev, maquinaId: value} : null)}
-                >
-                  <div className="space-y-2">
-                    {maquinasDisponiveis.map((maquina) => (
-                      <div key={maquina.id} className="flex items-center space-x-2 border rounded-lg p-3">
-                        <RadioGroupItem value={maquina.id} id={maquina.id} />
-                        <Label htmlFor={maquina.id} className="flex-1 cursor-pointer">
-                          <div className="font-medium">{maquina.nome}</div>
-                          <div className="text-xs text-gray-500">Código: {maquina.codigo}</div>
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </RadioGroup>
-              )}
-            </div>
-            <div className="flex items-start space-x-2 pt-2">
-              <Checkbox
-                id="reprocesso"
-                checked={movimento?.isReprocesso || false}
-                onCheckedChange={(checked) => 
-                  setMovimento(prev => prev ? {...prev, isReprocesso: checked as boolean} : null)
-                }
-                className="mt-1"
-              />
-              <div className="space-y-1">
-                <Label htmlFor="reprocesso" className="text-sm font-medium">
-                  🔄 É reprocesso?
-                </Label>
-                <p className="text-xs text-gray-500">
-                  Marque se este produto já passou por este estágio
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => setMovimento(null)}>
-              Cancelar
-            </Button>
-            <Button 
-              onClick={handleConfirmarInicio}
-              disabled={!movimento?.maquinaId || maquinasDisponiveis.length === 0}
-            >
-              Iniciar Produção
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* MODAIS... */}
     </div>
   );
 }
