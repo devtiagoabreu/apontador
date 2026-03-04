@@ -31,6 +31,7 @@ type DashboardStats = {
   paradas_ativas: number;
   paradas_hoje: number;
   metragem_total_hoje: number;
+  metragem_produzida_total_hoje: number;
   tempo_total_producao_hoje: number;
   tempo_total_paradas_hoje: number;
 };
@@ -79,6 +80,12 @@ export default async function DashboardPage() {
         FROM producoes 
         WHERE DATE(data_fim) = CURRENT_DATE
       ), 0) as metragem_total_hoje,
+
+       COALESCE((
+        SELECT COALESCE(SUM(qtde_produzida::numeric), 0) 
+        FROM ops 
+        WHERE DATE(data_ultimo_apontamento) = CURRENT_DATE
+      ), 0) as metragem_produzida_total_hoje,
       
       COALESCE((
         SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (data_fim - data_inicio))/60), 0)
@@ -197,7 +204,7 @@ export default async function DashboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Metragem Produzida</CardTitle>
+            <CardTitle className="text-sm font-medium">Metragem Processada</CardTitle>
             <BarChart3 className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
@@ -207,11 +214,11 @@ export default async function DashboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Eficiência Global</CardTitle>
+            <CardTitle className="text-sm font-medium">Matragem Produzida</CardTitle>
             <Clock className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{eficienciaGlobal}%</div>
+            <div className="text-2xl font-bold">{(stats?.metragem_produzida_total_hoje ?? 0).toLocaleString('pt-BR')} m</div>
           </CardContent>
         </Card>
       </div>
