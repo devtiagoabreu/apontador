@@ -150,8 +150,18 @@ https://chat.deepseek.com/share/i76mazgjla0gb74ric
 
 ## 🚀 Commit 16: Criar tabela paradas_maquina (Backend + Frontend) --> feat: criar módulo de paradas de máquina em tabela separada
 
-Schema:	paradas-maquina.ts com campos específicos
-Migration:	Cria tabela com índices
-API:	CRUD completo com GET, POST e finalizar
-Desktop:	Lista com ações e modal
-Mobile:	Interface simplificada para operadores
+✅ Schema:	paradas-maquina.ts com campos específicos
+✅ Migration:	Cria tabela com índices
+✅ API:	CRUD completo com GET, POST e finalizar
+✅ Desktop:	Lista com ações e modal
+✅ Mobile:	Interface simplificada para operadores
+
+## 📋 Commit 17: feat: melhorar dashboard com métricas reais de produção
+
+✅ Substitui tabela apontamentos por producoes
+✅ Adiciona contadores de máquinas por status
+✅ Adiciona operadores ativos no momento
+✅ Adiciona métricas do dia (produções, paradas, metragem)
+✅ Adiciona cálculo de eficiência global
+✅ Adiciona cards clicáveis para status das OPs
+✅ Adiciona links rápidos para outras seções"
