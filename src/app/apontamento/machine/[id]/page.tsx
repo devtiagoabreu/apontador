@@ -84,7 +84,7 @@ export default async function MachinePage({ params }: { params: { id: string } }
         sql`${ops.status} != 'CANCELADA'`
       )
     )
-    .limit(20);
+    .limit(100);
 
   return (
     <div className="p-4 space-y-4">
