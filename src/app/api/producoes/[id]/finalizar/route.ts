@@ -61,7 +61,7 @@ async function determinarStatusOP(opId: number, tx: any): Promise<string> {
 
     console.log('📅 Último apontamento:', ultimoApontamento.id);
 
-    // 🔴 ALTERAÇÃO AQUI: Buscar estágio de FINALIZAR (código 30)
+    // Buscar estágio de FINALIZAR (código 30)
     const estagioFinalizar = await tx.query.estagios.findFirst({
       where: eq(estagios.codigo, '30'),
     });
@@ -165,7 +165,7 @@ export async function POST(
         throw new Error('Estágio não encontrado');
       }
 
-      // 4. 🔴 ALTERAÇÃO AQUI: Verificar se é FINALIZAR (código 30) em vez de REVISÃO
+      // 4. Verificar se é FINALIZAR (código 30)
       const estagioFinalizar = await tx.query.estagios.findFirst({
         where: eq(estagios.codigo, '30'),
       });
@@ -176,11 +176,12 @@ export async function POST(
       console.log('📦 OP ID:', producao.opId);
       console.log('📦 É FINALIZAR?', isFinalizar);
       console.log('📦 Estágio atual:', estagioAtual.nome);
+      console.log('📦 Máquina atual da produção:', producao.maquinaId);
 
       let updateResult;
 
       if (isFinalizar) {
-        // 🔴 ALTERAÇÃO AQUI: Agora é FINALIZAR, não REVISÃO
+        // É FINALIZAR - finalizar OP
         console.log('🏁 FINALIZAR - FINALIZANDO OP');
         updateResult = await tx
           .update(ops)
@@ -198,22 +199,28 @@ export async function POST(
         
         console.log('✅ OP FINALIZADA');
       } else {
-        // NÃO É FINALIZAR - limpar estágio e máquina (qualquer outro estágio, incluindo REVISÃO)
-        console.log('➡️ FINALIZOU ESTÁGIO - VOLTANDO PARA NENHUM');
+        // 🔴 NÃO É FINALIZAR - MANTER o estágio e máquina atuais
+        // Só atualiza status e dataUltimoApontamento
+        console.log('➡️ FINALIZOU ESTÁGIO - MANTENDO ESTÁGIO/MÁQUINA PARA RASTREABILIDADE');
+        
+        // Buscar a máquina usada nesta produção
+        const maquinaUsada = await tx.query.maquinas.findFirst({
+          where: eq(maquinas.id, producao.maquinaId),
+        });
+
         updateResult = await tx
           .update(ops)
           .set({
             status: 'EM_ANDAMENTO',
-            codEstagioAtual: '00',
-            estagioAtual: 'NENHUM',
-            codMaquinaAtual: '00',
-            maquinaAtual: 'NENHUMA',
+            // 🔴 IMPORTANTE: NÃO ALTERA codEstagioAtual, estagioAtual, codMaquinaAtual, maquinaAtual
+            // Mantém os valores do último estágio finalizado
             dataUltimoApontamento: agora,
           })
           .where(eq(ops.op, producao.opId))
           .returning();
         
-        console.log('✅ OP voltou para NENHUM/NENHUMA');
+        console.log('✅ OP manteve estágio:', updateResult[0].estagioAtual);
+        console.log('✅ OP manteve máquina:', updateResult[0].maquinaAtual);
       }
 
       console.log('✅ UPDATE RESULT:', updateResult);
@@ -221,16 +228,18 @@ export async function POST(
       // 5. Determinar o status correto da OP baseado em TODOS os apontamentos
       const novoStatus = await determinarStatusOP(producao.opId, tx);
       
-      // 6. Atualizar status da OP (reforço)
-      await tx
-        .update(ops)
-        .set({
-          status: novoStatus,
-          dataUltimoApontamento: agora,
-        })
-        .where(eq(ops.op, producao.opId));
+      // 6. Atualizar status da OP (reforço) - se necessário
+      if (novoStatus !== updateResult[0].status) {
+        await tx
+          .update(ops)
+          .set({
+            status: novoStatus,
+            dataUltimoApontamento: agora,
+          })
+          .where(eq(ops.op, producao.opId));
+      }
 
-      console.log(`✅ Status da OP atualizado para: ${novoStatus}`);
+      console.log(`✅ Status da OP: ${novoStatus}`);
 
       // 7. Liberar máquina
       await tx
