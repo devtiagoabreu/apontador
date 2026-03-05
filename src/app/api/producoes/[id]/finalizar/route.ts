@@ -6,7 +6,7 @@ import { producoesTable } from '@/lib/db/schema/producoes';
 import { maquinas } from '@/lib/db/schema/maquinas';
 import { ops } from '@/lib/db/schema/ops';
 import { estagios } from '@/lib/db/schema/estagios';
-import { eq, sql } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';  // ✅ AND adicionado aqui
 import { z } from 'zod';
 
 const finalizarSchema = z.object({
@@ -199,20 +199,13 @@ export async function POST(
         
         console.log('✅ OP FINALIZADA');
       } else {
-        // 🔴 NÃO É FINALIZAR - MANTER o estágio e máquina atuais
-        // Só atualiza status e dataUltimoApontamento
+        // NÃO É FINALIZAR - MANTER o estágio e máquina atuais
         console.log('➡️ FINALIZOU ESTÁGIO - MANTENDO ESTÁGIO/MÁQUINA PARA RASTREABILIDADE');
         
-        // Buscar a máquina usada nesta produção
-        const maquinaUsada = await tx.query.maquinas.findFirst({
-          where: eq(maquinas.id, producao.maquinaId),
-        });
-
         updateResult = await tx
           .update(ops)
           .set({
             status: 'EM_ANDAMENTO',
-            // 🔴 IMPORTANTE: NÃO ALTERA codEstagioAtual, estagioAtual, codMaquinaAtual, maquinaAtual
             // Mantém os valores do último estágio finalizado
             dataUltimoApontamento: agora,
           })
@@ -241,16 +234,35 @@ export async function POST(
 
       console.log(`✅ Status da OP: ${novoStatus}`);
 
-      // 7. Liberar máquina
-      await tx
-        .update(maquinas)
-        .set({
-          status: 'DISPONIVEL',
-          updatedAt: agora,
-        })
-        .where(eq(maquinas.id, producao.maquinaId));
+      // 🔴 NOVA LÓGICA: Verificar se existem outras produções ativas na mesma máquina
+      console.log('🔍 Verificando se existem outras produções ativas na máquina...');
+      
+      const outrasProducoesAtivas = await tx
+        .select()
+        .from(producoesTable)
+        .where(
+          and(
+            eq(producoesTable.maquinaId, producao.maquinaId),
+            sql`${producoesTable.dataFim} IS NULL`,
+            sql`${producoesTable.id} != ${params.id}` // diferente da produção atual
+          )
+        );
 
-      console.log('✅ Máquina liberada');
+      if (outrasProducoesAtivas.length === 0) {
+        // Não há mais produções ativas na máquina - liberar
+        console.log('✅ Nenhuma outra produção ativa - liberando máquina');
+        await tx
+          .update(maquinas)
+          .set({
+            status: 'DISPONIVEL',
+            updatedAt: agora,
+          })
+          .where(eq(maquinas.id, producao.maquinaId));
+        console.log('✅ Máquina liberada');
+      } else {
+        // Ainda há produções ativas - manter máquina em processo
+        console.log(`ℹ️ Ainda existem ${outrasProducoesAtivas.length} produção(ões) ativa(s) na máquina - mantendo status EM_PROCESSO`);
+      }
     });
 
     console.log('🎉 Produção finalizada com sucesso!');
