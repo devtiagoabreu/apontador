@@ -276,16 +276,7 @@ export async function POST(request: Request) {
     }
     console.log('✅ Máquina encontrada:', maquina.nome, maquina.codigo);
 
-    // 6. Verificar se máquina está disponível
-    console.log('🔍 Verificando status da máquina:', maquina.status);
-    if (maquina.status !== 'DISPONIVEL') {
-      console.log('❌ Máquina não está disponível. Status:', maquina.status);
-      return NextResponse.json(
-        { error: 'Máquina não está disponível' },
-        { status: 400 }
-      );
-    }
-    console.log('✅ Máquina disponível');
+    // 🔴 REMOVIDO: Verificação de status da máquina (agora pode estar em processo)
 
     // 7. Verificar se já existe produção ativa para esta OP
     console.log('🔍 Verificando se OP já tem produção ativa...');
@@ -304,22 +295,7 @@ export async function POST(request: Request) {
     }
     console.log('✅ OK - Nenhuma produção ativa para esta OP');
 
-    // 8. Verificar se já existe produção ativa para esta máquina
-    console.log('🔍 Verificando se máquina já tem produção ativa...');
-    const producaoAtivaMaquina = await db.execute(sql`
-      SELECT id FROM producoes 
-      WHERE maquina_id = ${validated.maquinaId} 
-      AND data_fim IS NULL
-    `);
-
-    if (producaoAtivaMaquina.rows.length > 0) {
-      console.log('❌ Máquina já possui produção ativa:', producaoAtivaMaquina.rows[0].id);
-      return NextResponse.json(
-        { error: 'Máquina já está em produção' },
-        { status: 400 }
-      );
-    }
-    console.log('✅ OK - Nenhuma produção ativa para esta máquina');
+    // 🔴 REMOVIDO: Verificação de produção ativa na máquina (agora permite múltiplas)
 
     // 9. Verificar se estágio existe
     console.log('🔍 Buscando estágio:', validated.estagioId);
@@ -373,19 +349,23 @@ export async function POST(request: Request) {
       );
     }
 
-    // 12. Atualizar status da máquina
-    console.log('🔄 Atualizando status da máquina...');
-    try {
-      await db
-        .update(maquinas)
-        .set({ 
-          status: 'EM_PROCESSO',
-          updatedAt: agora 
-        })
-        .where(eq(maquinas.id, validated.maquinaId));
-      console.log('✅ Status da máquina atualizado para EM_PROCESSO');
-    } catch (updateError) {
-      console.error('❌ Erro ao atualizar máquina:', updateError);
+    // 12. Atualizar status da máquina (se estiver disponível)
+    console.log('🔄 Verificando status da máquina para atualização...');
+    if (maquina.status === 'DISPONIVEL') {
+      try {
+        await db
+          .update(maquinas)
+          .set({ 
+            status: 'EM_PROCESSO',
+            updatedAt: agora 
+          })
+          .where(eq(maquinas.id, validated.maquinaId));
+        console.log('✅ Status da máquina atualizado para EM_PROCESSO');
+      } catch (updateError) {
+        console.error('❌ Erro ao atualizar máquina:', updateError);
+      }
+    } else {
+      console.log('ℹ️ Máquina já estava em processo, mantendo status');
     }
 
     // 🔥 13. ATUALIZAR A OP COM ESTÁGIO E MÁQUINA SELECIONADOS
