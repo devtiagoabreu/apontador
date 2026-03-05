@@ -61,19 +61,19 @@ async function determinarStatusOP(opId: number, tx: any): Promise<string> {
 
     console.log('📅 Último apontamento:', ultimoApontamento.id);
 
-    // Buscar estágio de revisão
-    const estagioRevisao = await tx.query.estagios.findFirst({
-      where: eq(estagios.nome, 'REVISÃO'),
+    // 🔴 ALTERAÇÃO AQUI: Buscar estágio de FINALIZAR (código 30)
+    const estagioFinalizar = await tx.query.estagios.findFirst({
+      where: eq(estagios.codigo, '30'),
     });
 
-    if (!estagioRevisao) {
-      console.log('⚠️ Estágio de revisão não encontrado');
+    if (!estagioFinalizar) {
+      console.log('⚠️ Estágio de finalizar não encontrado');
       return 'EM_ANDAMENTO';
     }
 
-    // Verificar se o último apontamento é de revisão
-    if (ultimoApontamento.estagioId === estagioRevisao.id) {
-      console.log('🏁 Último apontamento é REVISÃO -> FINALIZADA');
+    // Verificar se o último apontamento é de finalizar
+    if (ultimoApontamento.estagioId === estagioFinalizar.id) {
+      console.log('🏁 Último apontamento é FINALIZAR -> FINALIZADA');
       return 'FINALIZADA';
     }
   }
@@ -165,23 +165,23 @@ export async function POST(
         throw new Error('Estágio não encontrado');
       }
 
-      // 4. Verificar se é revisão
-      const estagioRevisao = await tx.query.estagios.findFirst({
-        where: eq(estagios.nome, 'REVISÃO'),
+      // 4. 🔴 ALTERAÇÃO AQUI: Verificar se é FINALIZAR (código 30) em vez de REVISÃO
+      const estagioFinalizar = await tx.query.estagios.findFirst({
+        where: eq(estagios.codigo, '30'),
       });
 
-      const isRevisao = estagioAtual.id === estagioRevisao?.id;
+      const isFinalizar = estagioAtual.id === estagioFinalizar?.id;
 
       console.log('🔥 ATUALIZANDO OP - FINALIZAR PRODUÇÃO');
       console.log('📦 OP ID:', producao.opId);
-      console.log('📦 É revisão?', isRevisao);
+      console.log('📦 É FINALIZAR?', isFinalizar);
       console.log('📦 Estágio atual:', estagioAtual.nome);
 
       let updateResult;
 
-      if (isRevisao) {
-        // É REVISÃO - finalizar OP
-        console.log('🏁 REVISÃO - FINALIZANDO OP');
+      if (isFinalizar) {
+        // 🔴 ALTERAÇÃO AQUI: Agora é FINALIZAR, não REVISÃO
+        console.log('🏁 FINALIZAR - FINALIZANDO OP');
         updateResult = await tx
           .update(ops)
           .set({
@@ -198,7 +198,7 @@ export async function POST(
         
         console.log('✅ OP FINALIZADA');
       } else {
-        // NÃO É REVISÃO - limpar estágio e máquina
+        // NÃO É FINALIZAR - limpar estágio e máquina (qualquer outro estágio, incluindo REVISÃO)
         console.log('➡️ FINALIZOU ESTÁGIO - VOLTANDO PARA NENHUM');
         updateResult = await tx
           .update(ops)
