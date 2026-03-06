@@ -4,10 +4,10 @@ import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { maquinas } from '@/lib/db/schema/maquinas';
 import { ops } from '@/lib/db/schema/ops';
-import { producoesTable } from '@/lib/db/schema/producoes'; // ✅ Importar produções
+import { producoesTable } from '@/lib/db/schema/producoes';
 import { paradasMaquina } from '@/lib/db/schema/paradas-maquina';
 import { motivosParada } from '@/lib/db/schema/motivos-parada';
-import { estagios } from '@/lib/db/schema/estagios'; // ✅ Importar estágios
+import { estagios } from '@/lib/db/schema/estagios';
 import { eq, and, sql } from 'drizzle-orm';
 import { MobileCard } from '@/components/mobile/card';
 import { Button } from '@/components/ui/button';
@@ -34,7 +34,7 @@ export default async function MachinePage({ params }: { params: { id: string } }
     redirect('/apontamento');
   }
 
-  // 🔴 NOVO: Buscar TODAS as produções ativas nesta máquina
+  // Buscar TODAS as produções ativas nesta máquina
   const producoesAtivas = await db
     .select({
       id: producoesTable.id,
@@ -206,9 +206,9 @@ export default async function MachinePage({ params }: { params: { id: string } }
                   </p>
                 )}
                 
-                {/* Botões de ação para cada produção */}
+                {/* 🔴 BOTÃO CORRIGIDO - Agora aponta para a página correta */}
                 <div className="flex gap-2 mt-3">
-                  <Link href={`/apontamento/finalizar?producao=${producao.id}`} className="flex-1">
+                  <Link href={`/apontamento/producoes/finalizar?id=${producao.id}`} className="flex-1">
                     <Button size="sm" className="w-full" variant="default">
                       <CheckCircle className="mr-2 h-4 w-4" />
                       Finalizar
