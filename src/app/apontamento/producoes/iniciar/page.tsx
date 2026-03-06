@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { MobileCard } from '@/components/mobile/card';
 import { MobileHeader } from '@/components/mobile/header';
 import { MobileNav } from '@/components/mobile/nav';
-import { ArrowLeft, Play } from 'lucide-react';
+import { ArrowLeft, Play, Layers } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import {
   Select,
@@ -32,6 +32,7 @@ interface Maquina {
   nome: string;
   codigo: string;
   status: string;
+  producoesAtivas?: number; // 🔴 NOVO: contar produções ativas
 }
 
 interface Estagio {
@@ -60,7 +61,7 @@ export default function IniciarProducaoMobilePage() {
     try {
       const [opsRes, maquinasRes, estagiosRes] = await Promise.all([
         fetch('/api/ops?limit=1000'),
-        fetch('/api/maquinas'),
+        fetch('/api/maquinas'), // 🔴 SEM FILTRO - busca todas as máquinas
         fetch('/api/estagios?ativos=true'),
       ]);
 
@@ -74,8 +75,24 @@ export default function IniciarProducaoMobilePage() {
         return true;
       });
 
+      // 🔴 NOVO: Para cada máquina, contar produções ativas
+      const maquinasComContagem = await Promise.all(
+        (maquinasData || []).map(async (maquina: Maquina) => {
+          try {
+            const producoesRes = await fetch(`/api/producoes?ativas=true&maquinaId=${maquina.id}`);
+            const producoesData = await producoesRes.json();
+            return {
+              ...maquina,
+              producoesAtivas: producoesData.data?.length || 0
+            };
+          } catch {
+            return { ...maquina, producoesAtivas: 0 };
+          }
+        })
+      );
+
       setOps(opsDisponiveis);
-      setMaquinas(maquinasData.filter((m: Maquina) => m.status === 'DISPONIVEL'));
+      setMaquinas(maquinasComContagem);
       setEstagios(estagiosData);
     } catch (error) {
       toast({
@@ -134,6 +151,14 @@ export default function IniciarProducaoMobilePage() {
     }
   }
 
+  // 🔴 Função para obter o label da máquina com indicador de OPs ativas
+  function getMaquinaLabel(maquina: Maquina): string {
+    if (maquina.producoesAtivas && maquina.producoesAtivas > 0) {
+      return `${maquina.nome} (${maquina.producoesAtivas} OP${maquina.producoesAtivas > 1 ? 's' : ''} ativa${maquina.producoesAtivas > 1 ? 's' : ''})`;
+    }
+    return maquina.nome;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <MobileHeader user={{ nome: 'Operador', matricula: '123' }} />
@@ -167,7 +192,7 @@ export default function IniciarProducaoMobilePage() {
               </Select>
             </div>
 
-            {/* Máquina */}
+            {/* Máquina - 🔴 AGORA MOSTRA TODAS AS MÁQUINAS */}
             <div className="space-y-2">
               <Label>Máquina</Label>
               <Select value={selectedMaquina} onValueChange={setSelectedMaquina}>
@@ -175,13 +200,37 @@ export default function IniciarProducaoMobilePage() {
                   <SelectValue placeholder="Selecione a máquina" />
                 </SelectTrigger>
                 <SelectContent>
-                  {maquinas.map((maquina) => (
-                    <SelectItem key={maquina.id} value={maquina.id}>
-                      {maquina.nome}
-                    </SelectItem>
-                  ))}
+                  {maquinas.map((maquina) => {
+                    const temProducoes = maquina.producoesAtivas && maquina.producoesAtivas > 0;
+                    
+                    return (
+                      <SelectItem key={maquina.id} value={maquina.id}>
+                        <div className="flex items-center justify-between w-full gap-2">
+                          <span>{getMaquinaLabel(maquina)}</span>
+                          {temProducoes && (
+                            <span className="flex items-center gap-1 text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                              <Layers className="h-3 w-3" />
+                              {maquina.producoesAtivas}
+                            </span>
+                          )}
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            maquina.status === 'DISPONIVEL' 
+                              ? 'bg-green-100 text-green-700' 
+                              : maquina.status === 'EM_PROCESSO'
+                                ? 'bg-blue-100 text-blue-700'
+                                : 'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {maquina.status}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-gray-500 mt-1">
+                ✓ Máquinas com OPs ativas também podem ser selecionadas
+              </p>
             </div>
 
             {/* Estágio */}
