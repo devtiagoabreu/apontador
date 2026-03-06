@@ -1,68 +1,199 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { MobileCard } from '@/components/mobile/card';
-import { Plus, Clock, CheckCircle, Pause } from 'lucide-react';
-import { formatDate, formatNumber } from '@/lib/utils';
+import { ArrowLeft, Play, Search, Layers } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
+import { Suspense } from 'react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 
-interface Producao {
+interface Maquina {
   id: string;
-  opId: number;
-  maquinaId: string;
-  estagioId: string;
-  dataInicio: string;
-  op?: {
-    op: number;
-    produto: string;
-    carregado: number;
-    um: string;
-  };
-  maquina?: {
-    nome: string;
-    codigo: string;
-  };
-  estagio?: {
-    nome: string;
-    cor: string;
-  };
+  nome: string;
+  codigo: string;
+  status: string;
+  producoesAtivas?: number; // 🔴 NOVO: contar produções ativas
 }
 
-function getEstagioStyle(estagio: any) {
-  if (!estagio?.cor) {
-    return {
-      backgroundColor: '#f3f4f6',
-      color: '#374151',
-      border: '1px solid #e5e7eb'
-    };
-  }
-  return {
-    backgroundColor: `${estagio.cor}15`,
-    color: estagio.cor,
-    border: '1px solid transparent',
-    fontWeight: '500'
-  };
+interface OP {
+  op: number;
+  produto: string;
+  qtdeCarregado: number;
+  um: string;
+  status: string;
 }
 
-export default function ProducoesPage() {
-  const [producoes, setProducoes] = useState<Producao[]>([]);
-  const [loading, setLoading] = useState(true);
+interface Estagio {
+  id: string;
+  codigo: string;
+  nome: string;
+}
+
+function IniciarContent() {
+  const router = useRouter();
+  
+  const [loading, setLoading] = useState(false);
+  const [buscando, setBuscando] = useState(false);
+  const [opNumero, setOpNumero] = useState('');
+  const [op, setOp] = useState<OP | null>(null);
+  const [maquinas, setMaquinas] = useState<Maquina[]>([]);
+  const [estagios, setEstagios] = useState<Estagio[]>([]);
+  const [maquinaId, setMaquinaId] = useState<string>('');
+  const [estagioId, setEstagioId] = useState<string>('');
+  const [isReprocesso, setIsReprocesso] = useState(false);
+  const [carregandoDados, setCarregandoDados] = useState(true);
 
   useEffect(() => {
-    carregarProducoes();
+    carregarDadosIniciais();
   }, []);
 
-  async function carregarProducoes() {
+  async function carregarDadosIniciais() {
     try {
-      const response = await fetch('/api/producoes?ativas=true');
-      const data = await response.json();
-      setProducoes(data.data || []);
+      // 🔴 ALTERADO: Buscar TODAS as máquinas (não apenas disponíveis)
+      const [maquinasRes, estagiosRes] = await Promise.all([
+        fetch('/api/maquinas'), // SEM FILTRO de disponibilidade
+        fetch('/api/estagios?ativos=true'),
+      ]);
+
+      const maquinasData = await maquinasRes.json();
+      const estagiosData = await estagiosRes.json();
+
+      // 🔴 NOVO: Para cada máquina, contar produções ativas
+      const maquinasComContagem = await Promise.all(
+        maquinasData.map(async (maquina: Maquina) => {
+          try {
+            const producoesRes = await fetch(`/api/producoes?ativas=true&maquinaId=${maquina.id}`);
+            const producoesData = await producoesRes.json();
+            return {
+              ...maquina,
+              producoesAtivas: producoesData.data?.length || 0
+            };
+          } catch {
+            return { ...maquina, producoesAtivas: 0 };
+          }
+        })
+      );
+
+      setMaquinas(maquinasComContagem);
+      setEstagios(estagiosData);
     } catch (error) {
       toast({
         title: 'Erro',
-        description: 'Não foi possível carregar as produções',
+        description: 'Não foi possível carregar os dados',
+        variant: 'destructive',
+      });
+    } finally {
+      setCarregandoDados(false);
+    }
+  }
+
+  async function buscarOP() {
+    if (!opNumero) {
+      toast({
+        title: 'Atenção',
+        description: 'Digite o número da OP',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setBuscando(true);
+    try {
+      const response = await fetch(`/api/ops/${opNumero}`);
+      
+      if (!response.ok) {
+        throw new Error('OP não encontrada');
+      }
+
+      const data = await response.json();
+      
+      if (data.status === 'FINALIZADA' || data.status === 'CANCELADA') {
+        throw new Error('OP já finalizada ou cancelada');
+      }
+
+      setOp(data);
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: error instanceof Error ? error.message : 'Erro ao buscar OP',
+        variant: 'destructive',
+      });
+      setOp(null);
+    } finally {
+      setBuscando(false);
+    }
+  }
+
+  async function handleIniciar() {
+    if (!op) {
+      toast({
+        title: 'Erro',
+        description: 'Selecione uma OP',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!maquinaId) {
+      toast({
+        title: 'Erro',
+        description: 'Selecione uma máquina',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!estagioId) {
+      toast({
+        title: 'Erro',
+        description: 'Selecione um estágio',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch('/api/producoes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          opId: op.op,
+          maquinaId,
+          estagioId,
+          isReprocesso,
+          observacoes: '',
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao iniciar produção');
+      }
+
+      toast({
+        title: 'Sucesso',
+        description: 'Produção iniciada com sucesso',
+      });
+
+      router.push('/apontamento/producoes');
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: error instanceof Error ? error.message : 'Erro ao iniciar',
         variant: 'destructive',
       });
     } finally {
@@ -70,85 +201,191 @@ export default function ProducoesPage() {
     }
   }
 
+  if (carregandoDados) {
+    return (
+      <div className="p-4">
+        <div className="flex items-center gap-3">
+          <Link href="/apontamento/producoes">
+            <Button variant="ghost" size="icon" className="h-10 w-10">
+              <ArrowLeft className="h-6 w-6" />
+            </Button>
+          </Link>
+          <h1 className="text-xl font-semibold">Carregando...</h1>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-semibold">Produções</h1>
-        <Link href="/apontamento/producoes/iniciar">
-          <Button variant="outline" size="sm">
-            <Plus className="h-4 w-4 mr-2" /> Nova
+    <div className="p-4 space-y-4">
+      {/* Cabeçalho */}
+      <div className="flex items-center gap-3">
+        <Link href="/apontamento/producoes">
+          <Button variant="ghost" size="icon" className="h-10 w-10">
+            <ArrowLeft className="h-6 w-6" />
           </Button>
         </Link>
+        <h1 className="text-xl font-semibold">Iniciar Produção</h1>
       </div>
 
-      {loading ? (
-        <div className="text-center py-8">Carregando...</div>
-      ) : producoes.length === 0 ? (
-        <MobileCard className="text-center py-8 text-gray-500">
-          Nenhuma produção em andamento
-        </MobileCard>
-      ) : (
-        <div className="space-y-3">
-          {producoes.map((prod) => {
-            const estiloEstagio = getEstagioStyle(prod.estagio);
+      {/* Buscar OP */}
+      <MobileCard>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="op">Número da OP</Label>
+            <div className="flex gap-2">
+              <Input
+                id="op"
+                type="number"
+                value={opNumero}
+                onChange={(e) => setOpNumero(e.target.value)}
+                placeholder="Digite o número da OP"
+                className="flex-1"
+              />
+              <Button onClick={buscarOP} disabled={buscando} variant="outline">
+                <Search className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
 
-            return (
-              <MobileCard key={prod.id}>
-                <div className="space-y-2">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-medium">OP {prod.op?.op || '---'}</p>
-                      <p className="text-sm text-gray-500 line-clamp-2">
-                        {prod.op?.produto || 'Produto não especificado'}
-                      </p>
-                    </div>
-                    <span 
-                      className="text-xs px-3 py-1 rounded-full font-medium"
-                      style={estiloEstagio}
-                    >
-                      {prod.estagio?.nome || 'Sem estágio'}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <span className="text-gray-500">Máquina:</span>
-                      <p className="font-medium">{prod.maquina?.nome || '-'}</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Carregado:</span>
-                      <p className="font-medium">
-                        {formatNumber(prod.op?.carregado || 0)} {prod.op?.um || 'm'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1 text-xs text-gray-400">
-                    <Clock className="h-3 w-3" />
-                    {prod.dataInicio ? formatDate(prod.dataInicio) : '-'}
-                  </div>
-
-                  <div className="flex gap-2 pt-2">
-                    <Link href={`/apontamento/producoes/finalizar?id=${prod.id}`} className="flex-1">
-                      <Button size="sm" className="w-full bg-green-600 hover:bg-green-700">
-                        <CheckCircle className="h-4 w-4 mr-1" /> Finalizar
-                      </Button>
-                    </Link>
-                    <Link 
-                      href={`/apontamento/parada?maquinaId=${prod.maquinaId}&opId=${prod.opId}`} 
-                      className="flex-1"
-                    >
-                      <Button size="sm" variant="outline" className="w-full text-yellow-600">
-                        <Pause className="h-4 w-4 mr-1" /> Parada
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
-              </MobileCard>
-            );
-          })}
+          {op && (
+            <div className="bg-blue-50 p-3 rounded-lg space-y-1">
+              <p className="font-medium">OP {op.op}</p>
+              <p className="text-sm text-gray-600">{op.produto}</p>
+              <p className="text-xs text-gray-500">
+                Programado: {op.qtdeCarregado} {op.um}
+              </p>
+            </div>
+          )}
         </div>
+      </MobileCard>
+
+      {/* Seleção de Máquina */}
+      {op && (
+        <MobileCard>
+          <div className="space-y-4">
+            <Label>Máquina</Label>
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
+              {maquinas.map((maquina) => {
+                const isSelected = maquinaId === maquina.id;
+                const temProducoes = maquina.producoesAtivas && maquina.producoesAtivas > 0;
+                
+                return (
+                  <div
+                    key={maquina.id}
+                    className={`border rounded-lg p-3 cursor-pointer transition-colors ${
+                      isSelected 
+                        ? 'border-blue-500 bg-blue-50' 
+                        : temProducoes
+                          ? 'border-purple-300 bg-purple-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    onClick={() => setMaquinaId(maquina.id)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <p className="font-medium">{maquina.nome}</p>
+                        <p className="text-xs text-gray-500">Código: {maquina.codigo}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {temProducoes && (
+                          <span className="flex items-center gap-1 text-xs bg-purple-200 text-purple-700 px-2 py-1 rounded-full">
+                            <Layers className="h-3 w-3" />
+                            {maquina.producoesAtivas} OP(s)
+                          </span>
+                        )}
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          maquina.status === 'DISPONIVEL' 
+                            ? 'bg-green-100 text-green-700' 
+                            : maquina.status === 'EM_PROCESSO'
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-yellow-100 text-yellow-700'
+                        }`}>
+                          {maquina.status}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </MobileCard>
+      )}
+
+      {/* Seleção de Estágio */}
+      {op && maquinaId && (
+        <MobileCard>
+          <div className="space-y-4">
+            <Label htmlFor="estagio">Estágio</Label>
+            <Select value={estagioId} onValueChange={setEstagioId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o estágio" />
+              </SelectTrigger>
+              <SelectContent>
+                {estagios.map((estagio) => (
+                  <SelectItem key={estagio.id} value={estagio.id}>
+                    {estagio.codigo} - {estagio.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </MobileCard>
+      )}
+
+      {/* Reprocesso */}
+      {op && maquinaId && estagioId && (
+        <MobileCard>
+          <div className="space-y-4">
+            <div className="flex items-start space-x-2">
+              <Checkbox
+                id="reprocesso"
+                checked={isReprocesso}
+                onCheckedChange={(checked) => setIsReprocesso(checked as boolean)}
+                className="mt-1"
+              />
+              <div className="space-y-1">
+                <Label htmlFor="reprocesso" className="text-sm font-medium">
+                  🔄 É reprocesso?
+                </Label>
+                <p className="text-xs text-gray-500">
+                  Marque se este produto já passou por este estágio anteriormente
+                </p>
+              </div>
+            </div>
+          </div>
+        </MobileCard>
+      )}
+
+      {/* Botão Iniciar */}
+      {op && maquinaId && estagioId && (
+        <Button 
+          className="w-full" 
+          onClick={handleIniciar}
+          disabled={loading}
+        >
+          <Play className="mr-2 h-4 w-4" />
+          {loading ? 'Iniciando...' : 'Iniciar Produção'}
+        </Button>
       )}
     </div>
+  );
+}
+
+export default function IniciarProducaoPage() {
+  return (
+    <Suspense fallback={
+      <div className="p-4">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" className="h-10 w-10">
+            <ArrowLeft className="h-6 w-6" />
+          </Button>
+          <h1 className="text-xl font-semibold">Carregando...</h1>
+        </div>
+      </div>
+    }>
+      <IniciarContent />
+    </Suspense>
   );
 }
