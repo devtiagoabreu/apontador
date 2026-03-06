@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { ArrowLeft, Play, Pause, CheckCircle, PlayCircle, Layers } from 'lucide-react';
 
-// FORÇA A PÁGINA A SER SEMPRE ATUALIZADA (SEM CACHE)
+// FORÇA A PÁGINA A SER SEMPRE ATUALIZADA (SEM CACHE)/
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
 
