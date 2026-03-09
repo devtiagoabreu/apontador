@@ -13,7 +13,13 @@ import {
   ChevronRight,
   CheckCircle,
   Pencil,
-  Trash2
+  Trash2,
+  Download,
+  BarChart3,
+  FileText,
+  FileSpreadsheet,
+  Search,
+  X
 } from 'lucide-react';
 import { formatDate, formatNumber } from '@/lib/utils';
 import {
@@ -21,6 +27,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import { z } from 'zod';
 import {
@@ -33,6 +40,26 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts';
 
 // Interfaces
 interface Producao {
@@ -121,6 +148,23 @@ interface Filtros {
   ativas?: string;
   dataInicio?: string;
   dataFim?: string;
+  search?: string;
+}
+
+interface SortConfig {
+  key: string;
+  direction: 'asc' | 'desc';
+}
+
+interface RelatorioLean {
+  totalProducoes: number;
+  totalMetragem: number;
+  tempoTotal: number;
+  eficienciaMedia: number;
+  producoesPorEstagio: { nome: string; cor: string; quantidade: number; metragem: number }[];
+  producoesPorMaquina: { nome: string; quantidade: number; metragem: number }[];
+  producoesPorOperador: { nome: string; quantidade: number; metragem: number }[];
+  producoesPorDia: { data: string; quantidade: number; metragem: number }[];
 }
 
 // Schema para iniciar produção
@@ -155,82 +199,13 @@ const editarProducaoSchema = z.object({
   isReprocesso: z.boolean().optional(),
 });
 
-// Colunas da tabela - AGORA COM CARREGADO
-const columns = [
-  {
-    key: 'dataFim' as const,
-    title: 'Status',
-    format: (value: string | null) => (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-        !value ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
-      }`}>
-        {!value ? '⚙️ Em Andamento' : '✅ Finalizada'}
-      </span>
-    )
-  },
-  {
-    key: 'op' as const,
-    title: 'OP',
-    format: (value: any) => value?.op || '-'
-  },
-  {
-    key: 'maquina' as const,
-    title: 'Máquina',
-    format: (value: any) => value?.nome || '-'
-  },
-  {
-    key: 'estagio' as const,
-    title: 'Estágio',
-    format: (value: any) => {
-      if (!value) return '-';
-      return (
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: value.cor }} />
-          <span>{value.nome}</span>
-        </div>
-      );
-    }
-  },
-  {
-    key: 'operadorInicio' as const,
-    title: 'Operador',
-    format: (value: any) => value?.nome || '-'
-  },
-  {
-    key: 'dataInicio' as const,
-    title: 'Início',
-    format: (value: string) => formatDate(value)
-  },
-  {
-    key: 'dataFim' as const,
-    title: 'Fim',
-    format: (value: string | null) => value ? formatDate(value) : 'Em andamento'
-  },
-  {
-    key: 'metragemProgramada' as const,
-    title: 'Programado',
-    format: (value: number) => value ? formatNumber(value) : '-'
-  },
-  {
-    key: 'op' as const, // Usando a relação para acessar carregado
-    title: 'Carregado',
-    format: (value: any) => value?.carregado ? formatNumber(value.carregado) : '-'
-  },
-  {
-    key: 'metragemProcessada' as const,
-    title: 'Processado',
-    format: (value: number) => value ? formatNumber(value) : '-'
-  },
-  {
-    key: 'isReprocesso' as const,
-    title: 'Reprocesso',
-    format: (value: boolean) => value ? '🔄 Sim' : '✅ Não'
-  },
-];
+// Cores para gráficos
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
 export default function ProducoesPage() {
   // States
   const [producoes, setProducoes] = useState<Producao[]>([]);
+  const [producoesFiltradas, setProducoesFiltradas] = useState<Producao[]>([]);
   const [ops, setOps] = useState<OP[]>([]);
   const [maquinas, setMaquinas] = useState<Maquina[]>([]);
   const [operadores, setOperadores] = useState<Usuario[]>([]);
@@ -242,14 +217,18 @@ export default function ProducoesPage() {
     totalPages: 0
   });
   const [filtros, setFiltros] = useState<Filtros>({});
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'dataInicio', direction: 'desc' });
   const [loading, setLoading] = useState(false);
   const [modalIniciarOpen, setModalIniciarOpen] = useState(false);
   const [modalFinalizarOpen, setModalFinalizarOpen] = useState(false);
   const [modalEditarOpen, setModalEditarOpen] = useState(false);
   const [filtrosOpen, setFiltrosOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [relatorioOpen, setRelatorioOpen] = useState(false);
   const [selectedProducao, setSelectedProducao] = useState<Producao | null>(null);
   const [formData, setFormData] = useState<any>({});
+  const [searchTerm, setSearchTerm] = useState('');
+  const [relatorio, setRelatorio] = useState<RelatorioLean | null>(null);
 
   // Carregar dados iniciais
   useEffect(() => {
@@ -259,6 +238,68 @@ export default function ProducoesPage() {
   useEffect(() => {
     carregarProducoes(1);
   }, [filtros]);
+
+  // Filtrar e ordenar localmente quando os dados mudam
+  useEffect(() => {
+    let dadosFiltrados = [...producoes];
+    
+    // Filtro de pesquisa global
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      dadosFiltrados = dadosFiltrados.filter(p => 
+        p.op?.op.toString().includes(term) ||
+        p.op?.produto.toLowerCase().includes(term) ||
+        p.maquina?.nome.toLowerCase().includes(term) ||
+        p.estagio?.nome.toLowerCase().includes(term) ||
+        p.operadorInicio?.nome.toLowerCase().includes(term)
+      );
+    }
+
+    // Ordenação
+    dadosFiltrados.sort((a, b) => {
+      let aVal: any;
+      let bVal: any;
+
+      switch (sortConfig.key) {
+        case 'op':
+          aVal = a.op?.op;
+          bVal = b.op?.op;
+          break;
+        case 'maquina':
+          aVal = a.maquina?.nome;
+          bVal = b.maquina?.nome;
+          break;
+        case 'estagio':
+          aVal = a.estagio?.nome;
+          bVal = b.estagio?.nome;
+          break;
+        case 'operadorInicio':
+          aVal = a.operadorInicio?.nome;
+          bVal = b.operadorInicio?.nome;
+          break;
+        case 'metragemProgramada':
+          aVal = a.metragemProgramada;
+          bVal = b.metragemProgramada;
+          break;
+        case 'metragemProcessada':
+          aVal = a.metragemProcessada;
+          bVal = b.metragemProcessada;
+          break;
+        default:
+          aVal = a[sortConfig.key as keyof Producao];
+          bVal = b[sortConfig.key as keyof Producao];
+      }
+
+      if (aVal === null || aVal === undefined) aVal = '';
+      if (bVal === null || bVal === undefined) bVal = '';
+
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    setProducoesFiltradas(dadosFiltrados);
+  }, [producoes, searchTerm, sortConfig]);
 
   async function carregarDados() {
     try {
@@ -308,6 +349,125 @@ export default function ProducoesPage() {
     }
   }
 
+  // Gerar relatório lean com os dados filtrados
+  function gerarRelatorio() {
+    const dados = producoesFiltradas;
+    
+    // Totais
+    const totalProducoes = dados.length;
+    const totalMetragem = dados.reduce((acc, p) => acc + (p.metragemProcessada || 0), 0);
+    
+    // Calcular tempo total em minutos
+    const tempoTotal = dados.reduce((acc, p) => {
+      if (p.dataFim && p.dataInicio) {
+        const inicio = new Date(p.dataInicio).getTime();
+        const fim = new Date(p.dataFim).getTime();
+        return acc + (fim - inicio) / (1000 * 60);
+      }
+      return acc;
+    }, 0);
+
+    // Eficiência média (metragem por minuto)
+    const eficienciaMedia = tempoTotal > 0 ? (totalMetragem / tempoTotal) * 60 : 0;
+
+    // Produções por estágio
+    const producoesPorEstagio = estagios.map(estagio => {
+      const producoesEstagio = dados.filter(p => p.estagioId === estagio.id);
+      return {
+        nome: estagio.nome,
+        cor: estagio.cor,
+        quantidade: producoesEstagio.length,
+        metragem: producoesEstagio.reduce((acc, p) => acc + (p.metragemProcessada || 0), 0),
+      };
+    }).filter(e => e.quantidade > 0);
+
+    // Produções por máquina
+    const producoesPorMaquina = maquinas.map(maquina => {
+      const producoesMaquina = dados.filter(p => p.maquinaId === maquina.id);
+      return {
+        nome: maquina.nome,
+        quantidade: producoesMaquina.length,
+        metragem: producoesMaquina.reduce((acc, p) => acc + (p.metragemProcessada || 0), 0),
+      };
+    }).filter(m => m.quantidade > 0);
+
+    // Produções por operador
+    const producoesPorOperador = operadores.map(operador => {
+      const producoesOperador = dados.filter(p => p.operadorInicioId === operador.id);
+      return {
+        nome: operador.nome,
+        quantidade: producoesOperador.length,
+        metragem: producoesOperador.reduce((acc, p) => acc + (p.metragemProcessada || 0), 0),
+      };
+    }).filter(o => o.quantidade > 0);
+
+    // Produções por dia
+    const producoesPorDiaMap = new Map();
+    dados.forEach(p => {
+      if (p.dataFim) {
+        const data = p.dataFim.split('T')[0];
+        if (!producoesPorDiaMap.has(data)) {
+          producoesPorDiaMap.set(data, { quantidade: 0, metragem: 0 });
+        }
+        const item = producoesPorDiaMap.get(data);
+        item.quantidade++;
+        item.metragem += p.metragemProcessada || 0;
+      }
+    });
+    
+    const producoesPorDia = Array.from(producoesPorDiaMap.entries())
+      .map(([data, valores]) => ({
+        data,
+        quantidade: valores.quantidade,
+        metragem: valores.metragem,
+      }))
+      .sort((a, b) => a.data.localeCompare(b.data));
+
+    setRelatorio({
+      totalProducoes,
+      totalMetragem,
+      tempoTotal,
+      eficienciaMedia,
+      producoesPorEstagio,
+      producoesPorMaquina,
+      producoesPorOperador,
+      producoesPorDia,
+    });
+
+    setRelatorioOpen(true);
+  }
+
+  // Exportar para Excel (CSV)
+  function exportarCSV() {
+    const headers = ['OP', 'Produto', 'Máquina', 'Estágio', 'Operador', 'Início', 'Fim', 'Programado', 'Carregado', 'Processado', 'Reprocesso'];
+    const linhas = producoesFiltradas.map(p => [
+      p.op?.op,
+      p.op?.produto,
+      p.maquina?.nome,
+      p.estagio?.nome,
+      p.operadorInicio?.nome,
+      formatDate(p.dataInicio),
+      p.dataFim ? formatDate(p.dataFim) : 'Em andamento',
+      p.metragemProgramada,
+      p.op?.carregado,
+      p.metragemProcessada,
+      p.isReprocesso ? 'Sim' : 'Não',
+    ]);
+
+    const csv = [headers.join(','), ...linhas.map(l => l.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `producoes_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  }
+
+  // Exportar para PDF (via window.print)
+  function exportarPDF() {
+    window.print();
+  }
+
+  // Funções CRUD
   async function handleIniciarProducao(data: any) {
     try {
       console.log('📦 Iniciando produção:', data);
@@ -454,6 +614,98 @@ export default function ProducoesPage() {
     }
   }
 
+  // Função para ordenar colunas
+  function handleSort(key: string) {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  }
+
+  // Colunas da tabela - COM SORT CLICÁVEL
+  const columns = [
+    {
+      key: 'dataFim' as const,
+      title: 'Status',
+      sortable: false,
+      format: (value: string | null) => (
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+          !value ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+        }`}>
+          {!value ? '⚙️ Em Andamento' : '✅ Finalizada'}
+        </span>
+      )
+    },
+    {
+      key: 'op' as const,
+      title: 'OP',
+      sortable: true,
+      format: (value: any) => value?.op || '-'
+    },
+    {
+      key: 'maquina' as const,
+      title: 'Máquina',
+      sortable: true,
+      format: (value: any) => value?.nome || '-'
+    },
+    {
+      key: 'estagio' as const,
+      title: 'Estágio',
+      sortable: true,
+      format: (value: any) => {
+        if (!value) return '-';
+        return (
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: value.cor }} />
+            <span>{value.nome}</span>
+          </div>
+        );
+      }
+    },
+    {
+      key: 'operadorInicio' as const,
+      title: 'Operador',
+      sortable: true,
+      format: (value: any) => value?.nome || '-'
+    },
+    {
+      key: 'dataInicio' as const,
+      title: 'Início',
+      sortable: true,
+      format: (value: string) => formatDate(value)
+    },
+    {
+      key: 'dataFim' as const,
+      title: 'Fim',
+      sortable: true,
+      format: (value: string | null) => value ? formatDate(value) : 'Em andamento'
+    },
+    {
+      key: 'metragemProgramada' as const,
+      title: 'Programado',
+      sortable: true,
+      format: (value: number) => value ? formatNumber(value) : '-'
+    },
+    {
+      key: 'op' as const,
+      title: 'Carregado',
+      sortable: true,
+      format: (value: any) => value?.carregado ? formatNumber(value.carregado) : '-'
+    },
+    {
+      key: 'metragemProcessada' as const,
+      title: 'Processado',
+      sortable: true,
+      format: (value: number) => value ? formatNumber(value) : '-'
+    },
+    {
+      key: 'isReprocesso' as const,
+      title: 'Reprocesso',
+      sortable: true,
+      format: (value: boolean) => value ? '🔄 Sim' : '✅ Não'
+    },
+  ];
+
   // Campos para iniciar produção
   const camposIniciar = [
     {
@@ -581,6 +833,47 @@ export default function ProducoesPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Produções</h1>
         <div className="flex gap-2">
+          {/* Barra de pesquisa rápida */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Pesquisar..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-10 w-64"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2"
+              >
+                <X className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+              </button>
+            )}
+          </div>
+
+          {/* Menu de exportação */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <Download className="mr-2 h-4 w-4" /> Exportar
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={exportarCSV}>
+                <FileSpreadsheet className="mr-2 h-4 w-4" /> Excel (CSV)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportarPDF}>
+                <FileText className="mr-2 h-4 w-4" /> PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Botão de relatório lean */}
+          <Button variant="outline" onClick={gerarRelatorio} disabled={producoesFiltradas.length === 0}>
+            <BarChart3 className="mr-2 h-4 w-4" /> Relatório Lean
+          </Button>
+
           <Button variant="outline" onClick={() => setFiltrosOpen(true)}>
             <Filter className="mr-2 h-4 w-4" /> Filtros
           </Button>
@@ -593,10 +886,25 @@ export default function ProducoesPage() {
         </div>
       </div>
 
+      {/* Informações de filtro */}
+      {searchTerm && (
+        <div className="bg-blue-50 p-2 rounded-lg flex items-center justify-between">
+          <p className="text-sm text-blue-700">
+            Pesquisando por: <span className="font-medium">"{searchTerm}"</span> - {producoesFiltradas.length} resultado(s)
+          </p>
+          <Button variant="ghost" size="sm" onClick={() => setSearchTerm('')}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
       {/* Paginação */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-gray-500">
-          Mostrando {producoes.length} de {pagination.total} produções
+          Mostrando {producoesFiltradas.length} de {pagination.total} produções
+          {producoesFiltradas.length !== producoes.length && (
+            <span className="ml-2 text-blue-600">(filtrados)</span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -621,60 +929,99 @@ export default function ProducoesPage() {
         </div>
       </div>
 
-      {/* Tabela - AGORA COM COLUNA CARREGADO */}
-      <DataTable
-        data={producoes}
-        columns={columns}
-        onRowClick={(producao) => {
-          setSelectedProducao(producao);
-          setDetailsOpen(true);
-        }}
-        extraActions={(producao) => (
-          <div className="flex items-center gap-1">
-            {!producao.dataFim && (
-              <Button
-                variant="ghost"
-                size="icon"
+      {/* Tabela com ordenação clicável */}
+      <div className="border rounded-lg overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-gray-50 border-b">
+            <tr>
+              {columns.map((col) => (
+                <th
+                  key={col.key}
+                  className={`px-4 py-3 text-left text-sm font-medium text-gray-600 ${
+                    col.sortable ? 'cursor-pointer hover:bg-gray-100' : ''
+                  }`}
+                  onClick={() => col.sortable && handleSort(col.key)}
+                >
+                  <div className="flex items-center gap-1">
+                    {col.title}
+                    {sortConfig.key === col.key && (
+                      <span className="text-xs">
+                        {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </div>
+                </th>
+              ))}
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">
+                Ações
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {producoesFiltradas.map((producao) => (
+              <tr
+                key={producao.id}
+                className="border-b hover:bg-gray-50 cursor-pointer"
                 onClick={() => {
                   setSelectedProducao(producao);
-                  setModalFinalizarOpen(true);
+                  setDetailsOpen(true);
                 }}
-                className="h-8 w-8 text-green-600"
-                title="Finalizar Produção"
               >
-                <CheckCircle className="h-4 w-4" />
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                setSelectedProducao(producao);
-                setFormData({
-                  operadorFimId: producao.operadorFimId || '',
-                  metragemProcessada: producao.metragemProcessada,
-                  observacoes: producao.observacoes || '',
-                  isReprocesso: producao.isReprocesso,
-                });
-                setModalEditarOpen(true);
-              }}
-              className="h-8 w-8 text-blue-600"
-              title="Editar Produção"
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => handleDeletarProducao(producao)}
-              className="h-8 w-8 text-red-600"
-              title="Excluir Produção"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
-      />
+                {columns.map((col) => (
+                  <td key={col.key} className="px-4 py-3 text-sm">
+                    {col.format(producao[col.key as keyof Producao] as any)}
+                  </td>
+                ))}
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    {!producao.dataFim && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setSelectedProducao(producao);
+                          setModalFinalizarOpen(true);
+                        }}
+                        className="h-8 w-8 text-green-600"
+                        title="Finalizar Produção"
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setSelectedProducao(producao);
+                        setFormData({
+                          operadorFimId: producao.operadorFimId || '',
+                          metragemProcessada: producao.metragemProcessada,
+                          observacoes: producao.observacoes || '',
+                          isReprocesso: producao.isReprocesso,
+                        });
+                        setModalEditarOpen(true);
+                      }}
+                      className="h-8 w-8 text-blue-600"
+                      title="Editar Produção"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDeletarProducao(producao)}
+                      className="h-8 w-8 text-red-600"
+                      title="Excluir Produção"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {/* Modal de Iniciar Produção */}
       <FormModal
@@ -910,6 +1257,139 @@ export default function ProducoesPage() {
               Aplicar
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Relatório Lean */}
+      <Dialog open={relatorioOpen} onOpenChange={setRelatorioOpen}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Relatório Lean - Produções</DialogTitle>
+            <DialogDescription>
+              Análise baseada nos {producoesFiltradas.length} registros filtrados
+            </DialogDescription>
+          </DialogHeader>
+
+          {relatorio && (
+            <div className="space-y-8 py-4">
+              {/* Cards de resumo */}
+              <div className="grid grid-cols-4 gap-4">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <p className="text-sm text-blue-600 font-medium">Total Produções</p>
+                  <p className="text-3xl font-bold">{relatorio.totalProducoes}</p>
+                </div>
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <p className="text-sm text-green-600 font-medium">Metragem Total</p>
+                  <p className="text-3xl font-bold">{formatNumber(relatorio.totalMetragem)} m</p>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <p className="text-sm text-purple-600 font-medium">Tempo Total</p>
+                  <p className="text-3xl font-bold">{Math.round(relatorio.tempoTotal)} min</p>
+                </div>
+                <div className="bg-orange-50 p-4 rounded-lg">
+                  <p className="text-sm text-orange-600 font-medium">Eficiência Média</p>
+                  <p className="text-3xl font-bold">{Math.round(relatorio.eficienciaMedia)} m/h</p>
+                </div>
+              </div>
+
+              <Tabs defaultValue="estagios">
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="estagios">Por Estágio</TabsTrigger>
+                  <TabsTrigger value="maquinas">Por Máquina</TabsTrigger>
+                  <TabsTrigger value="operadores">Por Operador</TabsTrigger>
+                  <TabsTrigger value="dias">Por Dia</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="estagios" className="mt-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="h-80">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={relatorio.producoesPorEstagio}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={(entry) => `${entry.nome}: ${entry.quantidade}`}
+                            outerRadius={80}
+                            dataKey="quantidade"
+                          >
+                            {relatorio.producoesPorEstagio.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.cor || COLORS[index % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="h-80">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={relatorio.producoesPorEstagio}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="nome" angle={-45} textAnchor="end" height={80} />
+                          <YAxis yAxisId="left" orientation="left" stroke="#3b82f6" />
+                          <YAxis yAxisId="right" orientation="right" stroke="#10b981" />
+                          <Tooltip />
+                          <Legend />
+                          <Bar yAxisId="left" dataKey="quantidade" fill="#3b82f6" name="Quantidade" />
+                          <Bar yAxisId="right" dataKey="metragem" fill="#10b981" name="Metragem (m)" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="maquinas" className="mt-4">
+                  <div className="h-96">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={relatorio.producoesPorMaquina} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" />
+                        <YAxis dataKey="nome" type="category" width={150} />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="quantidade" fill="#3b82f6" name="Quantidade" />
+                        <Bar dataKey="metragem" fill="#10b981" name="Metragem (m)" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="operadores" className="mt-4">
+                  <div className="h-96">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={relatorio.producoesPorOperador} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" />
+                        <YAxis dataKey="nome" type="category" width={150} />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="quantidade" fill="#f59e0b" name="Quantidade" />
+                        <Bar dataKey="metragem" fill="#10b981" name="Metragem (m)" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="dias" className="mt-4">
+                  <div className="h-96">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={relatorio.producoesPorDia}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="data" angle={-45} textAnchor="end" height={80} />
+                        <YAxis yAxisId="left" orientation="left" stroke="#3b82f6" />
+                        <YAxis yAxisId="right" orientation="right" stroke="#10b981" />
+                        <Tooltip />
+                        <Legend />
+                        <Bar yAxisId="left" dataKey="quantidade" fill="#3b82f6" name="Quantidade" />
+                        <Bar yAxisId="right" dataKey="metragem" fill="#10b981" name="Metragem (m)" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
