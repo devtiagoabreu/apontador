@@ -1152,17 +1152,40 @@ export default function ProducoesPage() {
             <DialogTitle>Filtros</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {/* Filtro de Período */}
+            <div className="space-y-2">
+              <Label>Período</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">Data Início</Label>
+                  <Input
+                    type="date"
+                    value={filtros.dataInicio || ''}
+                    onChange={(e) => setFiltros(prev => ({ ...prev, dataInicio: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Data Fim</Label>
+                  <Input
+                    type="date"
+                    value={filtros.dataFim || ''}
+                    onChange={(e) => setFiltros(prev => ({ ...prev, dataFim: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label>Status</Label>
               <Select 
-                value={filtros.ativas || ''} 
-                onValueChange={(value) => setFiltros(prev => ({ ...prev, ativas: value }))}
+                value={filtros.ativas === undefined ? '' : filtros.ativas} 
+                onValueChange={(value) => setFiltros(prev => ({ ...prev, ativas: value || undefined }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="todos">Todos</SelectItem>
                   <SelectItem value="true">Em Andamento</SelectItem>
                   <SelectItem value="false">Finalizadas</SelectItem>
                 </SelectContent>
@@ -1173,13 +1196,13 @@ export default function ProducoesPage() {
               <Label>OP</Label>
               <Select 
                 value={filtros.opId || ''} 
-                onValueChange={(value) => setFiltros(prev => ({ ...prev, opId: value }))}
+                onValueChange={(value) => setFiltros(prev => ({ ...prev, opId: value || undefined }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Todas" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todas</SelectItem>
+                  <SelectItem value="todos">Todas</SelectItem>
                   {ops.map(op => (
                     <SelectItem key={op.op} value={op.op.toString()}>
                       OP {op.op}
@@ -1193,13 +1216,13 @@ export default function ProducoesPage() {
               <Label>Máquina</Label>
               <Select 
                 value={filtros.maquinaId || ''} 
-                onValueChange={(value) => setFiltros(prev => ({ ...prev, maquinaId: value }))}
+                onValueChange={(value) => setFiltros(prev => ({ ...prev, maquinaId: value || undefined }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Todas" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todas</SelectItem>
+                  <SelectItem value="todos">Todas</SelectItem>
                   {maquinas.map(m => (
                     <SelectItem key={m.id} value={m.id}>
                       {m.nome}
@@ -1213,13 +1236,13 @@ export default function ProducoesPage() {
               <Label>Estágio</Label>
               <Select 
                 value={filtros.estagioId || ''} 
-                onValueChange={(value) => setFiltros(prev => ({ ...prev, estagioId: value }))}
+                onValueChange={(value) => setFiltros(prev => ({ ...prev, estagioId: value || undefined }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="todos">Todos</SelectItem>
                   {estagios.map(e => (
                     <SelectItem key={e.id} value={e.id}>
                       {e.nome}
@@ -1233,13 +1256,13 @@ export default function ProducoesPage() {
               <Label>Operador</Label>
               <Select 
                 value={filtros.operadorId || ''} 
-                onValueChange={(value) => setFiltros(prev => ({ ...prev, operadorId: value }))}
+                onValueChange={(value) => setFiltros(prev => ({ ...prev, operadorId: value || undefined }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="todos">Todos</SelectItem>
                   {operadores.map(op => (
                     <SelectItem key={op.id} value={op.id}>
                       {op.nome}
@@ -1250,7 +1273,11 @@ export default function ProducoesPage() {
             </div>
           </div>
           <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => { setFiltros({}); setFiltrosOpen(false); }}>
+            <Button variant="outline" onClick={() => { 
+              setFiltros({}); 
+              setFiltrosOpen(false);
+              carregarProducoes(1);
+            }}>
               Limpar
             </Button>
             <Button onClick={() => setFiltrosOpen(false)}>
