@@ -71,8 +71,7 @@ export default async function DashboardPage() {
       COALESCE((
           SELECT COUNT(*) 
           FROM producoes 
-          WHERE data_fim >= CURRENT_DATE
-            AND data_fim < CURRENT_DATE + INTERVAL '1 day'
+          WHERE DATE(data_fim) = CURRENT_DATE
             AND estagio_id <> '73e1dc52-6447-4e26-af7c-9d50ade7337f' -- estágio (Finalizar) utilizado para fila de revisão de op do pcp não deve contar como produção
       ), 0) AS producoes_finalizadas_hoje,
       
