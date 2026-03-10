@@ -61,11 +61,20 @@ export default async function DashboardPage() {
       COALESCE((SELECT COUNT(*) FROM ops WHERE status = 'CANCELADA'), 0) as ops_canceladas,
       
       -- Produções
-      COALESCE((SELECT COUNT(*) FROM producoes WHERE data_fim IS NULL), 0) as producoes_ativas,
       COALESCE((
-        SELECT COUNT(*) FROM producoes 
-        WHERE DATE(data_fim) = CURRENT_DATE
-      ), 0) as producoes_finalizadas_hoje,
+          SELECT COUNT(*) 
+          FROM producoes 
+          WHERE data_fim IS NULL
+            AND estagio_id <> '73e1dc52-6447-4e26-af7c-9d50ade7337f' -- estágio (Finalizar) utilizado para fila de revisão de op do pcp não deve contar como produção
+      ), 0) AS producoes_ativas,
+
+      COALESCE((
+          SELECT COUNT(*) 
+          FROM producoes 
+          WHERE data_fim >= CURRENT_DATE
+            AND data_fim < CURRENT_DATE + INTERVAL '1 day'
+            AND estagio_id <> '73e1dc52-6447-4e26-af7c-9d50ade7337f' -- estágio (Finalizar) utilizado para fila de revisão de op do pcp não deve contar como produção
+      ), 0) AS producoes_finalizadas_hoje
       
       -- Paradas
       COALESCE((SELECT COUNT(*) FROM paradas_maquina WHERE data_fim IS NULL), 0) as paradas_ativas,
@@ -79,7 +88,7 @@ export default async function DashboardPage() {
         SELECT COALESCE(SUM(metragem_processada::numeric), 0) 
         FROM producoes 
         WHERE DATE(data_fim) = CURRENT_DATE
-          AND estagio_id <> '73e1dc52-6447-4e26-af7c-9d50ade7337f' -- estágio (Finalizar) utilizado para fila de revisão de op do pcp
+          AND estagio_id <> '73e1dc52-6447-4e26-af7c-9d50ade7337f' -- estágio (Finalizar) utilizado para fila de revisão de op do pcp não deve contar como produção
       ), 0) AS metragem_total_hoje
 
        COALESCE((
