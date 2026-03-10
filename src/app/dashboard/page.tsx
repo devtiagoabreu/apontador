@@ -37,7 +37,7 @@ type DashboardStats = {
 };
 
 export default async function DashboardPage() {
-  // Buscar estatísticas
+
   const result = await db.execute(sql`
     SELECT 
       -- Máquinas
@@ -65,14 +65,14 @@ export default async function DashboardPage() {
           SELECT COUNT(*) 
           FROM producoes 
           WHERE data_fim IS NULL
-            AND estagio_id <> '73e1dc52-6447-4e26-af7c-9d50ade7337f' -- estágio (Finalizar) utilizado para fila de revisão de op do pcp não deve contar como produção
+            AND estagio_id <> '73e1dc52-6447-4e26-af7c-9d50ade7337f'
       ), 0) AS producoes_ativas,
 
       COALESCE((
           SELECT COUNT(*) 
           FROM producoes 
           WHERE DATE(data_fim) = CURRENT_DATE
-            AND estagio_id <> '73e1dc52-6447-4e26-af7c-9d50ade7337f' -- estágio (Finalizar) utilizado para fila de revisão de op do pcp não deve contar como produção
+            AND estagio_id <> '73e1dc52-6447-4e26-af7c-9d50ade7337f'
       ), 0) AS producoes_finalizadas_hoje,
       
       -- Paradas
@@ -87,10 +87,10 @@ export default async function DashboardPage() {
         SELECT COALESCE(SUM(metragem_processada::numeric), 0) 
         FROM producoes 
         WHERE DATE(data_fim) = CURRENT_DATE
-          AND estagio_id <> '73e1dc52-6447-4e26-af7c-9d50ade7337f' -- estágio (Finalizar) utilizado para fila de revisão de op do pcp não deve contar como produção
+          AND estagio_id <> '73e1dc52-6447-4e26-af7c-9d50ade7337f'
       ), 0) AS metragem_total_hoje,
 
-       COALESCE((
+      COALESCE((
         SELECT COALESCE(SUM(qtde_produzida::numeric), 0) 
         FROM ops 
         WHERE DATE(data_ultimo_apontamento) = CURRENT_DATE
@@ -106,19 +106,18 @@ export default async function DashboardPage() {
         SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (data_fim - data_inicio))/60), 0)
         FROM paradas_maquina 
         WHERE DATE(data_fim) = CURRENT_DATE
-      ), 0) as tempo_total_paradas_hoje,
+      ), 0) as tempo_total_paradas_hoje
   `);
 
-  // Converter para o tipo correto
   const stats = result.rows[0] as DashboardStats;
 
-  // Calcular eficiência global
   const eficienciaGlobal = stats.tempo_total_producao_hoje > 0 
     ? (stats.tempo_total_producao_hoje / (stats.tempo_total_producao_hoje + stats.tempo_total_paradas_hoje) * 100).toFixed(1)
     : 0;
 
   return (
     <div className="space-y-6">
+
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Dashboard</h1>
         <div className="text-sm text-gray-500">
@@ -130,9 +129,10 @@ export default async function DashboardPage() {
           })}
         </div>
       </div>
-      
+
       {/* Cards principais */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Máquinas</CardTitle>
@@ -186,11 +186,14 @@ export default async function DashboardPage() {
             </p>
           </CardContent>
         </Card>
+
       </div>
 
       {/* Métricas de hoje */}
       <h2 className="text-xl font-semibold mt-8">Resumo do Dia</h2>
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Estágios Finalizados</CardTitle>
@@ -230,11 +233,14 @@ export default async function DashboardPage() {
             <div className="text-2xl font-bold">{(stats?.metragem_produzida_total_hoje ?? 0).toLocaleString('pt-BR')} m</div>
           </CardContent>
         </Card>
+
       </div>
 
       {/* Status das OPs */}
       <h2 className="text-xl font-semibold mt-8">Status das OPs</h2>
+
       <div className="grid gap-4 md:grid-cols-4">
+
         <Link href="/dashboard/ops?status=ABERTA">
           <Card className="hover:shadow-md transition-shadow cursor-pointer">
             <CardContent className="pt-6">
@@ -290,6 +296,7 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
         </Link>
+
       </div>
 
       {/* Links rápidos */}
@@ -304,6 +311,7 @@ export default async function DashboardPage() {
           <Button variant="outline">Produções</Button>
         </Link>
       </div>
+
     </div>
   );
 }
