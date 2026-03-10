@@ -1223,7 +1223,7 @@ export default function ProducoesPage() {
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
                   <SelectItem value="true">Em Andamento</SelectItem>
-                  <SelectItem value="false">Finalizadas</SelectItem>
+                  <SelectItem value="false">Finalizada</SelectItem>
                 </SelectContent>
               </Select>
             </div>
