@@ -1145,21 +1145,21 @@ export default function ProducoesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Filtros */}
+      {/* Modal de Filtros - CORRIGIDO */}
       <Dialog open={filtrosOpen} onOpenChange={setFiltrosOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Filtros</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            {/* Filtro de Período */}
+            {/* Filtro de Período - AGORA COM DATETIME */}
             <div className="space-y-2">
               <Label>Período</Label>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className="text-xs">Data Início</Label>
                   <Input
-                    type="date"
+                    type="datetime-local"
                     value={filtros.dataInicio || ''}
                     onChange={(e) => setFiltros(prev => ({ ...prev, dataInicio: e.target.value }))}
                   />
@@ -1167,19 +1167,30 @@ export default function ProducoesPage() {
                 <div>
                   <Label className="text-xs">Data Fim</Label>
                   <Input
-                    type="date"
+                    type="datetime-local"
                     value={filtros.dataFim || ''}
                     onChange={(e) => setFiltros(prev => ({ ...prev, dataFim: e.target.value }))}
                   />
                 </div>
               </div>
+              <p className="text-xs text-gray-500">
+                Filtra por data e hora exata dos registros
+              </p>
             </div>
 
+            {/* Filtro de Status - CORRIGIDO */}
             <div className="space-y-2">
               <Label>Status</Label>
               <Select 
                 value={filtros.ativas === undefined ? '' : filtros.ativas} 
-                onValueChange={(value) => setFiltros(prev => ({ ...prev, ativas: value || undefined }))}
+                onValueChange={(value) => {
+                  if (value === 'todos') {
+                    const { ativas, ...rest } = filtros;
+                    setFiltros(rest);
+                  } else {
+                    setFiltros(prev => ({ ...prev, ativas: value }));
+                  }
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Todos" />
@@ -1196,7 +1207,14 @@ export default function ProducoesPage() {
               <Label>OP</Label>
               <Select 
                 value={filtros.opId || ''} 
-                onValueChange={(value) => setFiltros(prev => ({ ...prev, opId: value || undefined }))}
+                onValueChange={(value) => {
+                  if (value === 'todos') {
+                    const { opId, ...rest } = filtros;
+                    setFiltros(rest);
+                  } else {
+                    setFiltros(prev => ({ ...prev, opId: value }));
+                  }
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Todas" />
@@ -1216,7 +1234,14 @@ export default function ProducoesPage() {
               <Label>Máquina</Label>
               <Select 
                 value={filtros.maquinaId || ''} 
-                onValueChange={(value) => setFiltros(prev => ({ ...prev, maquinaId: value || undefined }))}
+                onValueChange={(value) => {
+                  if (value === 'todos') {
+                    const { maquinaId, ...rest } = filtros;
+                    setFiltros(rest);
+                  } else {
+                    setFiltros(prev => ({ ...prev, maquinaId: value }));
+                  }
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Todas" />
@@ -1236,7 +1261,14 @@ export default function ProducoesPage() {
               <Label>Estágio</Label>
               <Select 
                 value={filtros.estagioId || ''} 
-                onValueChange={(value) => setFiltros(prev => ({ ...prev, estagioId: value || undefined }))}
+                onValueChange={(value) => {
+                  if (value === 'todos') {
+                    const { estagioId, ...rest } = filtros;
+                    setFiltros(rest);
+                  } else {
+                    setFiltros(prev => ({ ...prev, estagioId: value }));
+                  }
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Todos" />
@@ -1256,7 +1288,14 @@ export default function ProducoesPage() {
               <Label>Operador</Label>
               <Select 
                 value={filtros.operadorId || ''} 
-                onValueChange={(value) => setFiltros(prev => ({ ...prev, operadorId: value || undefined }))}
+                onValueChange={(value) => {
+                  if (value === 'todos') {
+                    const { operadorId, ...rest } = filtros;
+                    setFiltros(rest);
+                  } else {
+                    setFiltros(prev => ({ ...prev, operadorId: value }));
+                  }
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Todos" />
@@ -1280,7 +1319,10 @@ export default function ProducoesPage() {
             }}>
               Limpar
             </Button>
-            <Button onClick={() => setFiltrosOpen(false)}>
+            <Button onClick={() => {
+              setFiltrosOpen(false);
+              carregarProducoes(1);
+            }}>
               Aplicar
             </Button>
           </div>
