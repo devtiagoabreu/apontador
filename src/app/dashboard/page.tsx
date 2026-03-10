@@ -79,7 +79,8 @@ export default async function DashboardPage() {
         SELECT COALESCE(SUM(metragem_processada::numeric), 0) 
         FROM producoes 
         WHERE DATE(data_fim) = CURRENT_DATE
-      ), 0) as metragem_total_hoje,
+          AND estagio_id <> '73e1dc52-6447-4e26-af7c-9d50ade7337f' -- estágio (Finalizar) utilizado para fila de revisão de op do pcp
+      ), 0) AS metragem_total_hoje
 
        COALESCE((
         SELECT COALESCE(SUM(qtde_produzida::numeric), 0) 
@@ -184,7 +185,7 @@ export default async function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Produções Finalizadas</CardTitle>
+            <CardTitle className="text-sm font-medium">Estágios Finalizados</CardTitle>
             <CheckCircle className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
@@ -214,7 +215,7 @@ export default async function DashboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Metragem Revisada</CardTitle>
+            <CardTitle className="text-sm font-medium">Metragem Produzida</CardTitle>
             <Clock className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
