@@ -330,8 +330,35 @@ export default function ProducoesPage() {
       const params = new URLSearchParams({
         page: page.toString(),
         limit: pagination.limit.toString(),
-        ...filtros,
       });
+
+      // Adicionar filtros apenas se tiverem valor
+      if (filtros.opId) params.append('opId', filtros.opId);
+      if (filtros.maquinaId) params.append('maquinaId', filtros.maquinaId);
+      if (filtros.estagioId) params.append('estagioId', filtros.estagioId);
+      if (filtros.operadorId) params.append('operadorId', filtros.operadorId);
+      
+      // Filtro de status (ativas = true para em andamento, false para finalizadas)
+      if (filtros.ativas !== undefined && filtros.ativas !== 'todos') {
+        params.append('ativas', filtros.ativas);
+      }
+
+      // Filtro de período - enviar como string ISO
+      if (filtros.dataInicio) {
+        const dataInicio = new Date(filtros.dataInicio);
+        if (!isNaN(dataInicio.getTime())) {
+          params.append('dataInicio', dataInicio.toISOString());
+        }
+      }
+      
+      if (filtros.dataFim) {
+        const dataFim = new Date(filtros.dataFim);
+        if (!isNaN(dataFim.getTime())) {
+          params.append('dataFim', dataFim.toISOString());
+        }
+      }
+
+      console.log('📦 Enviando filtros:', Object.fromEntries(params));
 
       const response = await fetch(`/api/producoes?${params}`);
       const result = await response.json();
@@ -339,6 +366,7 @@ export default function ProducoesPage() {
       setProducoes(result.data);
       setPagination(result.pagination);
     } catch (error) {
+      console.error('❌ Erro ao carregar:', error);
       toast({
         title: 'Erro',
         description: 'Não foi possível carregar as produções',
@@ -1152,7 +1180,7 @@ export default function ProducoesPage() {
             <DialogTitle>Filtros</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            {/* Filtro de Período - AGORA COM DATETIME */}
+            {/* Filtro de Período */}
             <div className="space-y-2">
               <Label>Período</Label>
               <div className="grid grid-cols-2 gap-2">
@@ -1173,16 +1201,13 @@ export default function ProducoesPage() {
                   />
                 </div>
               </div>
-              <p className="text-xs text-gray-500">
-                Filtra por data e hora exata dos registros
-              </p>
             </div>
 
             {/* Filtro de Status - CORRIGIDO */}
             <div className="space-y-2">
               <Label>Status</Label>
               <Select 
-                value={filtros.ativas === undefined ? '' : filtros.ativas} 
+                value={filtros.ativas || 'todos'} 
                 onValueChange={(value) => {
                   if (value === 'todos') {
                     const { ativas, ...rest } = filtros;
@@ -1206,7 +1231,7 @@ export default function ProducoesPage() {
             <div className="space-y-2">
               <Label>OP</Label>
               <Select 
-                value={filtros.opId || ''} 
+                value={filtros.opId || 'todos'} 
                 onValueChange={(value) => {
                   if (value === 'todos') {
                     const { opId, ...rest } = filtros;
@@ -1233,7 +1258,7 @@ export default function ProducoesPage() {
             <div className="space-y-2">
               <Label>Máquina</Label>
               <Select 
-                value={filtros.maquinaId || ''} 
+                value={filtros.maquinaId || 'todos'} 
                 onValueChange={(value) => {
                   if (value === 'todos') {
                     const { maquinaId, ...rest } = filtros;
@@ -1260,7 +1285,7 @@ export default function ProducoesPage() {
             <div className="space-y-2">
               <Label>Estágio</Label>
               <Select 
-                value={filtros.estagioId || ''} 
+                value={filtros.estagioId || 'todos'} 
                 onValueChange={(value) => {
                   if (value === 'todos') {
                     const { estagioId, ...rest } = filtros;
@@ -1287,7 +1312,7 @@ export default function ProducoesPage() {
             <div className="space-y-2">
               <Label>Operador</Label>
               <Select 
-                value={filtros.operadorId || ''} 
+                value={filtros.operadorId || 'todos'} 
                 onValueChange={(value) => {
                   if (value === 'todos') {
                     const { operadorId, ...rest } = filtros;
