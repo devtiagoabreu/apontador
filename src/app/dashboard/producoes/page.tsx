@@ -343,17 +343,23 @@ export default function ProducoesPage() {
         params.append('ativas', filtros.ativas);
       }
 
-      // Filtro de período - enviar como string ISO
+      // 🔴 CORRIGIDO: Filtro de período - ajustar para início e fim do dia
       if (filtros.dataInicio) {
+        // Para data de início, considerar desde 00:00:00
         const dataInicio = new Date(filtros.dataInicio);
         if (!isNaN(dataInicio.getTime())) {
+          // Ajustar para início do dia
+          dataInicio.setHours(0, 0, 0, 0);
           params.append('dataInicio', dataInicio.toISOString());
         }
       }
       
       if (filtros.dataFim) {
+        // Para data de fim, considerar até 23:59:59
         const dataFim = new Date(filtros.dataFim);
         if (!isNaN(dataFim.getTime())) {
+          // Ajustar para fim do dia
+          dataFim.setHours(23, 59, 59, 999);
           params.append('dataFim', dataFim.toISOString());
         }
       }
@@ -1187,23 +1193,26 @@ export default function ProducoesPage() {
                 <div>
                   <Label className="text-xs">Data Início</Label>
                   <Input
-                    type="datetime-local"
-                    value={filtros.dataInicio || ''}
+                    type="date"
+                    value={filtros.dataInicio ? filtros.dataInicio.split('T')[0] : ''}
                     onChange={(e) => setFiltros(prev => ({ ...prev, dataInicio: e.target.value }))}
                   />
                 </div>
                 <div>
                   <Label className="text-xs">Data Fim</Label>
                   <Input
-                    type="datetime-local"
-                    value={filtros.dataFim || ''}
+                    type="date"
+                    value={filtros.dataFim ? filtros.dataFim.split('T')[0] : ''}
                     onChange={(e) => setFiltros(prev => ({ ...prev, dataFim: e.target.value }))}
                   />
                 </div>
               </div>
+              <p className="text-xs text-gray-500">
+                Filtra por data (considera todo o dia)
+              </p>
             </div>
 
-            {/* Filtro de Status - CORRIGIDO */}
+            {/* Filtro de Status */}
             <div className="space-y-2">
               <Label>Status</Label>
               <Select 
@@ -1223,7 +1232,7 @@ export default function ProducoesPage() {
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
                   <SelectItem value="true">Em Andamento</SelectItem>
-                  <SelectItem value="false">Finalizada</SelectItem>
+                  <SelectItem value="false">Finalizadas</SelectItem>
                 </SelectContent>
               </Select>
             </div>
