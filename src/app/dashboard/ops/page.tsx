@@ -624,7 +624,25 @@ export default function OpsPage() {
     }
   }
 
+  // 🔴 FUNÇÃO DE DELETAR CORRIGIDA - Verifica se há produções vinculadas
   async function handleDeleteOp(op: OP) {
+    // Primeiro, verificar se existem produções vinculadas
+    try {
+      const response = await fetch(`/api/producoes?opId=${op.op}&limit=1`);
+      const data = await response.json();
+      
+      if (data.data && data.data.length > 0) {
+        toast({
+          title: 'Não é possível excluir',
+          description: `Esta OP possui ${data.pagination?.total || 'produções'} vinculadas. Cancele ou finalize as produções primeiro.`,
+          variant: 'destructive',
+        });
+        return;
+      }
+    } catch (error) {
+      console.error('Erro ao verificar produções:', error);
+    }
+
     if (!confirm(`Tem certeza que deseja excluir permanentemente a OP ${op.op}?`)) return;
 
     try {
@@ -813,6 +831,7 @@ export default function OpsPage() {
     },
   ];
 
+  // 🔴 CAMPOS CORRIGIDOS - Máquina agora é select
   const camposOp = [
     { name: 'op', label: 'Número da OP', type: 'number' as const, required: true },
     { name: 'produto', label: 'Produto', type: 'text' as const, required: true },
@@ -844,11 +863,14 @@ export default function OpsPage() {
       label: 'Estágio Atual', 
       type: 'text' as const,
     },
+    // 🔴 Código da Máquina agora é select
     { 
       name: 'codMaquinaAtual', 
       label: 'Código da Máquina', 
-      type: 'text' as const,
+      type: 'select' as const,
+      options: maquinas.map(m => ({ value: m.codigo, label: `${m.codigo} - ${m.nome}` }))
     },
+    // 🔴 Este campo será preenchido automaticamente
     { 
       name: 'maquinaAtual', 
       label: 'Máquina Atual', 
@@ -1038,10 +1060,8 @@ export default function OpsPage() {
               >
                 {columns.map((col) => {
                   const value = op[col.key as keyof OP];
-                  // 🔴 CORREÇÃO: Tratamento seguro de tipos
                   const displayValue = value === null || value === undefined ? '-' : String(value);
                   
-                  // 🔴 CORREÇÃO: Usar casting para evitar erro de tipo
                   return (
                     <td key={col.key} className="px-4 py-3 text-sm">
                       {col.format ? (col.format as any)(value) : displayValue}
