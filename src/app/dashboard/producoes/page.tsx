@@ -243,19 +243,29 @@ export default function ProducoesPage() {
   useEffect(() => {
     let dadosFiltrados = [...producoes];
     
-    // Filtro de pesquisa global
+    // Filtro de pesquisa global - AGORA COM DATA FORMATADA
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      dadosFiltrados = dadosFiltrados.filter(p => 
-        p.op?.op.toString().includes(term) ||
-        p.op?.produto.toLowerCase().includes(term) ||
-        p.maquina?.nome.toLowerCase().includes(term) ||
-        p.estagio?.nome.toLowerCase().includes(term) ||
-        p.operadorInicio?.nome.toLowerCase().includes(term)
-      );
+      dadosFiltrados = dadosFiltrados.filter(p => {
+        // Formatar data para pesquisa
+        const dataInicioFormatada = p.dataInicio ? formatDate(p.dataInicio).toLowerCase() : '';
+        const dataFimFormatada = p.dataFim ? formatDate(p.dataFim).toLowerCase() : '';
+        
+        return (
+          p.op?.op.toString().includes(term) ||
+          p.op?.produto.toLowerCase().includes(term) ||
+          p.maquina?.nome.toLowerCase().includes(term) ||
+          p.estagio?.nome.toLowerCase().includes(term) ||
+          p.operadorInicio?.nome.toLowerCase().includes(term) ||
+          dataInicioFormatada.includes(term) ||
+          dataFimFormatada.includes(term) ||
+          (p.metragemProgramada?.toString() || '').includes(term) ||
+          (p.metragemProcessada?.toString() || '').includes(term)
+        );
+      });
     }
 
-    // Ordenação
+    // Ordenação - AGORA COM STATUS
     dadosFiltrados.sort((a, b) => {
       let aVal: any;
       let bVal: any;
@@ -277,6 +287,15 @@ export default function ProducoesPage() {
           aVal = a.operadorInicio?.nome;
           bVal = b.operadorInicio?.nome;
           break;
+        case 'dataInicio':
+          aVal = a.dataInicio ? new Date(a.dataInicio).getTime() : 0;
+          bVal = b.dataInicio ? new Date(b.dataInicio).getTime() : 0;
+          break;
+        case 'dataFim':
+          // Para status: finalizadas (com dataFim) vêm depois de em andamento (sem dataFim)
+          aVal = a.dataFim ? 1 : 0;
+          bVal = b.dataFim ? 1 : 0;
+          break;
         case 'metragemProgramada':
           aVal = a.metragemProgramada;
           bVal = b.metragemProgramada;
@@ -284,6 +303,10 @@ export default function ProducoesPage() {
         case 'metragemProcessada':
           aVal = a.metragemProcessada;
           bVal = b.metragemProcessada;
+          break;
+        case 'isReprocesso':
+          aVal = a.isReprocesso ? 1 : 0;
+          bVal = b.isReprocesso ? 1 : 0;
           break;
         default:
           aVal = a[sortConfig.key as keyof Producao];
@@ -332,36 +355,28 @@ export default function ProducoesPage() {
         limit: pagination.limit.toString(),
       });
 
-      // Adicionar filtros apenas se tiverem valor
-      if (filtros.opId) params.append('opId', filtros.opId);
-      if (filtros.maquinaId) params.append('maquinaId', filtros.maquinaId);
-      if (filtros.estagioId) params.append('estagioId', filtros.estagioId);
-      if (filtros.operadorId) params.append('operadorId', filtros.operadorId);
+      // Adicionar filtros apenas se tiverem valor e não forem 'todos'
+      if (filtros.opId && filtros.opId !== 'todos') params.append('opId', filtros.opId);
+      if (filtros.maquinaId && filtros.maquinaId !== 'todos') params.append('maquinaId', filtros.maquinaId);
+      if (filtros.estagioId && filtros.estagioId !== 'todos') params.append('estagioId', filtros.estagioId);
+      if (filtros.operadorId && filtros.operadorId !== 'todos') params.append('operadorId', filtros.operadorId);
       
-      // Filtro de status (ativas = true para em andamento, false para finalizadas)
-      if (filtros.ativas !== undefined && filtros.ativas !== 'todos') {
+      // Filtro de status
+      if (filtros.ativas && filtros.ativas !== 'todos') {
         params.append('ativas', filtros.ativas);
       }
 
-      // 🔴 CORRIGIDO: Filtro de período - ajustar para início e fim do dia
+      // Filtro de período - ajustar para início e fim do dia
       if (filtros.dataInicio) {
-        // Para data de início, considerar desde 00:00:00
         const dataInicio = new Date(filtros.dataInicio);
-        if (!isNaN(dataInicio.getTime())) {
-          // Ajustar para início do dia
-          dataInicio.setHours(0, 0, 0, 0);
-          params.append('dataInicio', dataInicio.toISOString());
-        }
+        dataInicio.setHours(0, 0, 0, 0);
+        params.append('dataInicio', dataInicio.toISOString());
       }
       
       if (filtros.dataFim) {
-        // Para data de fim, considerar até 23:59:59
         const dataFim = new Date(filtros.dataFim);
-        if (!isNaN(dataFim.getTime())) {
-          // Ajustar para fim do dia
-          dataFim.setHours(23, 59, 59, 999);
-          params.append('dataFim', dataFim.toISOString());
-        }
+        dataFim.setHours(23, 59, 59, 999);
+        params.append('dataFim', dataFim.toISOString());
       }
 
       console.log('📦 Enviando filtros:', Object.fromEntries(params));
@@ -369,13 +384,17 @@ export default function ProducoesPage() {
       const response = await fetch(`/api/producoes?${params}`);
       const result = await response.json();
       
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro ao carregar');
+      }
+
       setProducoes(result.data);
       setPagination(result.pagination);
     } catch (error) {
       console.error('❌ Erro ao carregar:', error);
       toast({
         title: 'Erro',
-        description: 'Não foi possível carregar as produções',
+        description: error instanceof Error ? error.message : 'Não foi possível carregar as produções',
         variant: 'destructive',
       });
     } finally {
@@ -656,12 +675,12 @@ export default function ProducoesPage() {
     }));
   }
 
-  // Colunas da tabela - COM SORT CLICÁVEL
+  // Colunas da tabela - AGORA COM STATUS ORDENÁVEL
   const columns = [
     {
       key: 'dataFim' as const,
       title: 'Status',
-      sortable: false,
+      sortable: true, // ✅ AGORA É ORDENÁVEL
       format: (value: string | null) => (
         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
           !value ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
@@ -1179,7 +1198,7 @@ export default function ProducoesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Filtros - CORRIGIDO */}
+      {/* Modal de Filtros */}
       <Dialog open={filtrosOpen} onOpenChange={setFiltrosOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

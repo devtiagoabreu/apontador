@@ -7,7 +7,7 @@ import { ops } from '@/lib/db/schema/ops';
 import { maquinas } from '@/lib/db/schema/maquinas';
 import { usuarios } from '@/lib/db/schema/usuarios';
 import { estagios } from '@/lib/db/schema/estagios';
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, and } from 'drizzle-orm';
 import { z } from 'zod';
 
 // Funções auxiliares para conversão segura
@@ -68,12 +68,17 @@ export async function GET(request: Request) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = (page - 1) * limit;
+    
+    // 🔴 NOVOS FILTROS
     const ativas = searchParams.get('ativas') === 'true';
     const opId = searchParams.get('opId');
     const maquinaId = searchParams.get('maquinaId');
     const estagioId = searchParams.get('estagioId');
+    const dataInicio = searchParams.get('dataInicio');
+    const dataFim = searchParams.get('dataFim');
 
-    console.log(`📊 Buscando produções - página ${page}, limite ${limit}, ativas: ${ativas}`);
+    console.log(`📊 Buscando produções - página ${page}, limite ${limit}`);
+    console.log('📊 Filtros:', { ativas, opId, maquinaId, estagioId, dataInicio, dataFim });
 
     // Construir query base
     let query = sql`
@@ -106,14 +111,26 @@ export async function GET(request: Request) {
     if (ativas) {
       query = sql`${query} AND p.data_fim IS NULL`;
     }
+    
     if (opId) {
       query = sql`${query} AND p.op_id = ${parseInt(opId)}`;
     }
+    
     if (maquinaId) {
       query = sql`${query} AND p.maquina_id = ${maquinaId}`;
     }
+    
     if (estagioId) {
       query = sql`${query} AND p.estagio_id = ${estagioId}`;
+    }
+
+    // 🔴 NOVOS FILTROS DE PERÍODO
+    if (dataInicio) {
+      query = sql`${query} AND p.data_inicio >= ${dataInicio}`;
+    }
+    
+    if (dataFim) {
+      query = sql`${query} AND p.data_inicio <= ${dataFim}`;
     }
 
     // Ordenação e paginação
@@ -121,8 +138,9 @@ export async function GET(request: Request) {
 
     const result = await db.execute(query);
 
-    // Contar total
+    // Contar total com os mesmos filtros
     let countQuery = sql`SELECT COUNT(*) as total FROM producoes p WHERE 1=1`;
+    
     if (ativas) {
       countQuery = sql`${countQuery} AND p.data_fim IS NULL`;
     }
@@ -134,6 +152,12 @@ export async function GET(request: Request) {
     }
     if (estagioId) {
       countQuery = sql`${countQuery} AND p.estagio_id = ${estagioId}`;
+    }
+    if (dataInicio) {
+      countQuery = sql`${countQuery} AND p.data_inicio >= ${dataInicio}`;
+    }
+    if (dataFim) {
+      countQuery = sql`${countQuery} AND p.data_inicio <= ${dataFim}`;
     }
 
     const totalResult = await db.execute(countQuery);
@@ -181,7 +205,7 @@ export async function GET(request: Request) {
       },
     }));
 
-    console.log(`✅ Retornando ${data.length} produções`);
+    console.log(`✅ Retornando ${data.length} produções de ${total} total`);
 
     return NextResponse.json({
       data,
