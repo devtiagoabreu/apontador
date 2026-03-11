@@ -52,7 +52,8 @@ export async function GET(
     console.log('✅ OP encontrada:', op.op);
     return NextResponse.json(op);
   } catch (error) {
-    console.error('❌ Erro:', error);
+    console.error('❌ Erro detalhado:', error);
+    console.error('❌ Stack:', error instanceof Error ? error.stack : 'N/A');
     return NextResponse.json(
       { error: String(error) },
       { status: 500 }
@@ -72,6 +73,15 @@ export async function PUT(
     const opId = parseInt(params.id);
     console.log('🔍 OP ID:', opId);
     
+    // Verificar se opId é válido
+    if (isNaN(opId)) {
+      console.log('❌ ID inválido:', params.id);
+      return NextResponse.json(
+        { error: 'ID inválido' },
+        { status: 400 }
+      );
+    }
+    
     const body = await request.json();
     console.log('📦 Body recebido:', JSON.stringify(body, null, 2));
 
@@ -90,10 +100,13 @@ export async function PUT(
     }
 
     console.log('✅ OP encontrada. Valores atuais:', {
-      codMaquinaAtual: existing.codMaquinaAtual,
-      maquinaAtual: existing.maquinaAtual,
+      op: existing.op,
+      produto: existing.produto,
+      status: existing.status,
       codEstagioAtual: existing.codEstagioAtual,
       estagioAtual: existing.estagioAtual,
+      codMaquinaAtual: existing.codMaquinaAtual,
+      maquinaAtual: existing.maquinaAtual,
     });
 
     // Validar dados
@@ -105,6 +118,7 @@ export async function PUT(
     } catch (validationError) {
       console.error('❌ Erro de validação:', validationError);
       if (validationError instanceof z.ZodError) {
+        console.error('❌ Erros específicos:', JSON.stringify(validationError.errors, null, 2));
         return NextResponse.json(
           { error: 'Dados inválidos', detalhes: validationError.errors },
           { status: 400 }
@@ -181,35 +195,43 @@ export async function PUT(
 
     // Campos adicionais
     if (validated.depositoFinal !== undefined) {
+      console.log('  - depositoFinal:', validated.depositoFinal);
       dadosParaAtualizar.deposito_final = validated.depositoFinal;
     }
     
     if (validated.pecasVinculadas !== undefined) {
+      console.log('  - pecasVinculadas:', validated.pecasVinculadas);
       dadosParaAtualizar.pecas_vinculadas = validated.pecasVinculadas;
     }
     
     if (validated.calculoQuebra !== undefined) {
+      console.log('  - calculoQuebra:', validated.calculoQuebra);
       dadosParaAtualizar.calculo_quebra = validated.calculoQuebra?.toString();
     }
     
     if (validated.nivel !== undefined) {
+      console.log('  - nivel:', validated.nivel);
       dadosParaAtualizar.nivel = validated.nivel;
     }
     
     if (validated.grupo !== undefined) {
+      console.log('  - grupo:', validated.grupo);
       dadosParaAtualizar.grupo = validated.grupo;
     }
     
     if (validated.sub !== undefined) {
+      console.log('  - sub:', validated.sub);
       dadosParaAtualizar.sub = validated.sub;
     }
     
     if (validated.item !== undefined) {
+      console.log('  - item:', validated.item);
       dadosParaAtualizar.item = validated.item;
     }
 
     // Sempre atualizar o updatedAt
     dadosParaAtualizar.updated_at = new Date();
+    console.log('  - updated_at:', dadosParaAtualizar.updated_at);
 
     console.log('💾 Dados finais para atualizar:', JSON.stringify(dadosParaAtualizar, null, 2));
 
@@ -226,6 +248,7 @@ export async function PUT(
       console.log('✅ Update executado com sucesso');
     } catch (dbError) {
       console.error('❌ Erro no banco de dados:', dbError);
+      console.error('❌ Detalhes do erro:', JSON.stringify(dbError, null, 2));
       throw dbError;
     }
 
@@ -241,7 +264,15 @@ export async function PUT(
     return NextResponse.json(updated);
 
   } catch (error) {
-    console.error('❌ ERRO:', error);
+    console.error('❌ ERRO CAPTURADO:', error);
+    console.error('❌ Tipo do erro:', typeof error);
+    console.error('❌ Constructor:', error instanceof Error ? error.constructor.name : 'N/A');
+    
+    if (error instanceof Error) {
+      console.error('❌ Mensagem:', error.message);
+      console.error('❌ Stack:', error.stack);
+      console.error('❌ Name:', error.name);
+    }
     
     if (error instanceof z.ZodError) {
       console.error('❌ Erros de validação:', JSON.stringify(error.errors, null, 2));
@@ -251,8 +282,22 @@ export async function PUT(
       );
     }
 
+    // Tentar extrair informações do erro
+    let errorMessage = 'Erro interno ao atualizar OP';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === 'object' && error !== null) {
+      try {
+        errorMessage = JSON.stringify(error);
+      } catch {
+        errorMessage = String(error);
+      }
+    } else {
+      errorMessage = String(error);
+    }
+
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Erro interno ao atualizar OP' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
