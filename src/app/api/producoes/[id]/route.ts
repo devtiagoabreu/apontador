@@ -42,19 +42,30 @@ const safeParseString = (value: any): string => {
   return String(value);
 };
 
-// 🔴 NOVO SCHEMA - AGORA COMPLETO
+// 🔴 SCHEMA CORRIGIDO - TODOS OS CAMPOS OPCIONAIS E ACEITANDO STRINGS VAZIAS
 const atualizarProducaoSchema = z.object({
-  opId: z.union([z.string(), z.number()]).transform(val => Number(val)).optional(),
-  maquinaId: z.string().uuid().optional(),
-  estagioId: z.string().uuid().optional(),
-  operadorInicioId: z.string().uuid().optional(),
-  operadorFimId: z.string().uuid().optional().nullable(),
-  dataInicio: z.string().datetime().optional().nullable(),
-  dataFim: z.string().datetime().optional().nullable(),
-  metragemProgramada: z.union([z.string(), z.number()]).transform(val => Number(val)).optional().nullable(),
-  metragemProcessada: z.union([z.string(), z.number()]).transform(val => Number(val)).optional().nullable(),
-  observacoes: z.string().optional().nullable(),
-  isReprocesso: z.boolean().optional(),
+  opId: z.union([z.string(), z.number()]).optional().nullable()
+    .transform(val => val ? Number(val) : undefined),
+  maquinaId: z.string().uuid().optional().nullable()
+    .transform(val => val || undefined),
+  estagioId: z.string().uuid().optional().nullable()
+    .transform(val => val || undefined),
+  operadorInicioId: z.string().uuid().optional().nullable()
+    .transform(val => val || undefined),
+  operadorFimId: z.string().uuid().optional().nullable()
+    .transform(val => val || null),
+  dataInicio: z.string().optional().nullable()
+    .transform(val => val || undefined),
+  dataFim: z.string().optional().nullable()
+    .transform(val => val || null),
+  metragemProgramada: z.union([z.string(), z.number()]).optional().nullable()
+    .transform(val => val ? Number(val) : null),
+  metragemProcessada: z.union([z.string(), z.number()]).optional().nullable()
+    .transform(val => val ? Number(val) : null),
+  observacoes: z.string().optional().nullable()
+    .transform(val => val || null),
+  isReprocesso: z.boolean().optional().nullable()
+    .transform(val => val ?? undefined),
 });
 
 export async function GET(
@@ -177,10 +188,23 @@ export async function PUT(
     console.log('🔍 ID da produção:', params.id);
 
     const body = await request.json();
-    console.log('📦 Body recebido:', body);
+    console.log('📦 Body recebido:', JSON.stringify(body, null, 2));
 
-    const validated = atualizarProducaoSchema.parse(body);
-    console.log('✅ Dados validados:', validated);
+    // Validar dados com schema corrigido
+    let validated;
+    try {
+      validated = atualizarProducaoSchema.parse(body);
+      console.log('✅ Dados validados:', JSON.stringify(validated, null, 2));
+    } catch (validationError) {
+      console.error('❌ Erro de validação:', validationError);
+      if (validationError instanceof z.ZodError) {
+        return NextResponse.json(
+          { error: 'Dados inválidos', detalhes: validationError.errors },
+          { status: 400 }
+        );
+      }
+      throw validationError;
+    }
 
     // Verificar se produção existe
     const producao = await db.execute(sql`
@@ -195,11 +219,11 @@ export async function PUT(
       );
     }
 
-    // 🔴 CONSTRUIR QUERY DINÂMICA COM TODOS OS CAMPOS
+    // Construir query de atualização DINAMICAMENTE
     let updateQuery = sql`UPDATE producoes SET `;
     const updates: any[] = [];
 
-    // Adicionar cada campo se foi fornecido
+    // Adicionar cada campo se foi fornecido (ignorar undefined)
     if (validated.opId !== undefined) {
       updates.push(sql`op_id = ${validated.opId}`);
     }
