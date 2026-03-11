@@ -3,7 +3,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { producoesTable } from '@/lib/db/schema/producoes';
-import { sql } from 'drizzle-orm';
+import { ops } from '@/lib/db/schema/ops';
+import { maquinas } from '@/lib/db/schema/maquinas';
+import { usuarios } from '@/lib/db/schema/usuarios';
+import { estagios } from '@/lib/db/schema/estagios';
+import { sql, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 // Funções auxiliares para conversão segura
@@ -38,11 +42,18 @@ const safeParseString = (value: any): string => {
   return String(value);
 };
 
-// Schema para atualização (PUT)
+// 🔴 NOVO SCHEMA - AGORA COMPLETO
 const atualizarProducaoSchema = z.object({
-  operadorFimId: z.string().uuid().optional(),
-  metragemProcessada: z.number().positive().optional(),
-  observacoes: z.string().optional(),
+  opId: z.union([z.string(), z.number()]).transform(val => Number(val)).optional(),
+  maquinaId: z.string().uuid().optional(),
+  estagioId: z.string().uuid().optional(),
+  operadorInicioId: z.string().uuid().optional(),
+  operadorFimId: z.string().uuid().optional().nullable(),
+  dataInicio: z.string().datetime().optional().nullable(),
+  dataFim: z.string().datetime().optional().nullable(),
+  metragemProgramada: z.union([z.string(), z.number()]).transform(val => Number(val)).optional().nullable(),
+  metragemProcessada: z.union([z.string(), z.number()]).transform(val => Number(val)).optional().nullable(),
+  observacoes: z.string().optional().nullable(),
   isReprocesso: z.boolean().optional(),
 });
 
@@ -184,15 +195,37 @@ export async function PUT(
       );
     }
 
-    // Construir query de atualização DINAMICAMENTE com sql
+    // 🔴 CONSTRUIR QUERY DINÂMICA COM TODOS OS CAMPOS
     let updateQuery = sql`UPDATE producoes SET `;
     const updates: any[] = [];
 
+    // Adicionar cada campo se foi fornecido
+    if (validated.opId !== undefined) {
+      updates.push(sql`op_id = ${validated.opId}`);
+    }
+    if (validated.maquinaId !== undefined) {
+      updates.push(sql`maquina_id = ${validated.maquinaId}`);
+    }
+    if (validated.estagioId !== undefined) {
+      updates.push(sql`estagio_id = ${validated.estagioId}`);
+    }
+    if (validated.operadorInicioId !== undefined) {
+      updates.push(sql`operador_inicio_id = ${validated.operadorInicioId}`);
+    }
     if (validated.operadorFimId !== undefined) {
       updates.push(sql`operador_fim_id = ${validated.operadorFimId}`);
     }
+    if (validated.dataInicio !== undefined) {
+      updates.push(sql`data_inicio = ${validated.dataInicio}`);
+    }
+    if (validated.dataFim !== undefined) {
+      updates.push(sql`data_fim = ${validated.dataFim}`);
+    }
+    if (validated.metragemProgramada !== undefined) {
+      updates.push(sql`metragem_programada = ${validated.metragemProgramada?.toString()}`);
+    }
     if (validated.metragemProcessada !== undefined) {
-      updates.push(sql`metragem_processada = ${validated.metragemProcessada.toString()}`);
+      updates.push(sql`metragem_processada = ${validated.metragemProcessada?.toString()}`);
     }
     if (validated.observacoes !== undefined) {
       updates.push(sql`observacoes = ${validated.observacoes}`);
@@ -201,6 +234,7 @@ export async function PUT(
       updates.push(sql`is_reprocesso = ${validated.isReprocesso}`);
     }
 
+    // Sempre atualizar o updated_at
     updates.push(sql`updated_at = ${new Date()}`);
 
     if (updates.length === 0) {

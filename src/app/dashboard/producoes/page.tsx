@@ -189,13 +189,18 @@ const finalizarProducaoSchema = z.object({
   observacoes: z.string().optional(),
 });
 
-// Schema para editar produção
+// Schema para editar produção - AGORA COMPLETO
 const editarProducaoSchema = z.object({
-  operadorFimId: z.string().optional(),
-  metragemProcessada: z.union([z.string(), z.number()])
-    .transform(val => Number(val))
-    .optional(),
-  observacoes: z.string().optional(),
+  opId: z.union([z.string(), z.number()]).transform(val => Number(val)).optional(),
+  maquinaId: z.string().uuid().optional(),
+  estagioId: z.string().uuid().optional(),
+  operadorInicioId: z.string().uuid().optional(),
+  operadorFimId: z.string().uuid().optional().nullable(),
+  dataInicio: z.string().optional().nullable(),
+  dataFim: z.string().optional().nullable(),
+  metragemProgramada: z.union([z.string(), z.number()]).transform(val => Number(val)).optional().nullable(),
+  metragemProcessada: z.union([z.string(), z.number()]).transform(val => Number(val)).optional().nullable(),
+  observacoes: z.string().optional().nullable(),
   isReprocesso: z.boolean().optional(),
 });
 
@@ -675,12 +680,29 @@ export default function ProducoesPage() {
     }));
   }
 
-  // Colunas da tabela - AGORA COM STATUS ORDENÁVEL
+  // Função para preparar dados de edição
+  function prepararDadosEdicao(producao: Producao) {
+    return {
+      opId: producao.opId.toString(),
+      maquinaId: producao.maquinaId,
+      estagioId: producao.estagioId,
+      operadorInicioId: producao.operadorInicioId,
+      operadorFimId: producao.operadorFimId || '',
+      dataInicio: producao.dataInicio ? new Date(producao.dataInicio).toISOString().slice(0, 16) : '',
+      dataFim: producao.dataFim ? new Date(producao.dataFim).toISOString().slice(0, 16) : '',
+      metragemProgramada: producao.metragemProgramada,
+      metragemProcessada: producao.metragemProcessada,
+      isReprocesso: producao.isReprocesso,
+      observacoes: producao.observacoes || '',
+    };
+  }
+
+  // Colunas da tabela - COM STATUS ORDENÁVEL
   const columns = [
     {
       key: 'dataFim' as const,
       title: 'Status',
-      sortable: true, // ✅ AGORA É ORDENÁVEL
+      sortable: true,
       format: (value: string | null) => (
         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
           !value ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
@@ -845,8 +867,53 @@ export default function ProducoesPage() {
     },
   ];
 
-  // Campos para editar produção
+  // Campos para editar produção - AGORA COMPLETO
   const camposEditar = [
+    {
+      name: 'opId',
+      label: 'OP',
+      type: 'select' as const,
+      required: false,
+      options: ops
+        .filter(op => op.status !== 'CANCELADA')
+        .map(op => ({ 
+          value: op.op.toString(), 
+          label: `OP ${op.op} - ${op.produto.substring(0, 30)} (Carregado: ${op.qtdeCarregado || 0} ${op.um})` 
+        }))
+    },
+    {
+      name: 'maquinaId',
+      label: 'Máquina',
+      type: 'select' as const,
+      required: false,
+      options: maquinas.map(m => ({ 
+        value: m.id, 
+        label: `${m.codigo} - ${m.nome}` 
+      }))
+    },
+    {
+      name: 'estagioId',
+      label: 'Estágio',
+      type: 'select' as const,
+      required: false,
+      options: estagios.map(e => ({ 
+        value: e.id, 
+        label: e.nome 
+      }))
+    },
+    {
+      name: 'operadorInicioId',
+      label: 'Operador (Início)',
+      type: 'select' as const,
+      required: false,
+      options: [
+        { value: '', label: 'Manter atual' },
+        ...operadores.map(o => ({ 
+          value: o.id, 
+          label: `${o.matricula} - ${o.nome}` 
+        }))
+      ]
+    },
     {
       name: 'operadorFimId',
       label: 'Operador (Fim)',
@@ -861,21 +928,39 @@ export default function ProducoesPage() {
       ]
     },
     {
+      name: 'dataInicio',
+      label: 'Data Início',
+      type: 'datetime-local' as const,
+      required: false,
+    },
+    {
+      name: 'dataFim',
+      label: 'Data Fim',
+      type: 'datetime-local' as const,
+      required: false,
+    },
+    {
+      name: 'metragemProgramada',
+      label: 'Metragem Programada',
+      type: 'number' as const,
+      required: false,
+    },
+    {
       name: 'metragemProcessada',
       label: 'Metragem Processada',
       type: 'number' as const,
       required: false,
     },
     {
-      name: 'observacoes',
-      label: 'Observações',
-      type: 'textarea' as const,
-      required: false,
-    },
-    {
       name: 'isReprocesso',
       label: 'É Reprocesso?',
       type: 'switch' as const,
+      required: false,
+    },
+    {
+      name: 'observacoes',
+      label: 'Observações',
+      type: 'textarea' as const,
       required: false,
     },
   ];
@@ -1046,12 +1131,7 @@ export default function ProducoesPage() {
                       size="icon"
                       onClick={() => {
                         setSelectedProducao(producao);
-                        setFormData({
-                          operadorFimId: producao.operadorFimId || '',
-                          metragemProcessada: producao.metragemProcessada,
-                          observacoes: producao.observacoes || '',
-                          isReprocesso: producao.isReprocesso,
-                        });
+                        setFormData(prepararDadosEdicao(producao));
                         setModalEditarOpen(true);
                       }}
                       className="h-8 w-8 text-blue-600"
@@ -1107,7 +1187,7 @@ export default function ProducoesPage() {
         schema={finalizarProducaoSchema}
       />
 
-      {/* Modal de Editar Produção */}
+      {/* Modal de Editar Produção - AGORA COMPLETO */}
       <FormModal
         open={modalEditarOpen}
         onClose={() => {
@@ -1116,9 +1196,9 @@ export default function ProducoesPage() {
           setFormData({});
         }}
         onSubmit={handleEditarProducao}
-        title="Editar Produção"
+        title={`Editar Produção - OP ${selectedProducao?.op?.op}`}
         fields={camposEditar}
-        initialData={formData}
+        initialData={selectedProducao ? prepararDadosEdicao(selectedProducao) : {}}
         schema={editarProducaoSchema}
       />
 
