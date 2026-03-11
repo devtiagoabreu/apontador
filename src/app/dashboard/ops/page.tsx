@@ -148,24 +148,88 @@ interface RelatorioOps {
   opsPorStatus: { nome: string; quantidade: number }[];
 }
 
-// Schema para criação/edição de OP
+// Schema para criação/edição de OP - CORRIGIDO PARA ACEITAR STRINGS
 const opSchema = z.object({
-  op: z.number().optional(),
+  op: z.union([z.string(), z.number()])
+    .transform(val => {
+      if (typeof val === 'string') {
+        // Remove pontos de milhar e substitui vírgula por ponto
+        const cleaned = val.replace(/\./g, '').replace(',', '.');
+        return Number(cleaned);
+      }
+      return Number(val);
+    })
+    .refine(val => !isNaN(val) && val > 0, 'OP deve ser um número positivo')
+    .optional(),
+  
   produto: z.string().min(1).optional(),
-  qtdeProgramado: z.number().optional().nullable(),
-  qtdeCarregado: z.number().optional().nullable(),
-  qtdeProduzida: z.number().optional().nullable(),
+  
+  qtdeProgramado: z.union([z.string(), z.number()])
+    .transform(val => {
+      if (val === null || val === undefined || val === '') return null;
+      if (typeof val === 'string') {
+        // Remove pontos de milhar e substitui vírgula por ponto
+        const cleaned = val.replace(/\./g, '').replace(',', '.');
+        const num = Number(cleaned);
+        return isNaN(num) ? null : num;
+      }
+      return Number(val);
+    })
+    .optional()
+    .nullable(),
+  
+  qtdeCarregado: z.union([z.string(), z.number()])
+    .transform(val => {
+      if (val === null || val === undefined || val === '') return null;
+      if (typeof val === 'string') {
+        const cleaned = val.replace(/\./g, '').replace(',', '.');
+        const num = Number(cleaned);
+        return isNaN(num) ? null : num;
+      }
+      return Number(val);
+    })
+    .optional()
+    .nullable(),
+  
+  qtdeProduzida: z.union([z.string(), z.number()])
+    .transform(val => {
+      if (val === null || val === undefined || val === '') return null;
+      if (typeof val === 'string') {
+        const cleaned = val.replace(/\./g, '').replace(',', '.');
+        const num = Number(cleaned);
+        return isNaN(num) ? null : num;
+      }
+      return Number(val);
+    })
+    .optional()
+    .nullable(),
+  
+  calculoQuebra: z.union([z.string(), z.number()])
+    .transform(val => {
+      if (val === null || val === undefined || val === '') return null;
+      if (typeof val === 'string') {
+        const cleaned = val.replace(/\./g, '').replace(',', '.');
+        const num = Number(cleaned);
+        return isNaN(num) ? null : num;
+      }
+      return Number(val);
+    })
+    .optional()
+    .nullable(),
+  
   um: z.string().optional().nullable(),
   narrativa: z.string().optional().nullable(),
   obs: z.string().optional().nullable(),
+  
   status: z.enum(['ABERTA', 'EM_ANDAMENTO', 'FINALIZADA', 'CANCELADA']).optional(),
+  
   codEstagioAtual: z.string().optional(),
   estagioAtual: z.string().optional(),
   codMaquinaAtual: z.string().optional(),
   maquinaAtual: z.string().optional(),
+  
   depositoFinal: z.string().optional().nullable(),
   pecasVinculadas: z.string().optional().nullable(),
-  calculoQuebra: z.number().optional().nullable(),
   nivel: z.string().optional().nullable(),
   grupo: z.string().optional().nullable(),
   sub: z.string().optional().nullable(),
