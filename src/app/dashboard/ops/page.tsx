@@ -495,7 +495,7 @@ export default function OpsPage() {
   }
 
   function exportarCSV() {
-    const headers = ['OP', 'Produto', 'Programado', 'Carregado', 'Produzido', 'Estágio', 'Máquina', 'Status', 'Importação'];
+    const headers = ['OP', 'Produto', 'Programado', 'Carregado', 'Produzido', 'Último Estágio', 'Última Máquina', 'Status', 'Importação'];
     const linhas = opsFiltradas.map(op => [
       op.op,
       op.produto,

@@ -21,6 +21,29 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { formatDate, formatNumber } from '@/lib/utils';
 
 type DashboardStats = {
   total_maquinas: number;
@@ -42,7 +65,7 @@ type DashboardStats = {
   tempo_total_producao_hoje: number;
   tempo_total_paradas_hoje: number;
   
-  // Novos campos
+  // Dados do mês
   producoes_finalizadas_mes: number;
   producoes_finalizadas_mes_anterior: number;
   paradas_mes: number;
@@ -53,6 +76,37 @@ type DashboardStats = {
   metragem_produzida_mes_anterior: number;
 };
 
+type Producao = {
+  id: string;
+  opId: number;
+  produto: string;
+  maquina: string;
+  estagio: string;
+  operador: string;
+  dataFim: string;
+  metragem: number;
+};
+
+type Parada = {
+  id: string;
+  motivo: string;
+  maquina: string;
+  operador: string;
+  dataInicio: string;
+  dataFim: string;
+  duracao: number;
+};
+
+type OPDashboard = {
+  op: number;
+  produto: string;
+  status: string;
+  estagio: string;
+  maquina: string;
+};
+
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+
 export default async function DashboardPage() {
   try {
     // Obter datas para cálculo
@@ -61,19 +115,16 @@ export default async function DashboardPage() {
     const mesmoDiaMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, hoje.getDate());
     const primeiroDiaMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
     
-    // Formatar datas como strings ISO (YYYY-MM-DD)
     const inicioMesAtual = primeiroDiaMes.toISOString().split('T')[0];
     const fimMesAtual = hoje.toISOString().split('T')[0];
     const inicioMesAnterior = primeiroDiaMesAnterior.toISOString().split('T')[0];
     const fimMesAnterior = mesmoDiaMesAnterior.toISOString().split('T')[0];
 
-    // Nomes dos meses para exibição
     const mesAtualNome = hoje.toLocaleDateString('pt-BR', { month: 'long' });
     const mesAnteriorNome = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1).toLocaleDateString('pt-BR', { month: 'long' });
-    
-    // Período para exibição (ex: "fev/01-12")
     const periodoAnterior = `${mesAnteriorNome.substring(0,3)}/${primeiroDiaMesAnterior.getDate()}-${mesmoDiaMesAnterior.getDate()}`;
 
+    // Buscar estatísticas principais
     const result = await db.execute(sql`
       WITH datas AS (
         SELECT 
@@ -152,7 +203,7 @@ export default async function DashboardPage() {
           WHERE DATE(data_fim) = CURRENT_DATE
         ), 0) as tempo_total_paradas_hoje,
         
-        -- 🔴 CORRIGIDO: Métricas do mês com conversão explícita para date
+        -- Dados do mês
         COALESCE((
           SELECT COUNT(*) 
           FROM producoes 
@@ -208,7 +259,99 @@ export default async function DashboardPage() {
 
     const stats = result.rows[0] as DashboardStats;
 
-    // Calcular variações com segurança
+    // 🔴 Buscar dados para os modais
+    
+    // Produções finalizadas no mês
+    const producoesMes = await db.execute(sql`
+      SELECT 
+        p.id,
+        p.op_id as "opId",
+        o.produto,
+        m.nome as maquina,
+        e.nome as estagio,
+        u.nome as operador,
+        p.data_fim as "dataFim",
+        p.metragem_processada as metragem
+      FROM producoes p
+      LEFT JOIN ops o ON p.op_id = o.op
+      LEFT JOIN maquinas m ON p.maquina_id = m.id
+      LEFT JOIN estagios e ON p.estagio_id = e.id
+      LEFT JOIN usuarios u ON p.operador_fim_id = u.id
+      WHERE DATE(p.data_fim) BETWEEN ${inicioMesAtual}::date AND ${fimMesAtual}::date
+        AND p.estagio_id <> '73e1dc52-6447-4e26-af7c-9d50ade7337f'
+      ORDER BY p.data_fim DESC
+    `);
+
+    // Paradas registradas no mês
+    const paradasMes = await db.execute(sql`
+      SELECT 
+        pm.id,
+        mp.descricao as motivo,
+        m.nome as maquina,
+        u.nome as operador,
+        pm.data_inicio as "dataInicio",
+        pm.data_fim as "dataFim",
+        EXTRACT(EPOCH FROM (pm.data_fim - pm.data_inicio))/60 as duracao
+      FROM paradas_maquina pm
+      LEFT JOIN maquinas m ON pm.maquina_id = m.id
+      LEFT JOIN usuarios u ON pm.operador_id = u.id
+      LEFT JOIN motivos_parada mp ON pm.motivo_parada_id = mp.id
+      WHERE DATE(pm.data_fim) BETWEEN ${inicioMesAtual}::date AND ${fimMesAtual}::date
+      ORDER BY pm.data_fim DESC
+    `);
+
+    // OPs por status
+    const opsPorStatus = await db.execute(sql`
+      SELECT 
+        op,
+        produto,
+        status,
+        estagio_atual as estagio,
+        maquina_atual as maquina
+      FROM ops
+      ORDER BY op DESC
+      LIMIT 100
+    `);
+
+    // Dados para gráficos
+    const producoesPorDia = await db.execute(sql`
+      SELECT 
+        DATE(data_fim) as data,
+        COUNT(*) as quantidade,
+        COALESCE(SUM(metragem_processada::numeric), 0) as metragem
+      FROM producoes
+      WHERE DATE(data_fim) BETWEEN ${inicioMesAtual}::date AND ${fimMesAtual}::date
+        AND estagio_id <> '73e1dc52-6447-4e26-af7c-9d50ade7337f'
+      GROUP BY DATE(data_fim)
+      ORDER BY data
+    `);
+
+    const paradasPorMotivo = await db.execute(sql`
+      SELECT 
+        mp.descricao as motivo,
+        COUNT(*) as quantidade,
+        COALESCE(SUM(EXTRACT(EPOCH FROM (pm.data_fim - pm.data_inicio))/60), 0) as minutos
+      FROM paradas_maquina pm
+      LEFT JOIN motivos_parada mp ON pm.motivo_parada_id = mp.id
+      WHERE DATE(pm.data_fim) BETWEEN ${inicioMesAtual}::date AND ${fimMesAtual}::date
+      GROUP BY mp.descricao
+      ORDER BY quantidade DESC
+    `);
+
+    const producoesPorMaquina = await db.execute(sql`
+      SELECT 
+        m.nome,
+        COUNT(*) as quantidade,
+        COALESCE(SUM(p.metragem_processada::numeric), 0) as metragem
+      FROM producoes p
+      LEFT JOIN maquinas m ON p.maquina_id = m.id
+      WHERE DATE(p.data_fim) BETWEEN ${inicioMesAtual}::date AND ${fimMesAtual}::date
+        AND p.estagio_id <> '73e1dc52-6447-4e26-af7c-9d50ade7337f'
+      GROUP BY m.nome
+      ORDER BY quantidade DESC
+    `);
+
+    // Calcular variações
     const statsComVariacao = {
       ...stats,
       variacao_producoes: stats.producoes_finalizadas_mes_anterior > 0 
@@ -223,15 +366,14 @@ export default async function DashboardPage() {
       variacao_metragem_produzida: stats.metragem_produzida_mes_anterior > 0
         ? ((stats.metragem_produzida_mes - stats.metragem_produzida_mes_anterior) / stats.metragem_produzida_mes_anterior * 100).toFixed(1)
         : 0,
-      dias_corridos_mes: hoje.getDate(),
       mes_atual_nome: mesAtualNome,
       mes_anterior_nome: mesAnteriorNome,
       periodo_anterior: periodoAnterior,
     };
 
-    const eficienciaGlobal = stats.tempo_total_producao_hoje > 0 
-      ? (stats.tempo_total_producao_hoje / (stats.tempo_total_producao_hoje + stats.tempo_total_paradas_hoje) * 100).toFixed(1)
-      : 0;
+    const producoesFinalizadas = producoesMes.rows as Producao[];
+    const paradasList = paradasMes.rows as Parada[];
+    const opsList = opsPorStatus.rows as OPDashboard[];
 
     return (
       <div className="space-y-6">
@@ -247,61 +389,230 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Cards principais (mantidos iguais) */}
+        {/* Cards principais */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Máquinas</CardTitle>
-              <Factory className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.total_maquinas ?? 0}</div>
-              <div className="flex gap-2 mt-1 text-xs">
-                <span className="text-green-600">{stats?.maquinas_disponiveis ?? 0} disponíveis</span>
-                <span className="text-blue-600">{stats?.maquinas_em_processo ?? 0} em processo</span>
-                <span className="text-yellow-600">{stats?.maquinas_paradas ?? 0} paradas</span>
+          {/* Card Máquinas */}
+          <Dialog>
+            <DialogTrigger asChild>
+              <Card className="cursor-pointer hover:shadow-md transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Máquinas</CardTitle>
+                  <Factory className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats?.total_maquinas ?? 0}</div>
+                  <div className="flex gap-2 mt-1 text-xs">
+                    <span className="text-green-600">{stats?.maquinas_disponiveis ?? 0} disponíveis</span>
+                    <span className="text-blue-600">{stats?.maquinas_em_processo ?? 0} em processo</span>
+                    <span className="text-yellow-600">{stats?.maquinas_paradas ?? 0} paradas</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Detalhamento de Máquinas</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-green-50 p-4 rounded-lg text-center">
+                    <p className="text-sm text-green-600 font-medium">Disponíveis</p>
+                    <p className="text-3xl font-bold text-green-700">{stats?.maquinas_disponiveis ?? 0}</p>
+                  </div>
+                  <div className="bg-blue-50 p-4 rounded-lg text-center">
+                    <p className="text-sm text-blue-600 font-medium">Em Processo</p>
+                    <p className="text-3xl font-bold text-blue-700">{stats?.maquinas_em_processo ?? 0}</p>
+                  </div>
+                  <div className="bg-yellow-50 p-4 rounded-lg text-center">
+                    <p className="text-sm text-yellow-600 font-medium">Paradas</p>
+                    <p className="text-3xl font-bold text-yellow-700">{stats?.maquinas_paradas ?? 0}</p>
+                  </div>
+                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Máquina</TableHead>
+                      <TableHead>Código</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {/* Aqui você pode listar as máquinas */}
+                  </TableBody>
+                </Table>
               </div>
-            </CardContent>
-          </Card>
+            </DialogContent>
+          </Dialog>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Operadores</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.total_operadores ?? 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {stats?.operadores_ativos ?? 0} ativos agora
-              </p>
-            </CardContent>
-          </Card>
+          {/* Card Operadores */}
+          <Dialog>
+            <DialogTrigger asChild>
+              <Card className="cursor-pointer hover:shadow-md transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Operadores</CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats?.total_operadores ?? 0}</div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {stats?.operadores_ativos ?? 0} ativos agora
+                  </p>
+                </CardContent>
+              </Card>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Operadores Ativos</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-blue-50 p-4 rounded-lg text-center">
+                    <p className="text-sm text-blue-600 font-medium">Total</p>
+                    <p className="text-3xl font-bold">{stats?.total_operadores ?? 0}</p>
+                  </div>
+                  <div className="bg-green-50 p-4 rounded-lg text-center">
+                    <p className="text-sm text-green-600 font-medium">Ativos Agora</p>
+                    <p className="text-3xl font-bold">{stats?.operadores_ativos ?? 0}</p>
+                  </div>
+                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Operador</TableHead>
+                      <TableHead>Matrícula</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {/* Aqui você pode listar os operadores */}
+                  </TableBody>
+                </Table>
+              </div>
+            </DialogContent>
+          </Dialog>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">OPs em Aberto</CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.ops_abertas ?? 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {stats?.ops_andamento ?? 0} em andamento
-              </p>
-            </CardContent>
-          </Card>
+          {/* Card OPs em Aberto */}
+          <Dialog>
+            <DialogTrigger asChild>
+              <Card className="cursor-pointer hover:shadow-md transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">OPs em Aberto</CardTitle>
+                  <Package className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats?.ops_abertas ?? 0}</div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {stats?.ops_andamento ?? 0} em andamento
+                  </p>
+                </CardContent>
+              </Card>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Ordens de Produção</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="grid grid-cols-4 gap-2">
+                  <div className="bg-blue-50 p-3 rounded-lg text-center">
+                    <p className="text-xs text-blue-600">Abertas</p>
+                    <p className="text-xl font-bold">{stats?.ops_abertas}</p>
+                  </div>
+                  <div className="bg-yellow-50 p-3 rounded-lg text-center">
+                    <p className="text-xs text-yellow-600">Andamento</p>
+                    <p className="text-xl font-bold">{stats?.ops_andamento}</p>
+                  </div>
+                  <div className="bg-green-50 p-3 rounded-lg text-center">
+                    <p className="text-xs text-green-600">Finalizadas</p>
+                    <p className="text-xl font-bold">{stats?.ops_finalizadas}</p>
+                  </div>
+                  <div className="bg-red-50 p-3 rounded-lg text-center">
+                    <p className="text-xs text-red-600">Canceladas</p>
+                    <p className="text-xl font-bold">{stats?.ops_canceladas}</p>
+                  </div>
+                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>OP</TableHead>
+                      <TableHead>Produto</TableHead>
+                      <TableHead>Estágio</TableHead>
+                      <TableHead>Máquina</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {opsList.map((op) => (
+                      <TableRow key={op.op}>
+                        <TableCell className="font-medium">OP {op.op}</TableCell>
+                        <TableCell>{op.produto}</TableCell>
+                        <TableCell>{op.estagio}</TableCell>
+                        <TableCell>{op.maquina}</TableCell>
+                        <TableCell>
+                          <span className={`px-2 py-1 rounded-full text-xs ${
+                            op.status === 'ABERTA' ? 'bg-blue-100 text-blue-800' :
+                            op.status === 'EM_ANDAMENTO' ? 'bg-yellow-100 text-yellow-800' :
+                            op.status === 'FINALIZADA' ? 'bg-green-100 text-green-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                            {op.status.replace('_', ' ')}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </DialogContent>
+          </Dialog>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Produções Ativas</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.producoes_ativas ?? 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {stats?.paradas_ativas ?? 0} paradas ativas
-              </p>
-            </CardContent>
-          </Card>
+          {/* Card Produções Ativas */}
+          <Dialog>
+            <DialogTrigger asChild>
+              <Card className="cursor-pointer hover:shadow-md transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Produções Ativas</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats?.producoes_ativas ?? 0}</div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {stats?.paradas_ativas ?? 0} paradas ativas
+                  </p>
+                </CardContent>
+              </Card>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Produções em Andamento</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-blue-50 p-4 rounded-lg text-center">
+                    <p className="text-sm text-blue-600 font-medium">Ativas</p>
+                    <p className="text-3xl font-bold">{stats?.producoes_ativas}</p>
+                  </div>
+                  <div className="bg-yellow-50 p-4 rounded-lg text-center">
+                    <p className="text-sm text-yellow-600 font-medium">Paradas</p>
+                    <p className="text-3xl font-bold">{stats?.paradas_ativas}</p>
+                  </div>
+                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>OP</TableHead>
+                      <TableHead>Produto</TableHead>
+                      <TableHead>Máquina</TableHead>
+                      <TableHead>Estágio</TableHead>
+                      <TableHead>Início</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {/* Aqui você pode listar as produções ativas */}
+                  </TableBody>
+                </Table>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {/* Métricas de hoje e do mês */}
@@ -339,13 +650,60 @@ export default async function DashboardPage() {
                 </CardContent>
               </Card>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl">
+            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Estágios Finalizados - {statsComVariacao.mes_atual_nome}</DialogTitle>
               </DialogHeader>
-              <div className="p-4">
-                <p className="text-gray-500">Listagem das produções finalizadas no mês...</p>
-              </div>
+              <Tabs defaultValue="lista" className="mt-4">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="lista">Lista</TabsTrigger>
+                  <TabsTrigger value="grafico">Gráfico</TabsTrigger>
+                </TabsList>
+                <TabsContent value="lista" className="mt-4">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>OP</TableHead>
+                        <TableHead>Produto</TableHead>
+                        <TableHead>Máquina</TableHead>
+                        <TableHead>Estágio</TableHead>
+                        <TableHead>Operador</TableHead>
+                        <TableHead>Data</TableHead>
+                        <TableHead className="text-right">Metragem</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {producoesFinalizadas.map((prod) => (
+                        <TableRow key={prod.id}>
+                          <TableCell className="font-medium">OP {prod.opId}</TableCell>
+                          <TableCell>{prod.produto}</TableCell>
+                          <TableCell>{prod.maquina}</TableCell>
+                          <TableCell>{prod.estagio}</TableCell>
+                          <TableCell>{prod.operador}</TableCell>
+                          <TableCell>{formatDate(prod.dataFim)}</TableCell>
+                          <TableCell className="text-right">{formatNumber(prod.metragem)} m</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TabsContent>
+                <TabsContent value="grafico" className="mt-4">
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={producoesPorDia.rows}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="data" />
+                        <YAxis yAxisId="left" orientation="left" stroke="#3b82f6" />
+                        <YAxis yAxisId="right" orientation="right" stroke="#10b981" />
+                        <Tooltip />
+                        <Legend />
+                        <Bar yAxisId="left" dataKey="quantidade" fill="#3b82f6" name="Quantidade" />
+                        <Bar yAxisId="right" dataKey="metragem" fill="#10b981" name="Metragem (m)" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </TabsContent>
+              </Tabs>
             </DialogContent>
           </Dialog>
 
@@ -380,13 +738,64 @@ export default async function DashboardPage() {
                 </CardContent>
               </Card>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl">
+            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Paradas Registradas - {statsComVariacao.mes_atual_nome}</DialogTitle>
               </DialogHeader>
-              <div className="p-4">
-                <p className="text-gray-500">Listagem das paradas registradas no mês...</p>
-              </div>
+              <Tabs defaultValue="lista" className="mt-4">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="lista">Lista</TabsTrigger>
+                  <TabsTrigger value="grafico">Gráfico</TabsTrigger>
+                </TabsList>
+                <TabsContent value="lista" className="mt-4">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Motivo</TableHead>
+                        <TableHead>Máquina</TableHead>
+                        <TableHead>Operador</TableHead>
+                        <TableHead>Início</TableHead>
+                        <TableHead>Fim</TableHead>
+                        <TableHead className="text-right">Duração (min)</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paradasList.map((parada) => (
+                        <TableRow key={parada.id}>
+                          <TableCell>{parada.motivo}</TableCell>
+                          <TableCell>{parada.maquina}</TableCell>
+                          <TableCell>{parada.operador}</TableCell>
+                          <TableCell>{formatDate(parada.dataInicio)}</TableCell>
+                          <TableCell>{formatDate(parada.dataFim)}</TableCell>
+                          <TableCell className="text-right">{Math.round(parada.duracao)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TabsContent>
+                <TabsContent value="grafico" className="mt-4">
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={paradasPorMotivo.rows}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={true}
+                          label={(entry) => `${entry.motivo}: ${entry.quantidade}`}
+                          outerRadius={80}
+                          dataKey="quantidade"
+                        >
+                          {paradasPorMotivo.rows.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </TabsContent>
+              </Tabs>
             </DialogContent>
           </Dialog>
 
@@ -421,13 +830,44 @@ export default async function DashboardPage() {
                 </CardContent>
               </Card>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl">
+            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Metragem Processada - {statsComVariacao.mes_atual_nome}</DialogTitle>
               </DialogHeader>
-              <div className="p-4">
-                <p className="text-gray-500">Gráfico e detalhamento da metragem processada...</p>
-              </div>
+              <Tabs defaultValue="grafico" className="mt-4">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="grafico">Gráfico</TabsTrigger>
+                  <TabsTrigger value="maquinas">Por Máquina</TabsTrigger>
+                </TabsList>
+                <TabsContent value="grafico" className="mt-4">
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={producoesPorDia.rows}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="data" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="metragem" fill="#3b82f6" name="Metragem (m)" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </TabsContent>
+                <TabsContent value="maquinas" className="mt-4">
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={producoesPorMaquina.rows} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" />
+                        <YAxis dataKey="nome" type="category" width={150} />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="metragem" fill="#10b981" name="Metragem (m)" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </TabsContent>
+              </Tabs>
             </DialogContent>
           </Dialog>
 
@@ -462,13 +902,50 @@ export default async function DashboardPage() {
                 </CardContent>
               </Card>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl">
+            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Metragem Produzida - {statsComVariacao.mes_atual_nome}</DialogTitle>
               </DialogHeader>
-              <div className="p-4">
-                <p className="text-gray-500">Gráfico e detalhamento da metragem produzida...</p>
-              </div>
+              <Tabs defaultValue="grafico" className="mt-4">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="grafico">Gráfico</TabsTrigger>
+                  <TabsTrigger value="ops">Por OP</TabsTrigger>
+                </TabsList>
+                <TabsContent value="grafico" className="mt-4">
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={producoesPorDia.rows}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="data" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="metragem" fill="#8b5cf6" name="Metragem (m)" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </TabsContent>
+                <TabsContent value="ops" className="mt-4">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>OP</TableHead>
+                        <TableHead>Produto</TableHead>
+                        <TableHead>Metragem</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {opsList.filter(op => op.status === 'FINALIZADA').map((op) => (
+                        <TableRow key={op.op}>
+                          <TableCell className="font-medium">OP {op.op}</TableCell>
+                          <TableCell>{op.produto}</TableCell>
+                          <TableCell>{formatNumber(Number(op.maquina) || 0)} m</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TabsContent>
+              </Tabs>
             </DialogContent>
           </Dialog>
         </div>
