@@ -1,4 +1,3 @@
-// src/app/dashboard/produtos/page.tsx (manter essa linha de comentário)
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -37,7 +36,6 @@ import {
   Trash2,
   BarChart3
 } from 'lucide-react';
-import { formatNumber } from '@/lib/utils';
 
 interface Produto {
   id: string;
@@ -48,7 +46,14 @@ interface Produto {
   grupo?: string;
   sub?: string;
   item?: string;
-  composicao: any;
+  composicao: {
+    algodao: { percentual: number; fio: string };
+    poliester: { percentual: number; fio: string };
+    elastano: { percentual: number; fio: string };
+    linho: { percentual: number; fio: string };
+    viscoso: { percentual: number; fio: string };
+    acrilico: { percentual: number; fio: string };
+  };
   largura: number;
   gramaturaLinear: number;
   gramaturaM2: number;
@@ -57,7 +62,15 @@ interface Produto {
   fiosUrdume: number;
   fiosTrama: number;
   classificacaoPeso: 'LEVE' | 'MEDIO' | 'PESADO';
-  parametrosEficiencia: any;
+  parametrosEficiencia: {
+    preparacao: { tempoPadrao: number; rendimento: number; velocidade: number };
+    tingimento: { tempoPadrao: number; rendimento: number; velocidade: number };
+    alvejamento: { tempoPadrao: number; rendimento: number; velocidade: number };
+    secagem: { tempoPadrao: number; rendimento: number; velocidade: number };
+    estamparia: { tempoPadrao: number; rendimento: number; velocidade: number };
+    acabamento: { tempoPadrao: number; rendimento: number; velocidade: number };
+    revisao: { tempoPadrao: number; rendimento: number; velocidade: number };
+  };
   metaDiaria?: number;
   metaMensal?: number;
   ativo: boolean;
@@ -110,10 +123,46 @@ export default function ProdutosPage() {
     carregarProdutos();
   }, []);
 
+  // 🔍 Função para normalizar dados do produto
+  const normalizeProduto = (produto: Produto): Partial<Produto> => {
+    return {
+      ...produto,
+      composicao: produto.composicao || {
+        algodao: { percentual: 0, fio: '' },
+        poliester: { percentual: 0, fio: '' },
+        elastano: { percentual: 0, fio: '' },
+        linho: { percentual: 0, fio: '' },
+        viscoso: { percentual: 0, fio: '' },
+        acrilico: { percentual: 0, fio: '' }
+      },
+      parametrosEficiencia: produto.parametrosEficiencia || {
+        preparacao: { tempoPadrao: 0, rendimento: 100, velocidade: 0 },
+        tingimento: { tempoPadrao: 0, rendimento: 100, velocidade: 0 },
+        alvejamento: { tempoPadrao: 0, rendimento: 100, velocidade: 0 },
+        secagem: { tempoPadrao: 0, rendimento: 100, velocidade: 0 },
+        estamparia: { tempoPadrao: 0, rendimento: 100, velocidade: 0 },
+        acabamento: { tempoPadrao: 0, rendimento: 100, velocidade: 0 },
+        revisao: { tempoPadrao: 0, rendimento: 100, velocidade: 0 }
+      },
+      largura: Number(produto.largura) || 0,
+      gramaturaLinear: Number(produto.gramaturaLinear) || 0,
+      gramaturaM2: Number(produto.gramaturaM2) || 0,
+      fiosUrdume: Number(produto.fiosUrdume) || 0,
+      fiosTrama: Number(produto.fiosTrama) || 0,
+    };
+  };
+
+  // 🔍 useEffect com logs para debug
   useEffect(() => {
+    console.log('🔄 useEffect executado - selectedProduto:', selectedProduto);
+    
     if (selectedProduto) {
-      setFormData(selectedProduto);
+      console.log('📦 Carregando dados do produto para edição:', selectedProduto.codigo);
+      const normalized = normalizeProduto(selectedProduto);
+      console.log('📦 Dados normalizados:', normalized);
+      setFormData(normalized);
     } else {
+      console.log('📦 Criando novo produto');
       setFormData({
         codigo: '',
         nome: '',
@@ -321,7 +370,14 @@ export default function ProdutosPage() {
     window.print();
   }
 
-  // 🔴 CORREÇÃO: Definir colunas com tipagem correta
+  const openEditModal = (produto: Produto) => {
+    console.log('🔍 Abrindo modal de edição para produto:', produto);
+    console.log('📦 Dados completos:', JSON.stringify(produto, null, 2));
+    setSelectedProduto(produto);
+    setModalOpen(true);
+  };
+
+  // Definição das colunas
   const columns: Column[] = [
     { key: 'codigo', title: 'Código', sortable: true },
     { key: 'nome', title: 'Nome', sortable: true },
@@ -455,7 +511,7 @@ export default function ProdutosPage() {
         </div>
       </div>
 
-      {/* Tabela com ordenação - CORRIGIDA */}
+      {/* Tabela com ordenação */}
       <div className="border rounded-lg overflow-hidden">
         <table className="w-full">
           <thead className="bg-gray-50 border-b">
@@ -488,7 +544,6 @@ export default function ProdutosPage() {
               <tr key={produto.id} className="border-b hover:bg-gray-50">
                 {columns.map((col) => {
                   const value = produto[col.key];
-                  // 🔴 CORREÇÃO: Usar type assertion seguro
                   const displayValue = value === null || value === undefined ? '-' : String(value);
                   
                   return (
@@ -503,8 +558,8 @@ export default function ProdutosPage() {
                       variant="ghost"
                       size="icon"
                       onClick={() => {
-                        setSelectedProduto(produto);
-                        setModalOpen(true);
+                        console.log('🖱️ Botão editar clicado para produto:', produto.codigo);
+                        openEditModal(produto);
                       }}
                       className="h-8 w-8 text-blue-600"
                       title="Editar Produto"
