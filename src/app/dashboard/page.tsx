@@ -29,21 +29,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-} from 'recharts';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { formatDate, formatNumber } from '@/lib/utils';
 
 type DashboardStats = {
   total_maquinas: number;
@@ -86,26 +71,6 @@ type Producao = {
   dataFim: string;
   metragem: number;
 };
-
-type Parada = {
-  id: string;
-  motivo: string;
-  maquina: string;
-  operador: string;
-  dataInicio: string;
-  dataFim: string;
-  duracao: number;
-};
-
-type OPDashboard = {
-  op: number;
-  produto: string;
-  status: string;
-  estagio: string;
-  maquina: string;
-};
-
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 export default async function DashboardPage() {
   try {
@@ -259,9 +224,7 @@ export default async function DashboardPage() {
 
     const stats = result.rows[0] as DashboardStats;
 
-    // 🔴 Buscar dados para os modais
-    
-    // Produções finalizadas no mês
+    // Buscar produções finalizadas no mês
     const producoesMes = await db.execute(sql`
       SELECT 
         p.id,
@@ -282,26 +245,8 @@ export default async function DashboardPage() {
       ORDER BY p.data_fim DESC
     `);
 
-    // Paradas registradas no mês
-    const paradasMes = await db.execute(sql`
-      SELECT 
-        pm.id,
-        mp.descricao as motivo,
-        m.nome as maquina,
-        u.nome as operador,
-        pm.data_inicio as "dataInicio",
-        pm.data_fim as "dataFim",
-        EXTRACT(EPOCH FROM (pm.data_fim - pm.data_inicio))/60 as duracao
-      FROM paradas_maquina pm
-      LEFT JOIN maquinas m ON pm.maquina_id = m.id
-      LEFT JOIN usuarios u ON pm.operador_id = u.id
-      LEFT JOIN motivos_parada mp ON pm.motivo_parada_id = mp.id
-      WHERE DATE(pm.data_fim) BETWEEN ${inicioMesAtual}::date AND ${fimMesAtual}::date
-      ORDER BY pm.data_fim DESC
-    `);
-
-    // OPs por status
-    const opsPorStatus = await db.execute(sql`
+    // Buscar OPs por status
+    const opsList = await db.execute(sql`
       SELECT 
         op,
         produto,
@@ -311,44 +256,6 @@ export default async function DashboardPage() {
       FROM ops
       ORDER BY op DESC
       LIMIT 100
-    `);
-
-    // Dados para gráficos
-    const producoesPorDia = await db.execute(sql`
-      SELECT 
-        DATE(data_fim) as data,
-        COUNT(*) as quantidade,
-        COALESCE(SUM(metragem_processada::numeric), 0) as metragem
-      FROM producoes
-      WHERE DATE(data_fim) BETWEEN ${inicioMesAtual}::date AND ${fimMesAtual}::date
-        AND estagio_id <> '73e1dc52-6447-4e26-af7c-9d50ade7337f'
-      GROUP BY DATE(data_fim)
-      ORDER BY data
-    `);
-
-    const paradasPorMotivo = await db.execute(sql`
-      SELECT 
-        mp.descricao as motivo,
-        COUNT(*) as quantidade,
-        COALESCE(SUM(EXTRACT(EPOCH FROM (pm.data_fim - pm.data_inicio))/60), 0) as minutos
-      FROM paradas_maquina pm
-      LEFT JOIN motivos_parada mp ON pm.motivo_parada_id = mp.id
-      WHERE DATE(pm.data_fim) BETWEEN ${inicioMesAtual}::date AND ${fimMesAtual}::date
-      GROUP BY mp.descricao
-      ORDER BY quantidade DESC
-    `);
-
-    const producoesPorMaquina = await db.execute(sql`
-      SELECT 
-        m.nome,
-        COUNT(*) as quantidade,
-        COALESCE(SUM(p.metragem_processada::numeric), 0) as metragem
-      FROM producoes p
-      LEFT JOIN maquinas m ON p.maquina_id = m.id
-      WHERE DATE(p.data_fim) BETWEEN ${inicioMesAtual}::date AND ${fimMesAtual}::date
-        AND p.estagio_id <> '73e1dc52-6447-4e26-af7c-9d50ade7337f'
-      GROUP BY m.nome
-      ORDER BY quantidade DESC
     `);
 
     // Calcular variações
@@ -372,8 +279,7 @@ export default async function DashboardPage() {
     };
 
     const producoesFinalizadas = producoesMes.rows as Producao[];
-    const paradasList = paradasMes.rows as Parada[];
-    const opsList = opsPorStatus.rows as OPDashboard[];
+    const opsRows = opsList.rows as any[];
 
     return (
       <div className="space-y-6">
@@ -409,37 +315,12 @@ export default async function DashboardPage() {
                 </CardContent>
               </Card>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogContent className="max-w-4xl">
               <DialogHeader>
                 <DialogTitle>Detalhamento de Máquinas</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-green-50 p-4 rounded-lg text-center">
-                    <p className="text-sm text-green-600 font-medium">Disponíveis</p>
-                    <p className="text-3xl font-bold text-green-700">{stats?.maquinas_disponiveis ?? 0}</p>
-                  </div>
-                  <div className="bg-blue-50 p-4 rounded-lg text-center">
-                    <p className="text-sm text-blue-600 font-medium">Em Processo</p>
-                    <p className="text-3xl font-bold text-blue-700">{stats?.maquinas_em_processo ?? 0}</p>
-                  </div>
-                  <div className="bg-yellow-50 p-4 rounded-lg text-center">
-                    <p className="text-sm text-yellow-600 font-medium">Paradas</p>
-                    <p className="text-3xl font-bold text-yellow-700">{stats?.maquinas_paradas ?? 0}</p>
-                  </div>
-                </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Máquina</TableHead>
-                      <TableHead>Código</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {/* Aqui você pode listar as máquinas */}
-                  </TableBody>
-                </Table>
+              <div className="p-4">
+                <p className="text-gray-500">Em desenvolvimento...</p>
               </div>
             </DialogContent>
           </Dialog>
@@ -460,33 +341,12 @@ export default async function DashboardPage() {
                 </CardContent>
               </Card>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogContent className="max-w-4xl">
               <DialogHeader>
                 <DialogTitle>Operadores Ativos</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-blue-50 p-4 rounded-lg text-center">
-                    <p className="text-sm text-blue-600 font-medium">Total</p>
-                    <p className="text-3xl font-bold">{stats?.total_operadores ?? 0}</p>
-                  </div>
-                  <div className="bg-green-50 p-4 rounded-lg text-center">
-                    <p className="text-sm text-green-600 font-medium">Ativos Agora</p>
-                    <p className="text-3xl font-bold">{stats?.operadores_ativos ?? 0}</p>
-                  </div>
-                </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Operador</TableHead>
-                      <TableHead>Matrícula</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {/* Aqui você pode listar os operadores */}
-                  </TableBody>
-                </Table>
+              <div className="p-4">
+                <p className="text-gray-500">Em desenvolvimento...</p>
               </div>
             </DialogContent>
           </Dialog>
@@ -541,7 +401,7 @@ export default async function DashboardPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {opsList.map((op) => (
+                    {opsRows.map((op) => (
                       <TableRow key={op.op}>
                         <TableCell className="font-medium">OP {op.op}</TableCell>
                         <TableCell>{op.produto}</TableCell>
@@ -581,35 +441,12 @@ export default async function DashboardPage() {
                 </CardContent>
               </Card>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogContent className="max-w-4xl">
               <DialogHeader>
                 <DialogTitle>Produções em Andamento</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-blue-50 p-4 rounded-lg text-center">
-                    <p className="text-sm text-blue-600 font-medium">Ativas</p>
-                    <p className="text-3xl font-bold">{stats?.producoes_ativas}</p>
-                  </div>
-                  <div className="bg-yellow-50 p-4 rounded-lg text-center">
-                    <p className="text-sm text-yellow-600 font-medium">Paradas</p>
-                    <p className="text-3xl font-bold">{stats?.paradas_ativas}</p>
-                  </div>
-                </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>OP</TableHead>
-                      <TableHead>Produto</TableHead>
-                      <TableHead>Máquina</TableHead>
-                      <TableHead>Estágio</TableHead>
-                      <TableHead>Início</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {/* Aqui você pode listar as produções ativas */}
-                  </TableBody>
-                </Table>
+              <div className="p-4">
+                <p className="text-gray-500">Em desenvolvimento...</p>
               </div>
             </DialogContent>
           </Dialog>
@@ -654,56 +491,34 @@ export default async function DashboardPage() {
               <DialogHeader>
                 <DialogTitle>Estágios Finalizados - {statsComVariacao.mes_atual_nome}</DialogTitle>
               </DialogHeader>
-              <Tabs defaultValue="lista" className="mt-4">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="lista">Lista</TabsTrigger>
-                  <TabsTrigger value="grafico">Gráfico</TabsTrigger>
-                </TabsList>
-                <TabsContent value="lista" className="mt-4">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>OP</TableHead>
-                        <TableHead>Produto</TableHead>
-                        <TableHead>Máquina</TableHead>
-                        <TableHead>Estágio</TableHead>
-                        <TableHead>Operador</TableHead>
-                        <TableHead>Data</TableHead>
-                        <TableHead className="text-right">Metragem</TableHead>
+              <div className="space-y-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>OP</TableHead>
+                      <TableHead>Produto</TableHead>
+                      <TableHead>Máquina</TableHead>
+                      <TableHead>Estágio</TableHead>
+                      <TableHead>Operador</TableHead>
+                      <TableHead>Data</TableHead>
+                      <TableHead className="text-right">Metragem</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {producoesFinalizadas.map((prod) => (
+                      <TableRow key={prod.id}>
+                        <TableCell className="font-medium">OP {prod.opId}</TableCell>
+                        <TableCell>{prod.produto}</TableCell>
+                        <TableCell>{prod.maquina}</TableCell>
+                        <TableCell>{prod.estagio}</TableCell>
+                        <TableCell>{prod.operador}</TableCell>
+                        <TableCell>{new Date(prod.dataFim).toLocaleDateString('pt-BR')}</TableCell>
+                        <TableCell className="text-right">{Number(prod.metragem).toLocaleString('pt-BR')} m</TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {producoesFinalizadas.map((prod) => (
-                        <TableRow key={prod.id}>
-                          <TableCell className="font-medium">OP {prod.opId}</TableCell>
-                          <TableCell>{prod.produto}</TableCell>
-                          <TableCell>{prod.maquina}</TableCell>
-                          <TableCell>{prod.estagio}</TableCell>
-                          <TableCell>{prod.operador}</TableCell>
-                          <TableCell>{formatDate(prod.dataFim)}</TableCell>
-                          <TableCell className="text-right">{formatNumber(prod.metragem)} m</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TabsContent>
-                <TabsContent value="grafico" className="mt-4">
-                  <div className="h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={producoesPorDia.rows}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="data" />
-                        <YAxis yAxisId="left" orientation="left" stroke="#3b82f6" />
-                        <YAxis yAxisId="right" orientation="right" stroke="#10b981" />
-                        <Tooltip />
-                        <Legend />
-                        <Bar yAxisId="left" dataKey="quantidade" fill="#3b82f6" name="Quantidade" />
-                        <Bar yAxisId="right" dataKey="metragem" fill="#10b981" name="Metragem (m)" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </TabsContent>
-              </Tabs>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </DialogContent>
           </Dialog>
 
@@ -738,64 +553,13 @@ export default async function DashboardPage() {
                 </CardContent>
               </Card>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogContent className="max-w-4xl">
               <DialogHeader>
                 <DialogTitle>Paradas Registradas - {statsComVariacao.mes_atual_nome}</DialogTitle>
               </DialogHeader>
-              <Tabs defaultValue="lista" className="mt-4">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="lista">Lista</TabsTrigger>
-                  <TabsTrigger value="grafico">Gráfico</TabsTrigger>
-                </TabsList>
-                <TabsContent value="lista" className="mt-4">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Motivo</TableHead>
-                        <TableHead>Máquina</TableHead>
-                        <TableHead>Operador</TableHead>
-                        <TableHead>Início</TableHead>
-                        <TableHead>Fim</TableHead>
-                        <TableHead className="text-right">Duração (min)</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {paradasList.map((parada) => (
-                        <TableRow key={parada.id}>
-                          <TableCell>{parada.motivo}</TableCell>
-                          <TableCell>{parada.maquina}</TableCell>
-                          <TableCell>{parada.operador}</TableCell>
-                          <TableCell>{formatDate(parada.dataInicio)}</TableCell>
-                          <TableCell>{formatDate(parada.dataFim)}</TableCell>
-                          <TableCell className="text-right">{Math.round(parada.duracao)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TabsContent>
-                <TabsContent value="grafico" className="mt-4">
-                  <div className="h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={paradasPorMotivo.rows}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={true}
-                          label={(entry) => `${entry.motivo}: ${entry.quantidade}`}
-                          outerRadius={80}
-                          dataKey="quantidade"
-                        >
-                          {paradasPorMotivo.rows.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </TabsContent>
-              </Tabs>
+              <div className="p-4">
+                <p className="text-gray-500">Em desenvolvimento...</p>
+              </div>
             </DialogContent>
           </Dialog>
 
@@ -830,44 +594,13 @@ export default async function DashboardPage() {
                 </CardContent>
               </Card>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogContent className="max-w-4xl">
               <DialogHeader>
                 <DialogTitle>Metragem Processada - {statsComVariacao.mes_atual_nome}</DialogTitle>
               </DialogHeader>
-              <Tabs defaultValue="grafico" className="mt-4">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="grafico">Gráfico</TabsTrigger>
-                  <TabsTrigger value="maquinas">Por Máquina</TabsTrigger>
-                </TabsList>
-                <TabsContent value="grafico" className="mt-4">
-                  <div className="h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={producoesPorDia.rows}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="data" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="metragem" fill="#3b82f6" name="Metragem (m)" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </TabsContent>
-                <TabsContent value="maquinas" className="mt-4">
-                  <div className="h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={producoesPorMaquina.rows} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis type="number" />
-                        <YAxis dataKey="nome" type="category" width={150} />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="metragem" fill="#10b981" name="Metragem (m)" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </TabsContent>
-              </Tabs>
+              <div className="p-4">
+                <p className="text-gray-500">Em desenvolvimento...</p>
+              </div>
             </DialogContent>
           </Dialog>
 
@@ -902,50 +635,13 @@ export default async function DashboardPage() {
                 </CardContent>
               </Card>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogContent className="max-w-4xl">
               <DialogHeader>
                 <DialogTitle>Metragem Produzida - {statsComVariacao.mes_atual_nome}</DialogTitle>
               </DialogHeader>
-              <Tabs defaultValue="grafico" className="mt-4">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="grafico">Gráfico</TabsTrigger>
-                  <TabsTrigger value="ops">Por OP</TabsTrigger>
-                </TabsList>
-                <TabsContent value="grafico" className="mt-4">
-                  <div className="h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={producoesPorDia.rows}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="data" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="metragem" fill="#8b5cf6" name="Metragem (m)" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </TabsContent>
-                <TabsContent value="ops" className="mt-4">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>OP</TableHead>
-                        <TableHead>Produto</TableHead>
-                        <TableHead>Metragem</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {opsList.filter(op => op.status === 'FINALIZADA').map((op) => (
-                        <TableRow key={op.op}>
-                          <TableCell className="font-medium">OP {op.op}</TableCell>
-                          <TableCell>{op.produto}</TableCell>
-                          <TableCell>{formatNumber(Number(op.maquina) || 0)} m</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TabsContent>
-              </Tabs>
+              <div className="p-4">
+                <p className="text-gray-500">Em desenvolvimento...</p>
+              </div>
             </DialogContent>
           </Dialog>
         </div>
