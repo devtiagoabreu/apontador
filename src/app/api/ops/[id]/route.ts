@@ -30,6 +30,56 @@ const opSchema = z.object({
   item: z.string().optional().nullable(),
 });
 
+// 🔴 ADICIONAR FUNÇÃO GET
+export async function GET(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  console.log('='.repeat(50));
+  console.log(`📦 GET /api/ops/${params.id} - INICIANDO`);
+  console.log('='.repeat(50));
+  
+  try {
+    const opId = parseInt(params.id);
+    console.log('🔍 OP ID recebido:', params.id);
+    console.log('🔍 OP ID convertido:', opId);
+    
+    if (isNaN(opId)) {
+      console.log('❌ ID inválido');
+      return NextResponse.json(
+        { error: 'ID inválido' },
+        { status: 400 }
+      );
+    }
+
+    console.log('🔍 Buscando OP no banco...');
+    const op = await db.query.ops.findFirst({
+      where: eq(ops.op, opId),
+    });
+
+    if (!op) {
+      console.log('❌ OP não encontrada');
+      return NextResponse.json(
+        { error: 'OP não encontrada' },
+        { status: 404 }
+      );
+    }
+
+    console.log('✅ OP encontrada:', op.op, op.produto);
+    
+    // Retornar a OP completa
+    return NextResponse.json(op);
+
+  } catch (error) {
+    console.error('❌ ERRO NO GET:', error);
+    console.error('   Mensagem:', error instanceof Error ? error.message : String(error));
+    return NextResponse.json(
+      { error: 'Erro interno ao buscar OP' },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PUT(
   request: Request,
   { params }: { params: { id: string } }
@@ -87,7 +137,7 @@ export async function PUT(
     const validated = opSchema.parse(body);
     console.log('   ✅ Dados validados:', JSON.stringify(validated, null, 2));
 
-    // 🔴 PASSO 6: Preparar dados para atualizar - USANDO CAMELCASE
+    // PASSO 6: Preparar dados para atualizar - USANDO CAMELCASE
     console.log('📝 PASSO 6: Preparando dados para atualizar...');
     const dadosParaAtualizar: any = {};
 
@@ -131,7 +181,7 @@ export async function PUT(
       dadosParaAtualizar.status = validated.status;
     }
     
-    // 🔴 CAMPOS DE ESTÁGIO - usar camelCase
+    // CAMPOS DE ESTÁGIO - usar camelCase
     if (validated.codEstagioAtual !== undefined) {
       console.log('   ✅ codEstagioAtual (camelCase):', validated.codEstagioAtual);
       dadosParaAtualizar.codEstagioAtual = validated.codEstagioAtual;
@@ -142,7 +192,7 @@ export async function PUT(
       dadosParaAtualizar.estagioAtual = validated.estagioAtual;
     }
     
-    // 🔴 CAMPOS DE MÁQUINA - usar camelCase
+    // CAMPOS DE MÁQUINA - usar camelCase
     if (validated.codMaquinaAtual !== undefined) {
       console.log('   ✅ codMaquinaAtual (camelCase):', validated.codMaquinaAtual);
       dadosParaAtualizar.codMaquinaAtual = validated.codMaquinaAtual;
@@ -189,7 +239,7 @@ export async function PUT(
       dadosParaAtualizar.item = validated.item;
     }
 
-    // 🔴 updatedAt em camelCase
+    // updatedAt em camelCase
     dadosParaAtualizar.updatedAt = new Date();
     console.log('   ✅ updatedAt:', dadosParaAtualizar.updatedAt);
 
@@ -230,6 +280,42 @@ export async function PUT(
     console.error('   Mensagem:', error instanceof Error ? error.message : String(error));
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Erro interno' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  console.log(`📦 DELETE /api/ops/${params.id} - EXCLUIR OP`);
+  
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    }
+
+    const opId = parseInt(params.id);
+
+    const existing = await db.query.ops.findFirst({
+      where: eq(ops.op, opId),
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: 'OP não encontrada' }, { status: 404 });
+    }
+
+    await db.delete(ops).where(eq(ops.op, opId));
+    console.log('✅ OP excluída com sucesso:', opId);
+
+    return NextResponse.json({ success: true });
+
+  } catch (error) {
+    console.error('❌ Erro:', error);
+    return NextResponse.json(
+      { error: String(error) },
       { status: 500 }
     );
   }
