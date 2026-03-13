@@ -33,6 +33,7 @@ interface Setor {
   nome: string;
 }
 
+// Definindo as colunas com tipos explícitos
 const columns = [
   { key: 'codigo' as const, title: 'Código' },
   { key: 'nome' as const, title: 'Nome' },
@@ -40,22 +41,34 @@ const columns = [
   { 
     key: 'velocidadePadrao' as const, 
     title: 'Velocidade (m/min)',
-    format: (value: number) => value ? value.toFixed(2) : '0'
+    format: (value: any) => {
+      const num = Number(value);
+      return !isNaN(num) ? num.toFixed(2) : '0';
+    }
   },
   { 
     key: 'capacidadeKg' as const, 
     title: 'Capacidade (kg)',
-    format: (value: number) => value ? value.toFixed(2) : '0'
+    format: (value: any) => {
+      const num = Number(value);
+      return !isNaN(num) ? num.toFixed(2) : '0';
+    }
   },
   { 
     key: 'capacidadeLitros' as const, 
     title: 'Capacidade (L)',
-    format: (value: number) => value ? value.toFixed(2) : '0'
+    format: (value: any) => {
+      const num = Number(value);
+      return !isNaN(num) ? num.toFixed(2) : '0';
+    }
   },
   { 
     key: 'tempoDiarioDisponivel' as const, 
     title: 'Tempo Disponível (min)',
-    format: (value: number) => value.toString()
+    format: (value: any) => {
+      const num = Number(value);
+      return !isNaN(num) ? num.toString() : '1440';
+    }
   },
   { 
     key: 'status' as const, 
@@ -112,20 +125,22 @@ export default function MaquinasPage() {
   });
 
   useEffect(() => {
+    console.log('🔍 Componente montado, carregando dados...');
     carregarDados();
   }, []);
 
   useEffect(() => {
     if (selectedMaquina) {
+      console.log('📦 Máquina selecionada para edição:', selectedMaquina);
       setFormData({
         nome: selectedMaquina.nome,
         codigo: selectedMaquina.codigo,
         status: selectedMaquina.status,
         ativo: selectedMaquina.ativo,
-        velocidadePadrao: selectedMaquina.velocidadePadrao || 0,
-        capacidadeKg: selectedMaquina.capacidadeKg || 0,
-        capacidadeLitros: selectedMaquina.capacidadeLitros || 0,
-        tempoDiarioDisponivel: selectedMaquina.tempoDiarioDisponivel || 1440,
+        velocidadePadrao: Number(selectedMaquina.velocidadePadrao) || 0,
+        capacidadeKg: Number(selectedMaquina.capacidadeKg) || 0,
+        capacidadeLitros: Number(selectedMaquina.capacidadeLitros) || 0,
+        tempoDiarioDisponivel: Number(selectedMaquina.tempoDiarioDisponivel) || 1440,
         setores: selectedMaquina.setores || [],
       });
       setSelectedSetores(selectedMaquina.setores || []);
@@ -148,9 +163,10 @@ export default function MaquinasPage() {
   async function carregarDados() {
     setLoading(true);
     try {
+      console.log('📡 Carregando máquinas e setores...');
       await Promise.all([carregarMaquinas(), carregarSetores()]);
     } catch (error) {
-      console.error('Erro ao carregar dados:', error);
+      console.error('❌ Erro ao carregar dados:', error);
     } finally {
       setLoading(false);
     }
@@ -158,11 +174,23 @@ export default function MaquinasPage() {
 
   async function carregarMaquinas() {
     try {
+      console.log('📡 Fazendo requisição GET /api/maquinas');
       const response = await fetch('/api/maquinas');
+      console.log('📦 Status da resposta:', response.status);
+      
       if (!response.ok) throw new Error('Erro ao carregar máquinas');
+      
       const data = await response.json();
+      console.log('📦 Dados recebidos da API:', data);
+      console.log('📦 Quantidade de máquinas:', data.length);
+      
+      if (data.length > 0) {
+        console.log('📦 Primeira máquina:', data[0]);
+      }
+      
       setMaquinas(data);
     } catch (error) {
+      console.error('❌ Erro ao carregar máquinas:', error);
       toast({
         title: 'Erro',
         description: 'Não foi possível carregar as máquinas',
@@ -178,6 +206,7 @@ export default function MaquinasPage() {
       const data = await response.json();
       setSetores(data);
     } catch (error) {
+      console.error('Erro ao carregar setores:', error);
       toast({
         title: 'Erro',
         description: 'Não foi possível carregar os setores',
@@ -490,6 +519,7 @@ export default function MaquinasPage() {
           data={maquinas}
           columns={columns}
           onEdit={(maquina) => {
+            console.log('✏️ Editando máquina:', maquina);
             setSelectedMaquina(maquina);
             setModalOpen(true);
           }}
