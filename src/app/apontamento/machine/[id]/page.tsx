@@ -1,3 +1,4 @@
+//src/app/apontamento/machine/[id]/page.tsx
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';

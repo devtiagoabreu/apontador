@@ -1,3 +1,4 @@
+// src/app/api/maquinas/[id]/setores/route.ts
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { maquinaSetor } from '@/lib/db/schema/maquina-setor';

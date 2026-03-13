@@ -1,3 +1,4 @@
+// src/app/api/maquinas/[id]/disponiveis/route.ts
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
