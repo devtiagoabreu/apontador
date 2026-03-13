@@ -7,6 +7,18 @@ import { maquinas } from '@/lib/db/schema/maquinas';
 import { maquinaSetor } from '@/lib/db/schema/maquina-setor';
 import { setores } from '@/lib/db/schema/setores';
 import { eq } from 'drizzle-orm';
+import { z } from 'zod';
+
+const maquinaSchema = z.object({
+  nome: z.string().min(3).optional(),
+  codigo: z.string().min(1).max(20).optional(),
+  status: z.enum(['DISPONIVEL', 'EM_PROCESSO', 'PARADA']).optional(),
+  ativo: z.boolean().optional(),
+  velocidadePadrao: z.number().optional(),
+  capacidadeKg: z.number().optional(),
+  capacidadeLitros: z.number().optional(),
+  tempoDiarioDisponivel: z.number().optional(),
+});
 
 export async function GET(
   request: Request,
@@ -82,6 +94,10 @@ export async function PUT(
     console.log('📦 Dados:', maquinaData);
     console.log('📦 Setores:', setores);
 
+    // Validar dados da máquina (ignorar setores)
+    const validated = maquinaSchema.parse(maquinaData);
+    console.log('✅ Dados validados:', validated);
+
     // Verificar se máquina existe
     const existing = await db.query.maquinas.findFirst({
       where: eq(maquinas.id, params.id),
@@ -94,18 +110,32 @@ export async function PUT(
       );
     }
 
+    // Preparar dados para atualização
+    const updateData: any = {
+      ...validated,
+      updatedAt: new Date(),
+    };
+
+    // Converter números decimais para string
+    if (validated.velocidadePadrao !== undefined) {
+      updateData.velocidadePadrao = validated.velocidadePadrao.toString();
+    }
+    if (validated.capacidadeKg !== undefined) {
+      updateData.capacidadeKg = validated.capacidadeKg.toString();
+    }
+    if (validated.capacidadeLitros !== undefined) {
+      updateData.capacidadeLitros = validated.capacidadeLitros.toString();
+    }
+
     // Atualizar máquina
     const [updated] = await db
       .update(maquinas)
-      .set({
-        ...maquinaData,
-        updatedAt: new Date(),
-      })
+      .set(updateData)
       .where(eq(maquinas.id, params.id))
       .returning();
 
-    // Atualizar vínculos com setores
-    if (setores) {
+    // Atualizar vínculos com setores (se fornecido)
+    if (setores !== undefined) {
       // Remover vínculos antigos
       await db.delete(maquinaSetor).where(eq(maquinaSetor.maquinaId, params.id));
 
@@ -126,6 +156,14 @@ export async function PUT(
 
   } catch (error) {
     console.error('❌ Erro ao atualizar máquina:', error);
+    
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Dados inválidos', detalhes: error.errors },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
       { error: 'Erro interno ao atualizar máquina' },
       { status: 500 }

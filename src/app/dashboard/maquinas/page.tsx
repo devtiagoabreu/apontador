@@ -22,18 +22,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Maquina, MaquinaFormData } from '@/types/maquinas';
 
 type StatusMaquina = 'DISPONIVEL' | 'EM_PROCESSO' | 'PARADA';
-
-interface Maquina {
-  id: string;
-  nome: string;
-  codigo: string;
-  status: StatusMaquina;
-  ativo: boolean;
-  setoresNomes?: string;
-  setores?: string[];
-}
 
 interface Setor {
   id: string;
@@ -44,6 +37,26 @@ const columns = [
   { key: 'codigo' as const, title: 'Código' },
   { key: 'nome' as const, title: 'Nome' },
   { key: 'setoresNomes' as const, title: 'Setores' },
+  { 
+    key: 'velocidadePadrao' as const, 
+    title: 'Velocidade (m/min)',
+    format: (value: number) => value ? value.toFixed(2) : '0'
+  },
+  { 
+    key: 'capacidadeKg' as const, 
+    title: 'Capacidade (kg)',
+    format: (value: number) => value ? value.toFixed(2) : '0'
+  },
+  { 
+    key: 'capacidadeLitros' as const, 
+    title: 'Capacidade (L)',
+    format: (value: number) => value ? value.toFixed(2) : '0'
+  },
+  { 
+    key: 'tempoDiarioDisponivel' as const, 
+    title: 'Tempo Disponível (min)',
+    format: (value: number) => value.toString()
+  },
   { 
     key: 'status' as const, 
     title: 'Status',
@@ -85,11 +98,17 @@ export default function MaquinasPage() {
   const [selectedMaquina, setSelectedMaquina] = useState<Maquina | null>(null);
   const [selectedSetores, setSelectedSetores] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
+  const [activeTab, setActiveTab] = useState('basico');
+  const [formData, setFormData] = useState<MaquinaFormData>({
     nome: '',
     codigo: '',
-    status: 'DISPONIVEL' as StatusMaquina,
+    status: 'DISPONIVEL',
     ativo: true,
+    velocidadePadrao: 0,
+    capacidadeKg: 0,
+    capacidadeLitros: 0,
+    tempoDiarioDisponivel: 1440,
+    setores: [],
   });
 
   useEffect(() => {
@@ -103,20 +122,24 @@ export default function MaquinasPage() {
         codigo: selectedMaquina.codigo,
         status: selectedMaquina.status,
         ativo: selectedMaquina.ativo,
+        velocidadePadrao: selectedMaquina.velocidadePadrao || 0,
+        capacidadeKg: selectedMaquina.capacidadeKg || 0,
+        capacidadeLitros: selectedMaquina.capacidadeLitros || 0,
+        tempoDiarioDisponivel: selectedMaquina.tempoDiarioDisponivel || 1440,
+        setores: selectedMaquina.setores || [],
       });
-      // Carregar setores da máquina
-      if (selectedMaquina.id) {
-        fetch(`/api/maquinas/${selectedMaquina.id}/setores`)
-          .then(res => res.json())
-          .then(data => setSelectedSetores(data.map((s: any) => s.setorId)))
-          .catch(err => console.error('Erro ao carregar setores:', err));
-      }
+      setSelectedSetores(selectedMaquina.setores || []);
     } else {
       setFormData({
         nome: '',
         codigo: '',
         status: 'DISPONIVEL',
         ativo: true,
+        velocidadePadrao: 0,
+        capacidadeKg: 0,
+        capacidadeLitros: 0,
+        tempoDiarioDisponivel: 1440,
+        setores: [],
       });
       setSelectedSetores([]);
     }
@@ -194,10 +217,8 @@ export default function MaquinasPage() {
       }
 
       const dataToSubmit = {
-        nome: formData.nome.trim(),
+        ...formData,
         codigo: formData.codigo.trim().toUpperCase(),
-        status: formData.status,
-        ativo: formData.ativo,
         setores: selectedSetores,
       };
 
@@ -228,12 +249,6 @@ export default function MaquinasPage() {
       setModalOpen(false);
       setSelectedMaquina(null);
       setSelectedSetores([]);
-      setFormData({
-        nome: '',
-        codigo: '',
-        status: 'DISPONIVEL',
-        ativo: true,
-      });
       
       // Recarregar lista
       await carregarMaquinas();
@@ -276,97 +291,180 @@ export default function MaquinasPage() {
     }
   }
 
-  const handleInputChange = (field: keyof typeof formData, value: any) => {
+  const handleInputChange = (field: keyof MaquinaFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  // Renderização do formulário
+  // Renderização do formulário com abas
   const renderForm = () => (
-    <div className="space-y-4 py-4">
-      <div className="space-y-2">
-        <Label htmlFor="nome">Nome *</Label>
-        <Input
-          id="nome"
-          value={formData.nome}
-          onChange={(e) => handleInputChange('nome', e.target.value)}
-          placeholder="Ex: JIGGER 01"
-          className="w-full"
-        />
-      </div>
+    <div className="py-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="basico">Básico</TabsTrigger>
+          <TabsTrigger value="parametros">Parâmetros</TabsTrigger>
+        </TabsList>
 
-      <div className="space-y-2">
-        <Label htmlFor="codigo">Código *</Label>
-        <Input
-          id="codigo"
-          value={formData.codigo}
-          onChange={(e) => handleInputChange('codigo', e.target.value.toUpperCase())}
-          placeholder="Ex: JG001"
-          className="w-full uppercase"
-        />
-      </div>
+        <TabsContent value="basico" className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="nome">Nome *</Label>
+            <Input
+              id="nome"
+              value={formData.nome}
+              onChange={(e) => handleInputChange('nome', e.target.value)}
+              placeholder="Ex: JIGGER 01"
+              className="w-full"
+            />
+          </div>
 
-      <div className="space-y-2">
-        <Label>Setores * (múltiplos)</Label>
-        <div className="border rounded-md p-4 space-y-2 max-h-48 overflow-y-auto">
-          {setores.length === 0 ? (
-            <p className="text-sm text-gray-500 text-center py-4">
-              Nenhum setor encontrado. Cadastre setores primeiro.
-            </p>
-          ) : (
-            setores.map((setor) => (
-              <div key={setor.id} className="flex items-center space-x-2">
-                <Checkbox
-                  id={setor.id}
-                  checked={selectedSetores.includes(setor.id)}
-                  onCheckedChange={(checked) => {
-                    if (checked) {
-                      setSelectedSetores([...selectedSetores, setor.id]);
-                    } else {
-                      setSelectedSetores(selectedSetores.filter(id => id !== setor.id));
-                    }
-                  }}
+          <div className="space-y-2">
+            <Label htmlFor="codigo">Código *</Label>
+            <Input
+              id="codigo"
+              value={formData.codigo}
+              onChange={(e) => handleInputChange('codigo', e.target.value.toUpperCase())}
+              placeholder="Ex: JG001"
+              className="w-full uppercase"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Setores * (múltiplos)</Label>
+            <div className="border rounded-md p-4 space-y-2 max-h-48 overflow-y-auto">
+              {setores.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  Nenhum setor encontrado. Cadastre setores primeiro.
+                </p>
+              ) : (
+                setores.map((setor) => (
+                  <div key={setor.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={setor.id}
+                      checked={selectedSetores.includes(setor.id)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedSetores([...selectedSetores, setor.id]);
+                        } else {
+                          setSelectedSetores(selectedSetores.filter(id => id !== setor.id));
+                        }
+                      }}
+                    />
+                    <Label htmlFor={setor.id} className="text-sm cursor-pointer">
+                      {setor.nome}
+                    </Label>
+                  </div>
+                ))
+              )}
+            </div>
+            {selectedSetores.length > 0 && (
+              <p className="text-xs text-gray-500">
+                {selectedSetores.length} setor(es) selecionado(s)
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="status">Status</Label>
+            <Select
+              value={formData.status}
+              onValueChange={(value: StatusMaquina) => handleInputChange('status', value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="DISPONIVEL">Disponível</SelectItem>
+                <SelectItem value="EM_PROCESSO">Em Processo</SelectItem>
+                <SelectItem value="PARADA">Parada</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center space-x-2 pt-2">
+            <Checkbox
+              id="ativo"
+              checked={formData.ativo}
+              onCheckedChange={(checked) => handleInputChange('ativo', checked)}
+            />
+            <Label htmlFor="ativo" className="text-sm cursor-pointer">
+              Máquina Ativa
+            </Label>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="parametros" className="space-y-4 py-4">
+          <Card>
+            <CardHeader className="py-3">
+              <CardTitle className="text-base">Parâmetros de Desempenho</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="velocidadePadrao">Velocidade Padrão (m/min)</Label>
+                <Input
+                  id="velocidadePadrao"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={formData.velocidadePadrao}
+                  onChange={(e) => handleInputChange('velocidadePadrao', Number(e.target.value))}
+                  placeholder="0"
                 />
-                <Label htmlFor={setor.id} className="text-sm cursor-pointer">
-                  {setor.nome}
-                </Label>
+                <p className="text-xs text-gray-500">
+                  Velocidade média de processamento em metros por minuto
+                </p>
               </div>
-            ))
-          )}
-        </div>
-        {selectedSetores.length > 0 && (
-          <p className="text-xs text-gray-500">
-            {selectedSetores.length} setor(es) selecionado(s)
-          </p>
-        )}
-      </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="status">Status</Label>
-        <Select
-          value={formData.status}
-          onValueChange={(value: StatusMaquina) => handleInputChange('status', value)}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Selecione o status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="DISPONIVEL">Disponível</SelectItem>
-            <SelectItem value="EM_PROCESSO">Em Processo</SelectItem>
-            <SelectItem value="PARADA">Parada</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+              <div className="space-y-2">
+                <Label htmlFor="capacidadeKg">Capacidade (kg)</Label>
+                <Input
+                  id="capacidadeKg"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={formData.capacidadeKg}
+                  onChange={(e) => handleInputChange('capacidadeKg', Number(e.target.value))}
+                  placeholder="0"
+                />
+                <p className="text-xs text-gray-500">
+                  Capacidade máxima em quilogramas por lote
+                </p>
+              </div>
 
-      <div className="flex items-center space-x-2 pt-2">
-        <Checkbox
-          id="ativo"
-          checked={formData.ativo}
-          onCheckedChange={(checked) => handleInputChange('ativo', checked)}
-        />
-        <Label htmlFor="ativo" className="text-sm cursor-pointer">
-          Máquina Ativa
-        </Label>
-      </div>
+              <div className="space-y-2">
+                <Label htmlFor="capacidadeLitros">Capacidade (litros)</Label>
+                <Input
+                  id="capacidadeLitros"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={formData.capacidadeLitros}
+                  onChange={(e) => handleInputChange('capacidadeLitros', Number(e.target.value))}
+                  placeholder="0"
+                />
+                <p className="text-xs text-gray-500">
+                  Capacidade máxima em litros por lote
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="tempoDiarioDisponivel">Tempo Diário Disponível (min)</Label>
+                <Input
+                  id="tempoDiarioDisponivel"
+                  type="number"
+                  step="1"
+                  min="0"
+                  max="1440"
+                  value={formData.tempoDiarioDisponivel}
+                  onChange={(e) => handleInputChange('tempoDiarioDisponivel', Number(e.target.value))}
+                  placeholder="1440"
+                />
+                <p className="text-xs text-gray-500">
+                  Tempo total disponível por dia em minutos (padrão: 1440 min = 24h)
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 
@@ -401,7 +499,7 @@ export default function MaquinasPage() {
 
       {/* Modal de máquina */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {selectedMaquina ? 'Editar Máquina' : 'Nova Máquina'}

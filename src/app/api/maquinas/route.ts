@@ -15,6 +15,12 @@ const maquinaSchema = z.object({
   setores: z.array(z.string()).min(1, 'Selecione pelo menos um setor'),
   status: z.enum(['DISPONIVEL', 'EM_PROCESSO', 'PARADA']).default('DISPONIVEL'),
   ativo: z.boolean().default(true),
+  
+  // NOVOS CAMPOS
+  velocidadePadrao: z.number().optional().default(0),
+  capacidadeKg: z.number().optional().default(0),
+  capacidadeLitros: z.number().optional().default(0),
+  tempoDiarioDisponivel: z.number().optional().default(1440),
 });
 
 export async function GET() {
@@ -32,6 +38,10 @@ export async function GET() {
         codigo: maquinas.codigo,
         status: maquinas.status,
         ativo: maquinas.ativo,
+        velocidadePadrao: maquinas.velocidadePadrao,
+        capacidadeKg: maquinas.capacidadeKg,
+        capacidadeLitros: maquinas.capacidadeLitros,
+        tempoDiarioDisponivel: maquinas.tempoDiarioDisponivel,
         createdAt: maquinas.createdAt,
         updatedAt: maquinas.updatedAt,
       })
@@ -97,7 +107,7 @@ export async function POST(request: Request) {
 
     // Inserir máquina em transação
     const result = await db.transaction(async (tx) => {
-      // Inserir máquina
+      // Inserir máquina com novos campos
       const [newMaquina] = await tx
         .insert(maquinas)
         .values({
@@ -105,6 +115,10 @@ export async function POST(request: Request) {
           codigo: validated.codigo,
           status: validated.status,
           ativo: validated.ativo,
+          velocidadePadrao: validated.velocidadePadrao?.toString(),
+          capacidadeKg: validated.capacidadeKg?.toString(),
+          capacidadeLitros: validated.capacidadeLitros?.toString(),
+          tempoDiarioDisponivel: validated.tempoDiarioDisponivel,
           createdAt: new Date(),
           updatedAt: new Date(),
         })
