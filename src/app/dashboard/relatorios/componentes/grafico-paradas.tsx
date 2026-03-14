@@ -1,3 +1,4 @@
+// src/app/dashboard/relatorios/componentes/grafico-paradas.tsx
 'use client';
 
 import {

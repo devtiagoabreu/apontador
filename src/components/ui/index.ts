@@ -14,3 +14,4 @@ export * from './toast';
 export * from './toaster';
 export * from './use-toast';
 export * from './radio-group';
+export * from './badge'; // ✅ Adicione esta linha
