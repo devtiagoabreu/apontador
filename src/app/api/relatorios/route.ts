@@ -1,9 +1,10 @@
+// src/app/api/relatorios/route.ts
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { producoesTable } from '@/lib/db/schema/producoes';
-import { paradasMaquina } from '@/lib/db/schema/paradas-maquina';
+import { producoesTable } from '@/lib/db/schema/producoes'; // ✅ USAR PRODUCOES
+import { paradasMaquina } from '@/lib/db/schema/paradas-maquina'; // ✅ USAR PARADAS
 import { ops } from '@/lib/db/schema/ops';
 import { maquinas } from '@/lib/db/schema/maquinas';
 import { usuarios } from '@/lib/db/schema/usuarios';
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
 
     switch (tipo) {
       case 'producao':
-        // Relatório de produção usando a tabela producoes
+        // 🔴 CORRIGIDO: Usar producoesTable em vez de apontamentos
         dados = await db
           .select({
             data: sql<string>`DATE(${producoesTable.dataFim})`,
@@ -66,7 +67,7 @@ export async function GET(request: Request) {
         break;
 
       case 'paradas':
-        // Relatório de paradas usando a tabela paradas_maquina
+        // 🔴 CORRIGIDO: Usar paradasMaquina em vez de apontamentos
         const paradas = await db
           .select({
             motivo: motivosParada.descricao,
@@ -119,7 +120,7 @@ export async function GET(request: Request) {
         break;
 
       case 'operadores':
-        // Relatório por operador usando a tabela producoes
+        // 🔴 CORRIGIDO: Usar producoesTable em vez de apontamentos
         dados = await db
           .select({
             nome: usuarios.nome,
@@ -153,7 +154,7 @@ export async function GET(request: Request) {
         break;
 
       case 'maquinas':
-        // Buscar dados de produção por máquina
+        // 🔴 CORRIGIDO: Usar producoesTable e paradasMaquina
         const producoesMaquinas = await db
           .select({
             maquinaId: maquinas.id,
@@ -174,7 +175,6 @@ export async function GET(request: Request) {
           )
           .groupBy(maquinas.id, maquinas.nome, maquinas.codigo);
 
-        // Buscar dados de paradas por máquina
         const paradasMaquinas = await db
           .select({
             maquinaId: maquinas.id,
@@ -198,28 +198,21 @@ export async function GET(request: Request) {
           const tempoParada = parada?.tempoParada || 0;
           const tempoTotal = p.tempoProducao + tempoParada;
           
-          // Disponibilidade = tempo produzindo / tempo total
           let disponibilidade = 100;
           if (tempoTotal > 0) {
             disponibilidade = Math.round((p.tempoProducao / tempoTotal) * 10000) / 100;
-          } else if (p.tempoProducao === 0 && tempoParada === 0) {
-            disponibilidade = 100; // Máquina não utilizada no período
           }
           
-          // Eficiência (taxa de produção por minuto)
           let metrosPorMinuto = 0;
           if (p.tempoProducao > 0) {
             metrosPorMinuto = Math.round((p.totalMetragem / p.tempoProducao) * 100) / 100;
           }
           
-          // Calcular eficiência relativa (comparada com a média da própria máquina)
-          // Como não temos velocidade padrão, usamos a média do período como referência
           let eficiencia = 100;
           if (p.tempoProducao > 0) {
-            // Se a máquina produziu, eficiência é 100% (referência ela mesma)
             eficiencia = 100;
           } else if (p.totalMetragem === 0 && tempoParada > 0) {
-            eficiencia = 0; // Só teve paradas
+            eficiencia = 0;
           }
           
           return {
@@ -234,7 +227,6 @@ export async function GET(request: Request) {
           };
         }).filter(m => m.totalMetragem > 0 || m.tempoParada > 0);
         
-        // Ordenar por nome
         dados.sort((a, b) => a.nome.localeCompare(b.nome));
         break;
 
