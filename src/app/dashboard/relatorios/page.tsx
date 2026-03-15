@@ -1,7 +1,7 @@
 // src/app/dashboard/relatorios/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Download, FileText, BarChart3, PieChart, Calendar, LineChart } from 'lucide-react';
@@ -16,6 +16,25 @@ import { CardResumoEficiencia } from './componentes/card-resumo-eficiencia';
 import { exportarPDF, exportarExcel } from './utils/exportar';
 import { toast } from '@/components/ui/use-toast';
 
+interface DadosRelatorio {
+  dados: any[];
+  totais?: {
+    totalRegistros: number;
+    metragemReal: number;
+    metragemEsperadaProduto: number;
+    metragemEsperadaMaquina: number;
+    tempoTotal: number;
+    eficienciaMediaProduto: number;
+    eficienciaMediaMaquina: number;
+  };
+  graficos?: {
+    porData?: any[];
+    porEstagio?: any[];
+    porMotivo?: any[];
+    porMaquina?: any[];
+  };
+}
+
 export default function RelatoriosPage() {
   const [periodo, setPeriodo] = useState<{ inicio: Date; fim: Date }>({
     inicio: new Date(new Date().setDate(new Date().getDate() - 30)),
@@ -23,73 +42,68 @@ export default function RelatoriosPage() {
   });
   const [tipoRelatorio, setTipoRelatorio] = useState('producao');
   const [filtrosAvancados, setFiltrosAvancados] = useState<any>(null);
-  const [dados, setDados] = useState<any[]>([]);
-  const [dadosEficiencia, setDadosEficiencia] = useState<any>(null);
+  const [dadosRelatorio, setDadosRelatorio] = useState<DadosRelatorio>({ dados: [] });
   const [carregando, setCarregando] = useState(false);
-  const [carregandoEficiencia, setCarregandoEficiencia] = useState(false);
 
-  console.log('🔄 RelatoriosPage renderizada');
-  console.log('📊 Estado atual:', {
-    tipoRelatorio,
-    periodo: {
-      inicio: periodo.inicio.toISOString(),
-      fim: periodo.fim.toISOString()
-    },
-    dadosLength: dados.length,
-    temDadosEficiencia: !!dadosEficiencia
-  });
+  // Carregar dados sempre que os filtros ou aba mudarem
+  useEffect(() => {
+    if (tipoRelatorio !== 'eficiencia') {
+      carregarDados();
+    }
+  }, [tipoRelatorio, periodo, filtrosAvancados]);
 
   async function carregarDados() {
     console.log('='.repeat(50));
-    console.log('📡 carregarDados - INICIANDO');
-    console.log('📊 Tipo de relatório:', tipoRelatorio);
-    console.log('📅 Período:', {
-      inicio: periodo.inicio.toISOString(),
-      fim: periodo.fim.toISOString()
-    });
+    console.log(`📡 carregarDados - ${tipoRelatorio}`);
+    console.log('📅 Período:', periodo);
+    console.log('🔍 Filtros avançados:', filtrosAvancados);
     
     setCarregando(true);
     try {
+      // Construir URL base
       const params = new URLSearchParams({
         inicio: periodo.inicio.toISOString(),
         fim: periodo.fim.toISOString(),
         tipo: tipoRelatorio,
       });
 
+      // Adicionar filtros avançados se existirem
+      if (filtrosAvancados) {
+        if (filtrosAvancados.maquinas?.length > 0) {
+          params.append('maquinas', filtrosAvancados.maquinas.join(','));
+        }
+        if (filtrosAvancados.operadores?.length > 0) {
+          params.append('operadores', filtrosAvancados.operadores.join(','));
+        }
+        if (filtrosAvancados.datas?.length > 0) {
+          params.append('datas', filtrosAvancados.datas.join(','));
+        }
+        if (filtrosAvancados.grupos?.length > 0) {
+          params.append('grupos', filtrosAvancados.grupos.join(','));
+        }
+        if (filtrosAvancados.estagios?.length > 0) {
+          params.append('estagios', filtrosAvancados.estagios.join(','));
+        }
+        if (filtrosAvancados.referencia) {
+          params.append('referencia', filtrosAvancados.referencia);
+        }
+      }
+
       const url = `/api/relatorios?${params}`;
-      console.log('🔗 URL da requisição:', url);
+      console.log('🔗 URL:', url);
 
       const response = await fetch(url);
-      console.log('📦 Status da resposta:', response.status);
-      console.log('📦 Headers:', Object.fromEntries(response.headers.entries()));
-
+      
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Erro na resposta:', {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorText
-        });
-        throw new Error(`Erro ${response.status}: ${errorText || response.statusText}`);
+        throw new Error(`Erro ${response.status}`);
       }
 
       const data = await response.json();
-      console.log('✅ Dados recebidos com sucesso:');
-      console.log('📊 Quantidade de registros:', data.length);
-      console.log('📋 Primeiro registro:', data[0]);
-      console.log('📋 Último registro:', data[data.length - 1]);
+      console.log('✅ Dados recebidos:', data);
       
-      setDados(data);
-      
-      toast({
-        title: 'Sucesso',
-        description: `${data.length} registros carregados`,
-      });
+      setDadosRelatorio(data);
     } catch (error) {
-      console.error('❌ Erro ao carregar dados:');
-      console.error('   Mensagem:', error instanceof Error ? error.message : String(error));
-      console.error('   Stack:', error instanceof Error ? error.stack : 'N/A');
-      
+      console.error('❌ Erro:', error);
       toast({
         title: 'Erro',
         description: error instanceof Error ? error.message : 'Não foi possível carregar os dados',
@@ -97,86 +111,17 @@ export default function RelatoriosPage() {
       });
     } finally {
       setCarregando(false);
-      console.log('🏁 carregarDados - FINALIZADO');
-      console.log('='.repeat(50));
     }
   }
 
-  async function carregarDadosEficiencia() {
-    console.log('='.repeat(50));
-    console.log('📡 carregarDadosEficiencia - INICIANDO');
-    console.log('📊 Filtros avançados:', filtrosAvancados);
-    
-    if (!filtrosAvancados) {
-      console.warn('⚠️ Nenhum filtro avançado selecionado');
-      toast({
-        title: 'Atenção',
-        description: 'Selecione os filtros avançados primeiro',
-        variant: 'default',
-      });
-      return;
-    }
-
-    setCarregandoEficiencia(true);
-    try {
-      const url = '/api/relatorios/eficiencia';
-      console.log('🔗 URL da requisição:', url);
-      console.log('📦 Body enviado:', JSON.stringify(filtrosAvancados, null, 2));
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(filtrosAvancados),
-      });
-
-      console.log('📦 Status da resposta:', response.status);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('❌ Erro na resposta:', errorData);
-        throw new Error(errorData.error || `Erro ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('✅ Dados de eficiência recebidos:');
-      console.log('📊 Totais:', data.totais);
-      console.log('📊 Gráficos:', {
-        porData: data.graficos?.porData?.length || 0,
-        porEstagio: data.graficos?.porEstagio?.length || 0
-      });
-      console.log('📋 Primeiro registro:', data.dados?.[0]);
-      
-      setDadosEficiencia(data);
-      
-      toast({
-        title: 'Sucesso',
-        description: `${data.dados?.length || 0} registros carregados`,
-      });
-    } catch (error) {
-      console.error('❌ Erro ao carregar dados de eficiência:');
-      console.error('   Mensagem:', error instanceof Error ? error.message : String(error));
-      console.error('   Stack:', error instanceof Error ? error.stack : 'N/A');
-      
-      toast({
-        title: 'Erro',
-        description: error instanceof Error ? error.message : 'Erro ao carregar dados',
-        variant: 'destructive',
-      });
-    } finally {
-      setCarregandoEficiencia(false);
-      console.log('🏁 carregarDadosEficiencia - FINALIZADO');
-      console.log('='.repeat(50));
-    }
-  }
-
-  const handleTabChange = (value: string) => {
-    console.log('🔄 Mudando de aba:', tipoRelatorio, '->', value);
-    setTipoRelatorio(value);
-    if (value !== 'eficiencia') {
-      console.log('📊 Carregando dados para aba:', value);
-      carregarDados();
+  const getTituloAba = () => {
+    switch (tipoRelatorio) {
+      case 'producao': return 'Produção';
+      case 'paradas': return 'Paradas';
+      case 'operadores': return 'Operadores';
+      case 'maquinas': return 'Máquinas';
+      case 'eficiencia': return 'Eficiência';
+      default: return '';
     }
   };
 
@@ -187,30 +132,24 @@ export default function RelatoriosPage() {
         <div className="flex gap-2">
           <Button 
             variant="outline" 
-            onClick={() => {
-              console.log('📥 Exportando PDF');
-              exportarPDF(
-                tipoRelatorio === 'eficiencia' ? dadosEficiencia?.dados || [] : dados, 
-                tipoRelatorio, 
-                periodo
-              );
-            }}
-            disabled={tipoRelatorio === 'eficiencia' ? !dadosEficiencia : dados.length === 0}
+            onClick={() => exportarPDF(
+              dadosRelatorio.dados || [], 
+              tipoRelatorio, 
+              periodo
+            )}
+            disabled={!dadosRelatorio.dados?.length}
           >
             <FileText className="mr-2 h-4 w-4" />
             PDF
           </Button>
           <Button 
             variant="outline" 
-            onClick={() => {
-              console.log('📥 Exportando Excel');
-              exportarExcel(
-                tipoRelatorio === 'eficiencia' ? dadosEficiencia?.dados || [] : dados, 
-                tipoRelatorio, 
-                periodo
-              );
-            }}
-            disabled={tipoRelatorio === 'eficiencia' ? !dadosEficiencia : dados.length === 0}
+            onClick={() => exportarExcel(
+              dadosRelatorio.dados || [], 
+              tipoRelatorio, 
+              periodo
+            )}
+            disabled={!dadosRelatorio.dados?.length}
           >
             <Download className="mr-2 h-4 w-4" />
             Excel
@@ -218,9 +157,18 @@ export default function RelatoriosPage() {
         </div>
       </div>
 
-      <FiltrosData periodo={periodo} setPeriodo={setPeriodo} onBuscar={carregarDados} />
+      {/* Filtros de Data (sempre visíveis) */}
+      <FiltrosData periodo={periodo} setPeriodo={setPeriodo} onBuscar={() => {}} />
 
-      <Tabs value={tipoRelatorio} onValueChange={handleTabChange}>
+      {/* Filtros Avançados (sempre visíveis) */}
+      <FiltrosAvancados
+        onChange={setFiltrosAvancados}
+        onBuscar={() => {}} // Agora os dados carregam automaticamente via useEffect
+        carregando={carregando}
+      />
+
+      {/* Abas */}
+      <Tabs value={tipoRelatorio} onValueChange={setTipoRelatorio}>
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="producao">
             <BarChart3 className="mr-2 h-4 w-4" />
@@ -244,120 +192,115 @@ export default function RelatoriosPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="producao" className="space-y-4">
+        {/* Cards de Resumo (comuns a todas as abas) */}
+        {dadosRelatorio.totais && (
+          <div className="grid gap-4 md:grid-cols-4 mt-6">
+            <CardResumoEficiencia
+              titulo="Total Produzido"
+              valor={dadosRelatorio.totais.metragemReal}
+              formato="numero"
+              cor="blue"
+            />
+            <CardResumoEficiencia
+              titulo={`Esperado (${filtrosAvancados?.referencia === 'produto' ? 'Produto' : 'Máquina'})`}
+              valor={filtrosAvancados?.referencia === 'produto' 
+                ? dadosRelatorio.totais.metragemEsperadaProduto 
+                : dadosRelatorio.totais.metragemEsperadaMaquina}
+              formato="numero"
+              cor="green"
+            />
+            <CardResumoEficiencia
+              titulo="Eficiência Média"
+              valor={filtrosAvancados?.referencia === 'produto' 
+                ? dadosRelatorio.totais.eficienciaMediaProduto 
+                : dadosRelatorio.totais.eficienciaMediaMaquina}
+              formato="percentual"
+              cor="purple"
+            />
+            <CardResumoEficiencia
+              titulo="Tempo Total"
+              valor={dadosRelatorio.totais.tempoTotal}
+              formato="numero"
+              cor="yellow"
+            />
+          </div>
+        )}
+
+        {/* Conteúdo das Abas */}
+        <TabsContent value="producao" className="space-y-4 mt-6">
           {carregando ? (
-            <div className="text-center py-8 text-gray-500">
-              Carregando dados...
-            </div>
+            <div className="text-center py-8 text-gray-500">Carregando...</div>
           ) : (
             <>
-              <div className="grid gap-4 md:grid-cols-2">
-                <GraficoProducao dados={dados} tipo="diario" />
-                <GraficoProducao dados={dados} tipo="acumulado" />
-              </div>
-              <TabelaDados dados={dados} tipo="producao" />
+              {dadosRelatorio.graficos?.porData && (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <GraficoProducao dados={dadosRelatorio.graficos.porData} tipo="diario" />
+                  <GraficoProducao dados={dadosRelatorio.graficos.porData} tipo="acumulado" />
+                </div>
+              )}
+              <TabelaDados dados={dadosRelatorio.dados} tipo="producao" />
             </>
           )}
         </TabsContent>
 
-        <TabsContent value="paradas" className="space-y-4">
+        <TabsContent value="paradas" className="space-y-4 mt-6">
           {carregando ? (
-            <div className="text-center py-8 text-gray-500">
-              Carregando dados...
-            </div>
+            <div className="text-center py-8 text-gray-500">Carregando...</div>
           ) : (
             <>
-              <div className="grid gap-4 md:grid-cols-2">
-                <GraficoParadas dados={dados} tipo="motivos" />
-                <GraficoParadas dados={dados} tipo="tempo" />
-              </div>
-              <TabelaDados dados={dados} tipo="paradas" />
+              {dadosRelatorio.graficos && (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <GraficoParadas dados={dadosRelatorio.dados} tipo="motivos" />
+                  <GraficoParadas dados={dadosRelatorio.dados} tipo="tempo" />
+                </div>
+              )}
+              <TabelaDados dados={dadosRelatorio.dados} tipo="paradas" />
             </>
           )}
         </TabsContent>
 
-        <TabsContent value="operadores" className="space-y-4">
+        <TabsContent value="operadores" className="space-y-4 mt-6">
           {carregando ? (
-            <div className="text-center py-8 text-gray-500">
-              Carregando dados...
-            </div>
+            <div className="text-center py-8 text-gray-500">Carregando...</div>
           ) : (
-            <TabelaDados dados={dados} tipo="operadores" />
+            <TabelaDados dados={dadosRelatorio.dados} tipo="operadores" />
           )}
         </TabsContent>
 
-        <TabsContent value="maquinas" className="space-y-4">
+        <TabsContent value="maquinas" className="space-y-4 mt-6">
           {carregando ? (
-            <div className="text-center py-8 text-gray-500">
-              Carregando dados...
-            </div>
+            <div className="text-center py-8 text-gray-500">Carregando...</div>
           ) : (
-            <TabelaDados dados={dados} tipo="maquinas" />
+            <TabelaDados dados={dadosRelatorio.dados} tipo="maquinas" />
           )}
         </TabsContent>
 
-        <TabsContent value="eficiencia" className="space-y-6">
-          {/* Filtros Avançados */}
-          <FiltrosAvancados
-            onChange={setFiltrosAvancados}
-            onBuscar={carregarDadosEficiencia}
-            carregando={carregandoEficiencia}
-          />
-
-          {/* Cards de Resumo */}
-          {dadosEficiencia && (
-            <>
-              <div className="grid gap-4 md:grid-cols-4">
-                <CardResumoEficiencia
-                  titulo="Total Produzido"
-                  valor={dadosEficiencia.totais.metragemReal}
-                  formato="numero"
-                  cor="blue"
+        <TabsContent value="eficiencia" className="space-y-4 mt-6">
+          {carregando ? (
+            <div className="text-center py-8 text-gray-500">Carregando...</div>
+          ) : (
+            dadosRelatorio.dados && (
+              <>
+                {dadosRelatorio.graficos && (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <GraficoEficiencia
+                      dados={dadosRelatorio.graficos.porData || []}
+                      tipo="comparativo"
+                      referencia={filtrosAvancados?.referencia || 'produto'}
+                    />
+                    <GraficoEficiencia
+                      dados={dadosRelatorio.graficos.porEstagio || []}
+                      tipo="estagios"
+                      referencia={filtrosAvancados?.referencia || 'produto'}
+                    />
+                  </div>
+                )}
+                <TabelaEficiencia
+                  dados={dadosRelatorio.dados}
+                  referencia={filtrosAvancados?.referencia || 'produto'}
                 />
-                <CardResumoEficiencia
-                  titulo={`Esperado (${filtrosAvancados?.referencia === 'produto' ? 'Produto' : 'Máquina'})`}
-                  valor={filtrosAvancados?.referencia === 'produto' 
-                    ? dadosEficiencia.totais.metragemEsperadaProduto 
-                    : dadosEficiencia.totais.metragemEsperadaMaquina}
-                  formato="numero"
-                  cor="green"
-                />
-                <CardResumoEficiencia
-                  titulo="Eficiência Média"
-                  valor={filtrosAvancados?.referencia === 'produto' 
-                    ? dadosEficiencia.totais.eficienciaMediaProduto 
-                    : dadosEficiencia.totais.eficienciaMediaMaquina}
-                  formato="percentual"
-                  cor="purple"
-                />
-                <CardResumoEficiencia
-                  titulo="Tempo Total"
-                  valor={dadosEficiencia.totais.tempoTotal}
-                  formato="numero"
-                  cor="yellow"
-                />
-              </div>
-
-              {/* Gráficos */}
-              <div className="grid gap-4 md:grid-cols-2">
-                <GraficoEficiencia
-                  dados={dadosEficiencia.graficos.porData}
-                  tipo="comparativo"
-                  referencia={filtrosAvancados?.referencia}
-                />
-                <GraficoEficiencia
-                  dados={dadosEficiencia.graficos.porEstagio}
-                  tipo="estagios"
-                  referencia={filtrosAvancados?.referencia}
-                />
-              </div>
-
-              {/* Tabela Detalhada */}
-              <TabelaEficiencia
-                dados={dadosEficiencia.dados}
-                referencia={filtrosAvancados?.referencia}
-              />
-            </>
+              </>
+            )
           )}
         </TabsContent>
       </Tabs>
