@@ -5,10 +5,10 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { MultiSelect } from './multi-select';
 import { ChevronDown, ChevronUp, Filter, X } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 interface Option {
   id: string;
@@ -21,15 +21,6 @@ interface FiltrosAvancadosProps {
   carregando?: boolean;
 }
 
-interface Filtros {
-  maquinas: string[];
-  operadores: string[];
-  datas: string[];
-  grupos: string[];
-  estagios: string[];
-  referencia: 'produto' | 'maquina';
-}
-
 export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [maquinas, setMaquinas] = useState<Option[]>([]);
@@ -38,13 +29,17 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
   const [grupos, setGrupos] = useState<Option[]>([]);
   const [datasDisponiveis, setDatasDisponiveis] = useState<Option[]>([]);
   
-  const [filtros, setFiltros] = useState<Filtros>({
-    maquinas: [],
-    operadores: [],
-    datas: [],
-    grupos: [],
-    estagios: [],
-    referencia: 'produto',
+  const [filtros, setFiltros] = useState({
+    periodo: {
+      inicio: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
+      fim: new Date().toISOString().split('T')[0],
+    },
+    maquinas: [] as string[],
+    operadores: [] as string[],
+    datas: [] as string[],
+    grupos: [] as string[],
+    estagios: [] as string[],
+    referencia: 'produto' as 'produto' | 'maquina',
   });
 
   // Carregar opções iniciais
@@ -52,10 +47,10 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
     carregarOpcoes();
   }, []);
 
-  // Notificar mudanças imediatamente
+  // Notificar mudanças
   useEffect(() => {
     onChange(filtros);
-  }, [filtros, onChange]);
+  }, [filtros]);
 
   async function carregarOpcoes() {
     try {
@@ -96,7 +91,6 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
       const produtosRes = await fetch('/api/produtos?limit=1000');
       const produtosData = await produtosRes.json();
       
-      // Extrair grupos únicos
       const gruposUnicos = new Set();
       const gruposList: Option[] = [];
       
@@ -134,15 +128,16 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
     }
   }
 
-  const atualizarFiltro = <K extends keyof Filtros>(
-    campo: K,
-    valor: Filtros[K]
-  ) => {
+  const atualizarFiltro = (campo: string, valor: any) => {
     setFiltros(prev => ({ ...prev, [campo]: valor }));
   };
 
   const limparFiltros = () => {
     setFiltros({
+      periodo: {
+        inicio: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
+        fim: new Date().toISOString().split('T')[0],
+      },
       maquinas: [],
       operadores: [],
       datas: [],
@@ -163,13 +158,13 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
   };
 
   return (
-    <Card className="mb-6">
+    <Card>
       <CardContent className="pt-6">
-        {/* Cabeçalho do filtro */}
+        {/* Cabeçalho */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Filter className="h-5 w-5 text-primary" />
-            <h3 className="text-lg font-semibold">Filtros Avançados</h3>
+            <h3 className="text-lg font-semibold">Filtros</h3>
             {temFiltrosAtivos() && (
               <span className="bg-primary/10 text-primary text-xs px-2 py-1 rounded-full">
                 {Object.values(filtros).reduce((acc, val) => 
@@ -190,7 +185,35 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
 
         {isOpen && (
           <div className="space-y-4">
-            {/* Linha 1: Máquinas e Operadores */}
+            {/* Período */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="dataInicio">Data Início</Label>
+                <Input
+                  id="dataInicio"
+                  type="date"
+                  value={filtros.periodo.inicio}
+                  onChange={(e) => setFiltros(prev => ({
+                    ...prev,
+                    periodo: { ...prev.periodo, inicio: e.target.value }
+                  }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dataFim">Data Fim</Label>
+                <Input
+                  id="dataFim"
+                  type="date"
+                  value={filtros.periodo.fim}
+                  onChange={(e) => setFiltros(prev => ({
+                    ...prev,
+                    periodo: { ...prev.periodo, fim: e.target.value }
+                  }))}
+                />
+              </div>
+            </div>
+
+            {/* Máquinas e Operadores */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <MultiSelect
                 label="Máquinas"
@@ -208,7 +231,7 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
               />
             </div>
 
-            {/* Linha 2: Datas e Grupos */}
+            {/* Datas Específicas e Grupos */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <MultiSelect
                 label="Datas Específicas"
@@ -226,7 +249,7 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
               />
             </div>
 
-            {/* Linha 3: Estágios */}
+            {/* Estágios */}
             <div className="grid grid-cols-1 gap-4">
               <MultiSelect
                 label="Estágios"
@@ -237,7 +260,7 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
               />
             </div>
 
-            {/* Linha 4: Referência para eficiência */}
+            {/* Referência para eficiência */}
             <div className="space-y-2">
               <Label>Referência para Cálculo de Eficiência</Label>
               <RadioGroup
@@ -262,7 +285,7 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
               </RadioGroup>
             </div>
 
-            {/* Botão de limpar apenas */}
+            {/* Botão de limpar */}
             <div className="flex justify-end gap-2 pt-4 border-t">
               {temFiltrosAtivos() && (
                 <Button

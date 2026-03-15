@@ -5,7 +5,6 @@ import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Download, FileText, BarChart3, PieChart, Calendar, LineChart } from 'lucide-react';
-import { FiltrosData } from './componentes/filtros';
 import { FiltrosAvancados } from './componentes/filtros-avancados';
 import { GraficoProducao } from './componentes/grafico-producao';
 import { GraficoParadas } from './componentes/grafico-paradas';
@@ -36,55 +35,54 @@ interface DadosRelatorio {
 }
 
 export default function RelatoriosPage() {
-  const [periodo, setPeriodo] = useState<{ inicio: Date; fim: Date }>({
-    inicio: new Date(new Date().setDate(new Date().getDate() - 30)),
-    fim: new Date(),
-  });
   const [tipoRelatorio, setTipoRelatorio] = useState('producao');
-  const [filtrosAvancados, setFiltrosAvancados] = useState<any>(null);
+  const [filtros, setFiltros] = useState<any>(null);
   const [dadosRelatorio, setDadosRelatorio] = useState<DadosRelatorio>({ dados: [] });
   const [carregando, setCarregando] = useState(false);
 
   // Carregar dados sempre que os filtros ou aba mudarem
   useEffect(() => {
-    carregarDados();
-  }, [tipoRelatorio, periodo, filtrosAvancados]);
+    if (filtros) {
+      carregarDados();
+    }
+  }, [tipoRelatorio, filtros]);
 
   async function carregarDados() {
     console.log('='.repeat(50));
     console.log(`📡 carregarDados - ${tipoRelatorio}`);
-    console.log('📅 Período:', periodo);
-    console.log('🔍 Filtros avançados:', filtrosAvancados);
+    console.log('🔍 Filtros:', filtros);
     
     setCarregando(true);
     try {
       // Construir URL base
       const params = new URLSearchParams({
-        inicio: periodo.inicio.toISOString(),
-        fim: periodo.fim.toISOString(),
         tipo: tipoRelatorio,
       });
 
-      // Adicionar filtros avançados se existirem
-      if (filtrosAvancados) {
-        if (filtrosAvancados.maquinas?.length > 0) {
-          params.append('maquinas', filtrosAvancados.maquinas.join(','));
-        }
-        if (filtrosAvancados.operadores?.length > 0) {
-          params.append('operadores', filtrosAvancados.operadores.join(','));
-        }
-        if (filtrosAvancados.datas?.length > 0) {
-          params.append('datas', filtrosAvancados.datas.join(','));
-        }
-        if (filtrosAvancados.grupos?.length > 0) {
-          params.append('grupos', filtrosAvancados.grupos.join(','));
-        }
-        if (filtrosAvancados.estagios?.length > 0) {
-          params.append('estagios', filtrosAvancados.estagios.join(','));
-        }
-        if (filtrosAvancados.referencia) {
-          params.append('referencia', filtrosAvancados.referencia);
-        }
+      // Adicionar filtros
+      if (filtros.periodo?.inicio) {
+        params.append('inicio', filtros.periodo.inicio);
+      }
+      if (filtros.periodo?.fim) {
+        params.append('fim', filtros.periodo.fim);
+      }
+      if (filtros.maquinas?.length > 0) {
+        params.append('maquinas', filtros.maquinas.join(','));
+      }
+      if (filtros.operadores?.length > 0) {
+        params.append('operadores', filtros.operadores.join(','));
+      }
+      if (filtros.datas?.length > 0) {
+        params.append('datas', filtros.datas.join(','));
+      }
+      if (filtros.grupos?.length > 0) {
+        params.append('grupos', filtros.grupos.join(','));
+      }
+      if (filtros.estagios?.length > 0) {
+        params.append('estagios', filtros.estagios.join(','));
+      }
+      if (filtros.referencia) {
+        params.append('referencia', filtros.referencia);
       }
 
       const url = `/api/relatorios?${params}`;
@@ -112,17 +110,6 @@ export default function RelatoriosPage() {
     }
   }
 
-  const getTituloAba = () => {
-    switch (tipoRelatorio) {
-      case 'producao': return 'Produção';
-      case 'paradas': return 'Paradas';
-      case 'operadores': return 'Operadores';
-      case 'maquinas': return 'Máquinas';
-      case 'eficiencia': return 'Eficiência';
-      default: return '';
-    }
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -133,7 +120,7 @@ export default function RelatoriosPage() {
             onClick={() => exportarPDF(
               dadosRelatorio.dados || [], 
               tipoRelatorio, 
-              periodo
+              filtros?.periodo || { inicio: new Date(), fim: new Date() }
             )}
             disabled={!dadosRelatorio.dados?.length}
           >
@@ -145,7 +132,7 @@ export default function RelatoriosPage() {
             onClick={() => exportarExcel(
               dadosRelatorio.dados || [], 
               tipoRelatorio, 
-              periodo
+              filtros?.periodo || { inicio: new Date(), fim: new Date() }
             )}
             disabled={!dadosRelatorio.dados?.length}
           >
@@ -155,12 +142,9 @@ export default function RelatoriosPage() {
         </div>
       </div>
 
-      {/* Filtros de Data (definem o período principal) */}
-      <FiltrosData periodo={periodo} setPeriodo={setPeriodo} onBuscar={() => {}} />
-
-      {/* Filtros Avançados (trabalham dentro do período) */}
+      {/* Filtros Avançados (agora com período incluído) */}
       <FiltrosAvancados
-        onChange={setFiltrosAvancados}
+        onChange={setFiltros}
         carregando={carregando}
       />
 
@@ -199,8 +183,8 @@ export default function RelatoriosPage() {
               cor="blue"
             />
             <CardResumoEficiencia
-              titulo={`Esperado (${filtrosAvancados?.referencia === 'produto' ? 'Produto' : 'Máquina'})`}
-              valor={filtrosAvancados?.referencia === 'produto' 
+              titulo={`Esperado (${filtros?.referencia === 'produto' ? 'Produto' : 'Máquina'})`}
+              valor={filtros?.referencia === 'produto' 
                 ? dadosRelatorio.totais.metragemEsperadaProduto 
                 : dadosRelatorio.totais.metragemEsperadaMaquina}
               formato="numero"
@@ -208,7 +192,7 @@ export default function RelatoriosPage() {
             />
             <CardResumoEficiencia
               titulo="Eficiência Média"
-              valor={filtrosAvancados?.referencia === 'produto' 
+              valor={filtros?.referencia === 'produto' 
                 ? dadosRelatorio.totais.eficienciaMediaProduto 
                 : dadosRelatorio.totais.eficienciaMediaMaquina}
               formato="percentual"
@@ -283,18 +267,18 @@ export default function RelatoriosPage() {
                     <GraficoEficiencia
                       dados={dadosRelatorio.graficos.porData || []}
                       tipo="comparativo"
-                      referencia={filtrosAvancados?.referencia || 'produto'}
+                      referencia={filtros?.referencia || 'produto'}
                     />
                     <GraficoEficiencia
                       dados={dadosRelatorio.graficos.porEstagio || []}
                       tipo="estagios"
-                      referencia={filtrosAvancados?.referencia || 'produto'}
+                      referencia={filtros?.referencia || 'produto'}
                     />
                   </div>
                 )}
                 <TabelaEficiencia
                   dados={dadosRelatorio.dados}
-                  referencia={filtrosAvancados?.referencia || 'produto'}
+                  referencia={filtros?.referencia || 'produto'}
                 />
               </>
             )
