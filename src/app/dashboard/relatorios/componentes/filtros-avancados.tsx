@@ -47,6 +47,11 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
     carregarOpcoes();
   }, []);
 
+  // 🔴 Atualizar datas disponíveis quando o período mudar
+  useEffect(() => {
+    gerarDatasDoPeriodo();
+  }, [filtros.periodo.inicio, filtros.periodo.fim]);
+
   // Notificar mudanças
   useEffect(() => {
     onChange(filtros);
@@ -107,26 +112,48 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
       
       setGrupos(gruposList);
 
-      // Gerar datas dos últimos 30 dias
-      const datas: Option[] = [];
-      const hoje = new Date();
-      for (let i = 0; i < 30; i++) {
-        const data = new Date(hoje);
-        data.setDate(hoje.getDate() - i);
-        const dataStr = data.toISOString().split('T')[0];
-        const dataFormatada = data.toLocaleDateString('pt-BR');
-        datas.push({
-          id: dataStr,
-          label: dataFormatada,
-          value: dataStr,
-        });
-      }
-      setDatasDisponiveis(datas);
+      // Gerar datas iniciais
+      gerarDatasDoPeriodo();
 
     } catch (error) {
       console.error('Erro ao carregar opções:', error);
     }
   }
+
+  // 🔴 Função para gerar datas dentro do período selecionado
+  const gerarDatasDoPeriodo = () => {
+    if (!filtros.periodo.inicio || !filtros.periodo.fim) return;
+
+    const inicio = new Date(filtros.periodo.inicio);
+    const fim = new Date(filtros.periodo.fim);
+    const datas: Option[] = [];
+
+    // Garantir que início não seja maior que fim
+    if (inicio > fim) return;
+
+    const dias = Math.ceil((fim.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24));
+    
+    for (let i = 0; i <= dias; i++) {
+      const data = new Date(inicio);
+      data.setDate(inicio.getDate() + i);
+      const dataStr = data.toISOString().split('T')[0];
+      const dataFormatada = data.toLocaleDateString('pt-BR');
+      
+      datas.push({
+        id: dataStr,
+        label: dataFormatada,
+        value: dataStr,
+      });
+    }
+
+    setDatasDisponiveis(datas);
+    
+    // 🔴 Limpar datas selecionadas que não estão mais no período
+    setFiltros(prev => ({
+      ...prev,
+      datas: prev.datas.filter(d => datas.some(opt => opt.value === d))
+    }));
+  };
 
   const atualizarFiltro = (campo: string, valor: any) => {
     setFiltros(prev => ({ ...prev, [campo]: valor }));
@@ -193,10 +220,13 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
                   id="dataInicio"
                   type="date"
                   value={filtros.periodo.inicio}
-                  onChange={(e) => setFiltros(prev => ({
-                    ...prev,
-                    periodo: { ...prev.periodo, inicio: e.target.value }
-                  }))}
+                  onChange={(e) => {
+                    const novaData = e.target.value;
+                    setFiltros(prev => ({
+                      ...prev,
+                      periodo: { ...prev.periodo, inicio: novaData }
+                    }));
+                  }}
                 />
               </div>
               <div className="space-y-2">
@@ -205,10 +235,13 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
                   id="dataFim"
                   type="date"
                   value={filtros.periodo.fim}
-                  onChange={(e) => setFiltros(prev => ({
-                    ...prev,
-                    periodo: { ...prev.periodo, fim: e.target.value }
-                  }))}
+                  onChange={(e) => {
+                    const novaData = e.target.value;
+                    setFiltros(prev => ({
+                      ...prev,
+                      periodo: { ...prev.periodo, fim: novaData }
+                    }));
+                  }}
                 />
               </div>
             </div>
@@ -231,7 +264,7 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
               />
             </div>
 
-            {/* Datas Específicas e Grupos */}
+            {/* Datas Específicas (agora limitadas ao período) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <MultiSelect
                 label="Datas Específicas"
