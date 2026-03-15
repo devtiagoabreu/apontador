@@ -51,6 +51,7 @@ export function TabelaEficienciaMelhorada({ dados }: TabelaEficienciaMelhoradaPr
           <TableHeader>
             <TableRow>
               <TableHead>Máquina</TableHead>
+              <TableHead className="text-right">Dias</TableHead>
               <TableHead className="text-right">Metragem Real</TableHead>
               <TableHead className="text-right">Metragem Esperada</TableHead>
               <TableHead className="text-right">Tempo Disponível</TableHead>
@@ -61,7 +62,7 @@ export function TabelaEficienciaMelhorada({ dados }: TabelaEficienciaMelhoradaPr
           <TableBody>
             {dados.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                   Nenhum dado encontrado para os filtros selecionados
                 </TableCell>
               </TableRow>
@@ -74,6 +75,9 @@ export function TabelaEficienciaMelhorada({ dados }: TabelaEficienciaMelhoradaPr
                 return (
                   <TableRow key={index}>
                     <TableCell className="font-medium">{item.nome}</TableCell>
+                    <TableCell className="text-right">
+                      {item.diasOperacao || 1} {item.diasOperacao === 1 ? 'dia' : 'dias'}
+                    </TableCell>
                     <TableCell className="text-right">
                       {formatarNumeroBR(item.metragemReal)} m
                     </TableCell>

@@ -105,6 +105,7 @@ interface DadosMaquina {
   metragemEsperada: number;
   tempoApontado: number;
   tempoDisponivel: number;
+  diasOperacao: number;
   eficiencia: number;
   registros: DadoProcessado[];
 }
@@ -118,6 +119,16 @@ const filtrosSchema = z.object({
   estagios: z.array(z.string()).optional(),
   referencia: z.enum(['produto', 'maquina']).default('produto'),
 });
+
+// Função auxiliar para formatar tempo em horas e minutos
+function formatarTempo(minutos: number): string {
+  const horas = Math.floor(minutos / 60);
+  const mins = Math.floor(minutos % 60);
+  if (horas > 0) {
+    return `${horas}h ${mins > 0 ? `${mins}min` : ''}`;
+  }
+  return `${mins}min`;
+}
 
 export async function POST(request: Request) {
   console.log('='.repeat(50));
@@ -144,7 +155,10 @@ export async function POST(request: Request) {
     dataInicio.setDate(hoje.getDate() - 30);
     const dataFim = hoje;
 
-    console.log('📅 Período:', { inicio: dataInicio, fim: dataFim });
+    console.log('📅 Período:', { 
+      inicio: dataInicio.toISOString().split('T')[0], 
+      fim: dataFim.toISOString().split('T')[0] 
+    });
 
     // Processar arrays de filtros
     const maquinasFilter = validated.maquinas || [];
@@ -382,7 +396,7 @@ export async function POST(request: Request) {
         : 0;
     });
 
-    // 🔴 PROCESSAMENTO POR MÁQUINA PARA OS GRÁFICOS
+    // 🔴 PROCESSAMENTO POR MÁQUINA PARA OS GRÁFICOS (CORRIGIDO)
     const maquinasMap = new Map<string, DadosMaquina>();
     
     dadosFiltrados.forEach(d => {
@@ -394,6 +408,7 @@ export async function POST(request: Request) {
           metragemEsperada: 0,
           tempoApontado: 0,
           tempoDisponivel: 0,
+          diasOperacao: 0,
           eficiencia: 0,
           registros: []
         });
@@ -425,17 +440,29 @@ export async function POST(request: Request) {
       maquinasInfo.map(m => [m.id, m])
     );
 
-    // Calcular tempo disponível total baseado nos dias de operação
+    // 🔴 CORREÇÃO: Calcular tempo disponível baseado em DIAS, não em produções
     maquinasMap.forEach((maq, id) => {
       const info = maquinasInfoMap.get(id);
-      if (info) {
-        // Calcular dias únicos no período
-        const diasUnicos = new Set(maq.registros.map(r => r.dataISO)).size;
-        maq.tempoDisponivel = (info.tempoDiarioDisponivel || 1440) * diasUnicos;
-      }
+      
+      // Calcular dias únicos no período
+      const datasUnicas = new Set(maq.registros.map(r => r.dataISO));
+      const diasOperacao = datasUnicas.size;
+      
+      // Tempo disponível por dia (padrão 1440 min = 24h)
+      const tempoPorDia = info?.tempoDiarioDisponivel 
+        ? Number(info.tempoDiarioDisponivel) 
+        : 1440;
+      
+      // 🔴 Multiplicar pelo número de DIAS, não pelo número de produções
+      maq.tempoDisponivel = tempoPorDia * diasOperacao;
+      maq.diasOperacao = diasOperacao;
+      
+      // Calcular eficiência
       maq.eficiencia = maq.metragemEsperada > 0 
         ? (maq.metragemReal / maq.metragemEsperada) * 100 
         : 0;
+      
+      console.log(`🔍 Máquina ${maq.nome}: ${diasOperacao} dias × ${formatarTempo(tempoPorDia)}/dia = ${formatarTempo(maq.tempoDisponivel)}`);
     });
 
     const resposta = {
@@ -458,6 +485,7 @@ export async function POST(request: Request) {
           metragemEsperada: Math.round(m.metragemEsperada * 100) / 100,
           tempoApontado: Math.round(m.tempoApontado * 100) / 100,
           tempoDisponivel: Math.round(m.tempoDisponivel * 100) / 100,
+          diasOperacao: m.diasOperacao,
           eficiencia: Math.round(m.eficiencia * 100) / 100,
         })),
       },
