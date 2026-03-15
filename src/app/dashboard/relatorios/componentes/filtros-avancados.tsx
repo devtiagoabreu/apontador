@@ -47,7 +47,7 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
     carregarOpcoes();
   }, []);
 
-  // 🔴 Atualizar datas disponíveis quando o período mudar
+  // Atualizar datas disponíveis quando o período mudar
   useEffect(() => {
     gerarDatasDoPeriodo();
   }, [filtros.periodo.inicio, filtros.periodo.fim]);
@@ -55,7 +55,7 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
   // Notificar mudanças
   useEffect(() => {
     onChange(filtros);
-  }, [filtros]);
+  }, [filtros, onChange]);
 
   async function carregarOpcoes() {
     try {
@@ -120,7 +120,7 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
     }
   }
 
-  // 🔴 Função para gerar datas dentro do período selecionado
+  // Função para gerar datas dentro do período selecionado
   const gerarDatasDoPeriodo = () => {
     if (!filtros.periodo.inicio || !filtros.periodo.fim) return;
 
@@ -148,7 +148,7 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
 
     setDatasDisponiveis(datas);
     
-    // 🔴 Limpar datas selecionadas que não estão mais no período
+    // Limpar datas selecionadas que não estão mais no período
     setFiltros(prev => ({
       ...prev,
       datas: prev.datas.filter(d => datas.some(opt => opt.value === d))
@@ -264,7 +264,7 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
               />
             </div>
 
-            {/* Datas Específicas (agora limitadas ao período) */}
+            {/* Datas Específicas e Grupos */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <MultiSelect
                 label="Datas Específicas"

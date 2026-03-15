@@ -23,6 +23,16 @@ interface GraficoParadasProps {
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
+const formatarMinutos = (minutos: number) => {
+  if (!minutos) return '0 min';
+  const horas = Math.floor(minutos / 60);
+  const mins = Math.floor(minutos % 60);
+  if (horas > 0) {
+    return `${horas}h ${mins}min`;
+  }
+  return `${mins} min`;
+};
+
 export function GraficoParadas({ dados, tipo }: GraficoParadasProps) {
   const titulo = tipo === 'motivos' ? 'Paradas por Motivo' : 'Tempo de Parada por Motivo';
 
@@ -84,9 +94,11 @@ export function GraficoParadas({ dados, tipo }: GraficoParadasProps) {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="motivo" />
               <YAxis />
-              <Tooltip />
+              <Tooltip 
+                formatter={(value: any) => [formatarMinutos(value), 'Tempo']}
+              />
               <Legend />
-              <Bar dataKey="minutos" fill="#f59e0b" name="Minutos" />
+              <Bar dataKey="minutos" fill="#f59e0b" name="Tempo de Parada" />
             </BarChart>
           </ResponsiveContainer>
         </div>

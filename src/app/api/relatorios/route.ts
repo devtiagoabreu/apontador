@@ -15,9 +15,29 @@ import { sql, and, gte, lte, eq, isNotNull, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
 // Interfaces para tipagem
+interface RowData {
+  id: string;
+  opId: number;
+  maquinaId: string;
+  operadorFimId: string | null;
+  estagioId: string;
+  dataFim: string | null;
+  metragemProcessada: string | null;
+  tempoMinutos: string | null;
+  opNumero: number | null;
+  produtoOp: string | null;
+  maquinaNome: string | null;
+  velocidadeMaquina: string | null;
+  operadorNome: string | null;
+  estagioNome: string | null;
+  estagioCodigo: string | null;
+}
+
 interface DadoProcessado {
   id: string;
   data: string;
+  dataISO: string;
+  dataCompleta: string;
   op: number | null;
   grupo: string;
   produtoOp: string | null;
@@ -176,8 +196,10 @@ export async function GET(request: Request) {
 
     // Processar dados
     const dadosProcessados: DadoProcessado[] = await Promise.all(result.rows.map(async (row: any) => {
+      const rowData = row as RowData;
+      
       // Extrair grupo do produto da OP
-      const produtoOp = row.produtoOp || '';
+      const produtoOp = rowData.produtoOp || '';
       const partes = produtoOp.split('.');
       const grupo = partes.length > 1 ? partes[1] : '';
 
@@ -185,15 +207,15 @@ export async function GET(request: Request) {
       const produto = produtosMap.get(grupo);
       const parametrosProduto = (produto?.parametrosEficiencia as ParametrosProduto) || {};
 
-      const tempoMinutos = Number(row.tempoMinutos) || 0;
-      const velocidadeMaquina = Number(row.velocidadeMaquina) || 0;
+      const tempoMinutos = Number(rowData.tempoMinutos) || 0;
+      const velocidadeMaquina = Number(rowData.velocidadeMaquina) || 0;
       
-      const estagioKey = row.estagioNome?.toLowerCase() || '';
+      const estagioKey = rowData.estagioNome?.toLowerCase() || '';
       const velocidadeProduto = parametrosProduto[estagioKey]?.velocidade || 0;
 
       const metragemEsperadaProduto = tempoMinutos * velocidadeProduto;
       const metragemEsperadaMaquina = tempoMinutos * velocidadeMaquina;
-      const metragemReal = Number(row.metragemProcessada) || 0;
+      const metragemReal = Number(rowData.metragemProcessada) || 0;
 
       const eficienciaProduto = metragemEsperadaProduto > 0 
         ? (metragemReal / metragemEsperadaProduto) * 100 
@@ -203,19 +225,24 @@ export async function GET(request: Request) {
         ? (metragemReal / metragemEsperadaMaquina) * 100 
         : 0;
 
+      // 🔴 Formatar datas
+      const dataFim = rowData.dataFim ? new Date(rowData.dataFim) : null;
+      
       return {
-        id: row.id,
-        data: row.dataFim?.split('T')[0] || '',
-        op: row.opNumero,
+        id: rowData.id,
+        data: dataFim ? dataFim.toLocaleDateString('pt-BR') : '',
+        dataISO: rowData.dataFim?.split('T')[0] || '',
+        dataCompleta: dataFim ? dataFim.toLocaleString('pt-BR') : '',
+        op: rowData.opNumero,
         grupo,
-        produtoOp: row.produtoOp,
-        estagioId: row.estagioId,
-        estagio: row.estagioNome,
-        estagioCodigo: row.estagioCodigo,
-        maquinaId: row.maquinaId,
-        maquina: row.maquinaNome,
-        operadorId: row.operadorFimId,
-        operador: row.operadorNome,
+        produtoOp: rowData.produtoOp,
+        estagioId: rowData.estagioId,
+        estagio: rowData.estagioNome,
+        estagioCodigo: rowData.estagioCodigo,
+        maquinaId: rowData.maquinaId,
+        maquina: rowData.maquinaNome,
+        operadorId: rowData.operadorFimId,
+        operador: rowData.operadorNome,
         metragemReal,
         tempoMinutos,
         velocidadeProduto,
@@ -257,9 +284,10 @@ export async function GET(request: Request) {
     // Agrupar por data para gráficos
     const porDataMap: Record<string, any> = {};
     dadosFiltrados.forEach(d => {
-      if (!porDataMap[d.data]) {
-        porDataMap[d.data] = {
+      if (!porDataMap[d.dataISO]) {
+        porDataMap[d.dataISO] = {
           data: d.data,
+          dataISO: d.dataISO,
           metragemReal: 0,
           metragemEsperadaProduto: 0,
           metragemEsperadaMaquina: 0,
@@ -268,11 +296,11 @@ export async function GET(request: Request) {
           registros: []
         };
       }
-      porDataMap[d.data].metragemReal += d.metragemReal;
-      porDataMap[d.data].metragemEsperadaProduto += d.metragemEsperadaProduto;
-      porDataMap[d.data].metragemEsperadaMaquina += d.metragemEsperadaMaquina;
-      porDataMap[d.data].tempoTotal += d.tempoMinutos;
-      porDataMap[d.data].registros.push(d);
+      porDataMap[d.dataISO].metragemReal += d.metragemReal;
+      porDataMap[d.dataISO].metragemEsperadaProduto += d.metragemEsperadaProduto;
+      porDataMap[d.dataISO].metragemEsperadaMaquina += d.metragemEsperadaMaquina;
+      porDataMap[d.dataISO].tempoTotal += d.tempoMinutos;
+      porDataMap[d.dataISO].registros.push(d);
     });
 
     // Calcular eficiência por data
@@ -357,7 +385,7 @@ export async function GET(request: Request) {
         eficienciaMediaMaquina: Math.round(totais.eficienciaMediaMaquina * 100) / 100,
       },
       graficos: {
-        porData: Object.values(porDataMap),
+        porData: Object.values(porDataMap).sort((a, b) => a.dataISO.localeCompare(b.dataISO)),
         porEstagio: Object.values(porEstagioMap),
       },
     };

@@ -20,6 +20,14 @@ interface GraficoProducaoProps {
   tipo: 'diario' | 'acumulado';
 }
 
+const formatarValor = (valor: number) => {
+  if (valor === null || valor === undefined || isNaN(valor)) return '-';
+  return valor.toLocaleString('pt-BR', { 
+    minimumFractionDigits: 2, 
+    maximumFractionDigits: 2 
+  }) + ' m';
+};
+
 export function GraficoProducao({ dados, tipo }: GraficoProducaoProps) {
   const titulo = tipo === 'diario' ? 'Produção Diária' : 'Produção Acumulada';
 
@@ -48,23 +56,24 @@ export function GraficoProducao({ dados, tipo }: GraficoProducaoProps) {
               <BarChart data={dados}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="data" />
-                <YAxis />
-                <Tooltip />
+                <YAxis tickFormatter={(value) => value.toLocaleString('pt-BR')} />
+                <Tooltip formatter={(value: any) => [formatarValor(value), 'Metragem']} />
                 <Legend />
-                <Bar dataKey="metragem" fill="#3b82f6" name="Metros Produzidos" />
+                <Bar dataKey="metragemReal" fill="#3b82f6" name="Metros Produzidos" />
               </BarChart>
             ) : (
               <LineChart data={dados}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="data" />
-                <YAxis />
-                <Tooltip />
+                <YAxis tickFormatter={(value) => value.toLocaleString('pt-BR')} />
+                <Tooltip formatter={(value: any) => [formatarValor(value), 'Metros Acumulados']} />
                 <Legend />
                 <Line
                   type="monotone"
-                  dataKey="acumulado"
+                  dataKey="metragemReal"
                   stroke="#10b981"
                   name="Metros Acumulados"
+                  strokeWidth={2}
                 />
               </LineChart>
             )}

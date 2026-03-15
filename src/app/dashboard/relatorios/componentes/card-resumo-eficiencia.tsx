@@ -12,6 +12,22 @@ interface CardResumoEficienciaProps {
   cor?: string;
 }
 
+const formatarNumeroBR = (valor: number, formato: 'numero' | 'percentual'): string => {
+  if (valor === null || valor === undefined || isNaN(valor)) return '-';
+  
+  if (formato === 'percentual') {
+    return valor.toLocaleString('pt-BR', {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1
+    }) + '%';
+  }
+  
+  return valor.toLocaleString('pt-BR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }) + ' m';
+};
+
 export function CardResumoEficiencia({
   titulo,
   valor,
@@ -19,13 +35,6 @@ export function CardResumoEficiencia({
   formato = 'numero',
   cor = 'blue',
 }: CardResumoEficienciaProps) {
-  const formatarValor = (val: number) => {
-    if (formato === 'percentual') {
-      return `${val.toFixed(1)}%`;
-    }
-    return val.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
-  };
-
   const getVariacao = () => {
     if (comparativo === undefined) return null;
     const variacao = ((valor - comparativo) / comparativo) * 100;
@@ -68,7 +77,7 @@ export function CardResumoEficiencia({
       <CardContent className="pt-6">
         <p className="text-sm font-medium text-gray-500 mb-2">{titulo}</p>
         <div className={`text-3xl font-bold ${corClasses[cor as keyof typeof corClasses] || corClasses.blue} p-3 rounded-lg inline-block`}>
-          {formatarValor(valor)}
+          {formatarNumeroBR(valor, formato)}
         </div>
         
         {variacao && (

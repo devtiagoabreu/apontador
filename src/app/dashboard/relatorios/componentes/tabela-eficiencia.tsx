@@ -11,12 +11,39 @@ import {
 } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { formatNumber as formatarNumero } from '@/lib/utils'; // 🔴 ALIAS para evitar conflito
+
 
 interface TabelaEficienciaProps {
   dados: any[];
   referencia: 'produto' | 'maquina';
 }
+
+// Função para formatar número no padrão brasileiro
+const formatarNumeroBR = (valor: number, casasDecimais: number = 2): string => {
+  if (valor === null || valor === undefined || isNaN(valor)) return '-';
+  return valor.toLocaleString('pt-BR', {
+    minimumFractionDigits: casasDecimais,
+    maximumFractionDigits: casasDecimais,
+  });
+};
+
+// Função para formatar data com hora
+const formatarDataHoraBR = (dataStr: string): string => {
+  if (!dataStr) return '-';
+  try {
+    const data = new Date(dataStr);
+    if (isNaN(data.getTime())) return dataStr;
+    return data.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return dataStr;
+  }
+};
 
 export function TabelaEficiencia({ dados, referencia }: TabelaEficienciaProps) {
   const getEficienciaColor = (valor: number) => {
@@ -34,7 +61,7 @@ export function TabelaEficiencia({ dados, referencia }: TabelaEficienciaProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Data</TableHead>
+              <TableHead>Data/Hora</TableHead>
               <TableHead>OP</TableHead>
               <TableHead>Grupo</TableHead>
               <TableHead>Estágio</TableHead>
@@ -70,7 +97,7 @@ export function TabelaEficiencia({ dados, referencia }: TabelaEficienciaProps) {
 
                 return (
                   <TableRow key={index}>
-                    <TableCell>{item.data}</TableCell>
+                    <TableCell>{formatarDataHoraBR(item.dataCompleta || item.data)}</TableCell>
                     <TableCell>OP {item.op}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{item.grupo}</Badge>
@@ -79,20 +106,20 @@ export function TabelaEficiencia({ dados, referencia }: TabelaEficienciaProps) {
                     <TableCell>{item.maquina}</TableCell>
                     <TableCell>{item.operador}</TableCell>
                     <TableCell className="text-right">
-                      {formatarNumero(item.metragemReal)} m
+                      {formatarNumeroBR(item.metragemReal)} m
                     </TableCell>
                     <TableCell className="text-right">
-                      {item.tempoMinutos.toFixed(0)} min
+                      {formatarNumeroBR(item.tempoMinutos, 0)} min
                     </TableCell>
                     <TableCell className="text-right">
-                      {velocidadeRef.toFixed(1)} m/min
+                      {formatarNumeroBR(velocidadeRef, 1)} m/min
                     </TableCell>
                     <TableCell className="text-right">
-                      {formatarNumero(metragemEsperada)} m
+                      {formatarNumeroBR(metragemEsperada)} m
                     </TableCell>
                     <TableCell className="text-right">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${getEficienciaColor(eficiencia)}`}>
-                        {eficiencia.toFixed(1)}%
+                        {formatarNumeroBR(eficiencia, 1)}%
                       </span>
                     </TableCell>
                   </TableRow>
