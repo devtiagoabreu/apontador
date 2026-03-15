@@ -18,7 +18,6 @@ interface Option {
 
 interface FiltrosAvancadosProps {
   onChange: (filtros: any) => void;
-  onBuscar: () => void;
   carregando?: boolean;
 }
 
@@ -31,7 +30,7 @@ interface Filtros {
   referencia: 'produto' | 'maquina';
 }
 
-export function FiltrosAvancados({ onChange, onBuscar, carregando }: FiltrosAvancadosProps) {
+export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [maquinas, setMaquinas] = useState<Option[]>([]);
   const [operadores, setOperadores] = useState<Option[]>([]);
@@ -53,7 +52,7 @@ export function FiltrosAvancados({ onChange, onBuscar, carregando }: FiltrosAvan
     carregarOpcoes();
   }, []);
 
-  // Notificar mudanças
+  // Notificar mudanças imediatamente
   useEffect(() => {
     onChange(filtros);
   }, [filtros, onChange]);
@@ -212,11 +211,11 @@ export function FiltrosAvancados({ onChange, onBuscar, carregando }: FiltrosAvan
             {/* Linha 2: Datas e Grupos */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <MultiSelect
-                label="Datas"
+                label="Datas Específicas"
                 options={datasDisponiveis}
                 selected={filtros.datas}
                 onChange={(val) => atualizarFiltro('datas', val)}
-                placeholder="Todas as datas"
+                placeholder="Todas as datas do período"
               />
               <MultiSelect
                 label="Grupos de Produto"
@@ -263,7 +262,7 @@ export function FiltrosAvancados({ onChange, onBuscar, carregando }: FiltrosAvan
               </RadioGroup>
             </div>
 
-            {/* Botões de ação */}
+            {/* Botão de limpar apenas */}
             <div className="flex justify-end gap-2 pt-4 border-t">
               {temFiltrosAtivos() && (
                 <Button
@@ -276,14 +275,6 @@ export function FiltrosAvancados({ onChange, onBuscar, carregando }: FiltrosAvan
                   Limpar Filtros
                 </Button>
               )}
-              <Button
-                type="button"
-                onClick={onBuscar}
-                disabled={carregando}
-                size="sm"
-              >
-                {carregando ? 'Buscando...' : 'Aplicar Filtros'}
-              </Button>
             </div>
           </div>
         )}

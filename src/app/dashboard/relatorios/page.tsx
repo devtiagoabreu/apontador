@@ -47,9 +47,7 @@ export default function RelatoriosPage() {
 
   // Carregar dados sempre que os filtros ou aba mudarem
   useEffect(() => {
-    if (tipoRelatorio !== 'eficiencia') {
-      carregarDados();
-    }
+    carregarDados();
   }, [tipoRelatorio, periodo, filtrosAvancados]);
 
   async function carregarDados() {
@@ -157,13 +155,12 @@ export default function RelatoriosPage() {
         </div>
       </div>
 
-      {/* Filtros de Data (sempre visíveis) */}
+      {/* Filtros de Data (definem o período principal) */}
       <FiltrosData periodo={periodo} setPeriodo={setPeriodo} onBuscar={() => {}} />
 
-      {/* Filtros Avançados (sempre visíveis) */}
+      {/* Filtros Avançados (trabalham dentro do período) */}
       <FiltrosAvancados
         onChange={setFiltrosAvancados}
-        onBuscar={() => {}} // Agora os dados carregam automaticamente via useEffect
         carregando={carregando}
       />
 
