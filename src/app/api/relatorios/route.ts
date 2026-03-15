@@ -29,6 +29,7 @@ interface RowData {
   maquinaNome: string | null;
   velocidadeMaquina: string | null;
   operadorNome: string | null;
+  operadorMatricula: string | null;
   estagioNome: string | null;
   estagioCodigo: string | null;
 }
@@ -48,6 +49,7 @@ interface DadoProcessado {
   maquina: string | null;
   operadorId: string | null;
   operador: string | null;
+  operadorMatricula: string | null;
   metragemReal: number;
   tempoMinutos: number;
   velocidadeProduto: number;
@@ -157,6 +159,7 @@ export async function GET(request: Request) {
         m.velocidade_padrao as "velocidadeMaquina",
         
         u.nome as "operadorNome",
+        u.matricula as "operadorMatricula",
         
         e.nome as "estagioNome",
         e.codigo as "estagioCodigo"
@@ -225,7 +228,7 @@ export async function GET(request: Request) {
         ? (metragemReal / metragemEsperadaMaquina) * 100 
         : 0;
 
-      // 🔴 Formatar datas
+      // Formatar datas
       const dataFim = rowData.dataFim ? new Date(rowData.dataFim) : null;
       
       return {
@@ -243,6 +246,7 @@ export async function GET(request: Request) {
         maquina: rowData.maquinaNome,
         operadorId: rowData.operadorFimId,
         operador: rowData.operadorNome,
+        operadorMatricula: rowData.operadorMatricula,
         metragemReal,
         tempoMinutos,
         velocidadeProduto,
@@ -261,6 +265,79 @@ export async function GET(request: Request) {
         d.grupo && gruposFilter.includes(d.grupo)
       );
     }
+
+    // 🔴 PROCESSAMENTO PARA OPERADORES (AGRUPADO)
+    const operadoresMap = new Map();
+    dadosFiltrados.forEach(d => {
+      const chave = d.operadorId || 'sem-operador';
+      if (!operadoresMap.has(chave)) {
+        operadoresMap.set(chave, {
+          nome: d.operador || 'Não identificado',
+          totalMetragem: 0,
+          tempoTotal: 0,
+          quantidadeProducoes: 0,
+        });
+      }
+      const op = operadoresMap.get(chave);
+      op.totalMetragem += d.metragemReal;
+      op.tempoTotal += d.tempoMinutos;
+      op.quantidadeProducoes += 1;
+    });
+
+    // 🔴 PROCESSAMENTO PARA MÁQUINAS (AGRUPADO)
+    const maquinasMap = new Map();
+    dadosFiltrados.forEach(d => {
+      const chave = d.maquinaId;
+      if (!maquinasMap.has(chave)) {
+        maquinasMap.set(chave, {
+          nome: d.maquina || 'Não identificado',
+          totalMetragem: 0,
+          tempoProducao: 0,
+          tempoParada: 0,
+        });
+      }
+      const maq = maquinasMap.get(chave);
+      maq.totalMetragem += d.metragemReal;
+      maq.tempoProducao += d.tempoMinutos;
+    });
+
+    // 🔴 BUSCAR DADOS DE PARADA PARA MÁQUINAS
+    const paradasQuery = await db
+      .select({
+        maquinaId: paradasMaquina.maquinaId,
+        tempoParada: sql<number>`COALESCE(SUM(EXTRACT(EPOCH FROM (${paradasMaquina.dataFim} - ${paradasMaquina.dataInicio}))/60), 0)`,
+      })
+      .from(paradasMaquina)
+      .where(
+        and(
+          isNotNull(paradasMaquina.dataFim),
+          gte(paradasMaquina.dataInicio, dataInicio),
+          lte(paradasMaquina.dataFim, dataFim),
+          maquinasFilter.length > 0 ? inArray(paradasMaquina.maquinaId, maquinasFilter) : undefined,
+        )
+      )
+      .groupBy(paradasMaquina.maquinaId);
+
+    // Adicionar tempo de parada às máquinas
+    paradasQuery.forEach(p => {
+      const maq = maquinasMap.get(p.maquinaId);
+      if (maq) {
+        maq.tempoParada = Number(p.tempoParada) || 0;
+      }
+    });
+
+    // 🔴 CALCULAR MÉTRICAS DAS MÁQUINAS
+    maquinasMap.forEach(maq => {
+      const tempoTotal = maq.tempoProducao + maq.tempoParada;
+      maq.disponibilidade = tempoTotal > 0 
+        ? Math.round((maq.tempoProducao / tempoTotal) * 10000) / 100 
+        : 100;
+      
+      maq.eficiencia = maq.tempoProducao > 0 ? 100 : 0; // Simplificado
+      maq.metrosPorMinuto = maq.tempoProducao > 0 
+        ? Math.round((maq.totalMetragem / maq.tempoProducao) * 100) / 100 
+        : 0;
+    });
 
     // Calcular totais
     const totais = {
@@ -372,7 +449,7 @@ export async function GET(request: Request) {
       dadosParadas = paradasQuery;
     }
 
-    // Preparar resposta baseada no tipo
+    // 🔴 PREPARAR RESPOSTA BASEADA NO TIPO
     let resposta: any = {
       dados: dadosFiltrados,
       totais: {
@@ -394,6 +471,29 @@ export async function GET(request: Request) {
     if (validated.tipo === 'paradas') {
       resposta.dados = dadosParadas;
       resposta.graficos.porMotivo = dadosParadas;
+    }
+
+    if (validated.tipo === 'operadores') {
+      // 🔴 Converter Map para array para operadores
+      resposta.dados = Array.from(operadoresMap.values()).map(op => ({
+        ...op,
+        metrosPorMinuto: op.tempoTotal > 0 
+          ? Math.round((op.totalMetragem / op.tempoTotal) * 100) / 100 
+          : 0,
+      }));
+    }
+
+    if (validated.tipo === 'maquinas') {
+      // 🔴 Converter Map para array para máquinas (sem campo código)
+      resposta.dados = Array.from(maquinasMap.values()).map(maq => ({
+        nome: maq.nome,
+        totalMetragem: maq.totalMetragem,
+        tempoProducao: maq.tempoProducao,
+        tempoParada: maq.tempoParada,
+        disponibilidade: maq.disponibilidade,
+        eficiencia: maq.eficiencia,
+        metrosPorMinuto: maq.metrosPorMinuto,
+      }));
     }
 
     console.log('✅ Resposta preparada com', dadosFiltrados.length, 'registros');

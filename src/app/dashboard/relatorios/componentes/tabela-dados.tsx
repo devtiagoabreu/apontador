@@ -10,7 +10,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { formatNumber, formatDate } from '@/lib/utils';
 
 interface TabelaDadosProps {
   dados: any[];
@@ -82,7 +81,6 @@ export function TabelaDados({ dados, tipo }: TabelaDadosProps) {
               <TableBody>
                 {dados.map((item, index) => {
                   try {
-                    // 🔴 CORREÇÃO: Acessar propriedades corretas do item
                     const metragem = item.metragemReal || item.metragem || 0;
                     const tempo = item.tempoMinutos || item.tempoProdução || 0;
                     const metrosPorMinuto = tempo > 0 ? (metragem / tempo).toFixed(2) : '0';
@@ -124,7 +122,6 @@ export function TabelaDados({ dados, tipo }: TabelaDadosProps) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Motivo</TableHead>
-                  <TableHead>Código</TableHead>
                   <TableHead className="text-right">Quantidade</TableHead>
                   <TableHead className="text-right">Tempo Total (min)</TableHead>
                   <TableHead className="text-right">Média por Parada (min)</TableHead>
@@ -134,7 +131,6 @@ export function TabelaDados({ dados, tipo }: TabelaDadosProps) {
                 {dados.map((item, index) => (
                   <TableRow key={index}>
                     <TableCell>{item.motivo}</TableCell>
-                    <TableCell>{item.codigo}</TableCell>
                     <TableCell className="text-right">{item.quantidade}</TableCell>
                     <TableCell className="text-right">
                       {formatarNumeroBR(item.minutos, 0)} min
@@ -157,7 +153,6 @@ export function TabelaDados({ dados, tipo }: TabelaDadosProps) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Operador</TableHead>
-                  <TableHead>Matrícula</TableHead>
                   <TableHead className="text-right">Total Produzido</TableHead>
                   <TableHead className="text-right">Tempo Total</TableHead>
                   <TableHead className="text-right">Produções</TableHead>
@@ -166,26 +161,20 @@ export function TabelaDados({ dados, tipo }: TabelaDadosProps) {
               </TableHeader>
               <TableBody>
                 {dados.map((item, index) => {
-                  // 🔴 CORREÇÃO: Acessar propriedades corretas
-                  const totalMetragem = item.totalMetragem || item.metragemReal || 0;
-                  const tempoTotal = item.tempoTotal || item.tempoMinutos || 0;
-                  const metrosPorMinuto = tempoTotal > 0 ? (totalMetragem / tempoTotal).toFixed(2) : '0';
-                  
                   return (
                     <TableRow key={index}>
                       <TableCell className="font-medium">{item.nome || item.operador}</TableCell>
-                      <TableCell>{item.matricula}</TableCell>
                       <TableCell className="text-right">
-                        {formatarNumeroBR(totalMetragem)} m
+                        {formatarNumeroBR(item.totalMetragem)} m
                       </TableCell>
                       <TableCell className="text-right">
-                        {formatarNumeroBR(tempoTotal, 0)} min
+                        {formatarNumeroBR(item.tempoTotal, 0)} min
                       </TableCell>
                       <TableCell className="text-right">
-                        {item.quantidadeProducoes || item.totalRegistros || 0}
+                        {item.quantidadeProducoes || 0}
                       </TableCell>
                       <TableCell className="text-right">
-                        {metrosPorMinuto} m/min
+                        {item.metrosPorMinuto?.toFixed(2) || '0'} m/min
                       </TableCell>
                     </TableRow>
                   );
@@ -201,7 +190,6 @@ export function TabelaDados({ dados, tipo }: TabelaDadosProps) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Máquina</TableHead>
-                  <TableHead>Código</TableHead>
                   <TableHead className="text-right">Total Produzido</TableHead>
                   <TableHead className="text-right">Tempo Produção</TableHead>
                   <TableHead className="text-right">Tempo Parada</TableHead>
@@ -212,38 +200,25 @@ export function TabelaDados({ dados, tipo }: TabelaDadosProps) {
               </TableHeader>
               <TableBody>
                 {dados.map((item, index) => {
-                  // 🔴 CORREÇÃO: Acessar propriedades corretas
-                  const totalMetragem = item.totalMetragem || item.metragemReal || 0;
-                  const tempoProducao = item.tempoProducao || item.tempoMinutos || 0;
-                  const tempoParada = item.tempoParada || 0;
-                  const disponibilidade = item.disponibilidade || 
-                    (tempoProducao + tempoParada > 0 
-                      ? (tempoProducao / (tempoProducao + tempoParada)) * 100 
-                      : 100);
-                  const metrosPorMinuto = tempoProducao > 0 
-                    ? (totalMetragem / tempoProducao).toFixed(2) 
-                    : '0';
-
                   return (
                     <TableRow key={index}>
-                      <TableCell className="font-medium">{item.nome || item.maquina}</TableCell>
-                      <TableCell>{item.codigo}</TableCell>
+                      <TableCell className="font-medium">{item.nome}</TableCell>
                       <TableCell className="text-right">
-                        {formatarNumeroBR(totalMetragem)} m
+                        {formatarNumeroBR(item.totalMetragem)} m
                       </TableCell>
                       <TableCell className="text-right">
-                        {formatarNumeroBR(tempoProducao, 0)} min
+                        {formatarNumeroBR(item.tempoProducao, 0)} min
                       </TableCell>
                       <TableCell className="text-right">
-                        {formatarNumeroBR(tempoParada, 0)} min
+                        {formatarNumeroBR(item.tempoParada, 0)} min
                       </TableCell>
                       <TableCell className="text-right">
                         <span className={
-                          disponibilidade < 50 ? 'text-red-600' : 
-                          disponibilidade < 80 ? 'text-yellow-600' : 
+                          item.disponibilidade < 50 ? 'text-red-600' : 
+                          item.disponibilidade < 80 ? 'text-yellow-600' : 
                           'text-green-600'
                         }>
-                          {disponibilidade.toFixed(1)}%
+                          {item.disponibilidade?.toFixed(1)}%
                         </span>
                       </TableCell>
                       <TableCell className="text-right">
@@ -252,11 +227,11 @@ export function TabelaDados({ dados, tipo }: TabelaDadosProps) {
                           item.eficiencia < 80 ? 'text-yellow-600' : 
                           'text-green-600'
                         }>
-                          {item.eficiencia?.toFixed(1) || '100'}%
+                          {item.eficiencia?.toFixed(1)}%
                         </span>
                       </TableCell>
                       <TableCell className="text-right">
-                        {metrosPorMinuto} m/min
+                        {item.metrosPorMinuto?.toFixed(2) || '0'} m/min
                       </TableCell>
                     </TableRow>
                   );
