@@ -9,8 +9,10 @@ import { FiltrosAvancados } from './componentes/filtros-avancados';
 import { GraficoProducao } from './componentes/grafico-producao';
 import { GraficoParadas } from './componentes/grafico-paradas';
 import { GraficoEficiencia } from './componentes/grafico-eficiencia';
+import { GraficoEficienciaMelhorado } from './componentes/grafico-eficiencia-melhorado';
 import { TabelaDados } from './componentes/tabela-dados';
 import { TabelaEficiencia } from './componentes/tabela-eficiencia';
+import { TabelaEficienciaMelhorada } from './componentes/tabela-eficiencia-melhorada';
 import { CardResumoEficiencia } from './componentes/card-resumo-eficiencia';
 import { exportarPDF, exportarExcel } from './utils/exportar';
 import { toast } from '@/components/ui/use-toast';
@@ -85,19 +87,42 @@ export default function RelatoriosPage() {
         params.append('referencia', filtros.referencia);
       }
 
-      const url = `/api/relatorios?${params}`;
-      console.log('🔗 URL:', url);
-
-      const response = await fetch(url);
+      let url: string;
       
-      if (!response.ok) {
-        throw new Error(`Erro ${response.status}`);
+      // Escolher a API correta baseada no tipo
+      if (tipoRelatorio === 'eficiencia') {
+        // Para eficiência, usar POST com body
+        const response = await fetch('/api/relatorios/eficiencia', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(filtros),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Erro ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('✅ Dados de eficiência recebidos:', data);
+        setDadosRelatorio(data);
+        setCarregando(false);
+        return;
+      } else {
+        // Para outros tipos, usar GET
+        url = `/api/relatorios?${params}`;
+        console.log('🔗 URL:', url);
+
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          throw new Error(`Erro ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('✅ Dados recebidos:', data);
+        setDadosRelatorio(data);
       }
-
-      const data = await response.json();
-      console.log('✅ Dados recebidos:', data);
       
-      setDadosRelatorio(data);
     } catch (error) {
       console.error('❌ Erro:', error);
       toast({
@@ -142,7 +167,7 @@ export default function RelatoriosPage() {
         </div>
       </div>
 
-      {/* Filtros Avançados (agora com período incluído) */}
+      {/* Filtros Avançados */}
       <FiltrosAvancados
         onChange={setFiltros}
         carregando={carregando}
@@ -174,7 +199,7 @@ export default function RelatoriosPage() {
         </TabsList>
 
         {/* Cards de Resumo (comuns a todas as abas) */}
-        {dadosRelatorio.totais && (
+        {dadosRelatorio.totais && tipoRelatorio !== 'eficiencia' && (
           <div className="grid gap-4 md:grid-cols-4 mt-6">
             <CardResumoEficiencia
               titulo="Total Produzido"
@@ -256,26 +281,86 @@ export default function RelatoriosPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="eficiencia" className="space-y-4 mt-6">
+        <TabsContent value="eficiencia" className="space-y-6 mt-6">
           {carregando ? (
             <div className="text-center py-8 text-gray-500">Carregando...</div>
           ) : (
             dadosRelatorio.dados && (
               <>
-                {dadosRelatorio.graficos && (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <GraficoEficiencia
-                      dados={dadosRelatorio.graficos.porData || []}
-                      tipo="comparativo"
-                      referencia={filtros?.referencia || 'produto'}
+                {/* Cards de Resumo para Eficiência */}
+                {dadosRelatorio.totais && (
+                  <div className="grid gap-4 md:grid-cols-4">
+                    <CardResumoEficiencia
+                      titulo="Total Produzido"
+                      valor={dadosRelatorio.totais.metragemReal}
+                      formato="numero"
+                      cor="blue"
                     />
-                    <GraficoEficiencia
-                      dados={dadosRelatorio.graficos.porEstagio || []}
-                      tipo="estagios"
-                      referencia={filtros?.referencia || 'produto'}
+                    <CardResumoEficiencia
+                      titulo={`Esperado (${filtros?.referencia === 'produto' ? 'Produto' : 'Máquina'})`}
+                      valor={filtros?.referencia === 'produto' 
+                        ? dadosRelatorio.totais.metragemEsperadaProduto 
+                        : dadosRelatorio.totais.metragemEsperadaMaquina}
+                      formato="numero"
+                      cor="green"
+                    />
+                    <CardResumoEficiencia
+                      titulo="Eficiência Média"
+                      valor={filtros?.referencia === 'produto' 
+                        ? dadosRelatorio.totais.eficienciaMediaProduto 
+                        : dadosRelatorio.totais.eficienciaMediaMaquina}
+                      formato="percentual"
+                      cor="purple"
+                    />
+                    <CardResumoEficiencia
+                      titulo="Tempo Total"
+                      valor={dadosRelatorio.totais.tempoTotal}
+                      formato="numero"
+                      cor="yellow"
                     />
                   </div>
                 )}
+
+                {/* Gráfico de Metragem por Máquina */}
+                {dadosRelatorio.graficos?.porMaquina && dadosRelatorio.graficos.porMaquina.length > 0 && (
+                  <GraficoEficienciaMelhorado
+                    dados={dadosRelatorio.graficos.porMaquina}
+                    tipo="metragem"
+                    referencia={filtros?.referencia || 'produto'}
+                  />
+                )}
+
+                {/* Gráfico de Tempo Disponível vs Apontado */}
+                {dadosRelatorio.graficos?.porMaquina && dadosRelatorio.graficos.porMaquina.length > 0 && (
+                  <GraficoEficienciaMelhorado
+                    dados={dadosRelatorio.graficos.porMaquina}
+                    tipo="tempo"
+                    referencia={filtros?.referencia || 'produto'}
+                  />
+                )}
+
+                {/* Tabela Resumo por Máquina */}
+                {dadosRelatorio.graficos?.porMaquina && dadosRelatorio.graficos.porMaquina.length > 0 && (
+                  <TabelaEficienciaMelhorada
+                    dados={dadosRelatorio.graficos.porMaquina}
+                  />
+                )}
+
+                {/* Gráficos originais */}
+                <div className="grid gap-4 md:grid-cols-2 mt-6">
+                  <GraficoEficiencia
+                    dados={dadosRelatorio.graficos?.porData || []}
+                    tipo="comparativo"
+                    referencia={filtros?.referencia || 'produto'}
+                  />
+                  <GraficoEficiencia
+                    dados={dadosRelatorio.graficos?.porEstagio || []}
+                    tipo="estagios"
+                    referencia={filtros?.referencia || 'produto'}
+                  />
+                </div>
+
+                {/* Tabela Detalhada Original */}
                 <TabelaEficiencia
                   dados={dadosRelatorio.dados}
                   referencia={filtros?.referencia || 'produto'}

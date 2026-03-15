@@ -9,7 +9,7 @@ import { maquinas } from '@/lib/db/schema/maquinas';
 import { usuarios } from '@/lib/db/schema/usuarios';
 import { estagios } from '@/lib/db/schema/estagios';
 import { produtos } from '@/lib/db/schema/produtos';
-import { sql, and, inArray, eq } from 'drizzle-orm';
+import { sql, and, gte, lte, eq, isNotNull, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
 // Interfaces para tipagem
@@ -34,6 +34,8 @@ interface RowData {
 interface DadoProcessado {
   id: string;
   data: string;
+  dataISO: string;
+  dataCompleta: string;
   op: number | null;
   grupo: string;
   produtoOp: string | null;
@@ -76,10 +78,12 @@ interface Totais {
 
 interface GraficoData {
   data: string;
+  dataISO: string;
   metragemReal: number;
   metragemEsperadaProduto: number;
   metragemEsperadaMaquina: number;
   tempoTotal: number;
+  eficiencia: number;
   registros: DadoProcessado[];
 }
 
@@ -92,6 +96,16 @@ interface GraficoEstagio {
   tempoTotal: number;
   eficienciaProduto: number;
   eficienciaMaquina: number;
+  registros: DadoProcessado[];
+}
+
+interface DadosMaquina {
+  nome: string;
+  metragemReal: number;
+  metragemEsperada: number;
+  tempoApontado: number;
+  tempoDisponivel: number;
+  eficiencia: number;
   registros: DadoProcessado[];
 }
 
@@ -124,7 +138,36 @@ export async function POST(request: Request) {
     const validated = filtrosSchema.parse(body);
     console.log('✅ Filtros validados:', validated);
 
-    // Construir query base
+    // Obter período dos filtros (se não tiver, usar últimos 30 dias)
+    const hoje = new Date();
+    const dataInicio = new Date(hoje);
+    dataInicio.setDate(hoje.getDate() - 30);
+    const dataFim = hoje;
+
+    console.log('📅 Período:', { inicio: dataInicio, fim: dataFim });
+
+    // Processar arrays de filtros
+    const maquinasFilter = validated.maquinas || [];
+    const operadoresFilter = validated.operadores || [];
+    const datasFilter = validated.datas || [];
+    const gruposFilter = validated.grupos || [];
+    const estagiosFilter = validated.estagios || [];
+
+    console.log('🔍 Filtros processados:', {
+      maquinas: maquinasFilter,
+      operadores: operadoresFilter,
+      datas: datasFilter,
+      grupos: gruposFilter,
+      estagios: estagiosFilter,
+    });
+
+    // Buscar todos os produtos para mapear grupos
+    const todosProdutos = await db.select().from(produtos);
+    const produtosMap = new Map<string, typeof produtos.$inferSelect>(
+      todosProdutos.map(p => [p.codigo, p])
+    );
+
+    // Construir query base para produções
     let query = sql`
       SELECT 
         p.id,
@@ -155,28 +198,24 @@ export async function POST(request: Request) {
       WHERE p.data_fim IS NOT NULL
     `;
 
+    // Aplicar filtros de período
+    query = sql`${query} AND p.data_fim >= ${dataInicio} AND p.data_fim <= ${dataFim}`;
+
     // Aplicar filtros
-    const conditions = [];
-
-    if (validated.maquinas && validated.maquinas.length > 0) {
-      conditions.push(sql`p.maquina_id IN (${sql.join(validated.maquinas, sql`, `)})`);
+    if (maquinasFilter.length > 0) {
+      query = sql`${query} AND p.maquina_id IN (${sql.join(maquinasFilter, sql`, `)})`;
     }
 
-    if (validated.operadores && validated.operadores.length > 0) {
-      conditions.push(sql`p.operador_fim_id IN (${sql.join(validated.operadores, sql`, `)})`);
+    if (operadoresFilter.length > 0) {
+      query = sql`${query} AND p.operador_fim_id IN (${sql.join(operadoresFilter, sql`, `)})`;
     }
 
-    if (validated.estagios && validated.estagios.length > 0) {
-      conditions.push(sql`p.estagio_id IN (${sql.join(validated.estagios, sql`, `)})`);
+    if (estagiosFilter.length > 0) {
+      query = sql`${query} AND p.estagio_id IN (${sql.join(estagiosFilter, sql`, `)})`;
     }
 
-    if (validated.datas && validated.datas.length > 0) {
-      conditions.push(sql`DATE(p.data_fim) IN (${sql.join(validated.datas.map(d => `'${d}'`), sql`, `)})`);
-    }
-
-    // Aplicar condições à query
-    if (conditions.length > 0) {
-      query = sql`${query} AND ${sql.join(conditions, sql` AND `)}`;
+    if (datasFilter.length > 0) {
+      query = sql`${query} AND DATE(p.data_fim) IN (${sql.join(datasFilter.map(d => `'${d}'`), sql`, `)})`;
     }
 
     query = sql`${query} ORDER BY p.data_fim DESC`;
@@ -185,13 +224,7 @@ export async function POST(request: Request) {
     const result = await db.execute(query);
     console.log(`✅ Encontrados ${result.rows.length} registros`);
 
-    // Buscar todos os produtos do banco para mapear códigos
-    const todosProdutos = await db.select().from(produtos);
-    const produtosMap = new Map<string, typeof produtos.$inferSelect>(
-      todosProdutos.map(p => [p.codigo, p])
-    );
-
-    // Processar dados com tipagem correta
+    // Processar dados
     const dadosProcessados: DadoProcessado[] = await Promise.all(result.rows.map(async (row: any) => {
       const rowData = row as RowData;
       
@@ -226,9 +259,14 @@ export async function POST(request: Request) {
         ? (metragemReal / metragemEsperadaMaquina) * 100 
         : 0;
 
+      // Formatar datas
+      const dataFim = rowData.dataFim ? new Date(rowData.dataFim) : null;
+      
       return {
         id: rowData.id,
-        data: rowData.dataFim?.split('T')[0] || '',
+        data: dataFim ? dataFim.toLocaleDateString('pt-BR') : '',
+        dataISO: rowData.dataFim?.split('T')[0] || '',
+        dataCompleta: dataFim ? dataFim.toLocaleString('pt-BR') : '',
         op: rowData.opNumero,
         grupo,
         produtoOp: rowData.produtoOp,
@@ -252,9 +290,9 @@ export async function POST(request: Request) {
 
     // Filtrar por grupos se necessário
     let dadosFiltrados = dadosProcessados;
-    if (validated.grupos && validated.grupos.length > 0) {
+    if (gruposFilter.length > 0) {
       dadosFiltrados = dadosProcessados.filter(d => 
-        d.grupo && validated.grupos?.includes(d.grupo)
+        d.grupo && gruposFilter.includes(d.grupo)
       );
     }
 
@@ -281,21 +319,31 @@ export async function POST(request: Request) {
     const porDataMap: Record<string, GraficoData> = {};
     
     dadosFiltrados.forEach(d => {
-      if (!porDataMap[d.data]) {
-        porDataMap[d.data] = {
+      if (!porDataMap[d.dataISO]) {
+        porDataMap[d.dataISO] = {
           data: d.data,
+          dataISO: d.dataISO,
           metragemReal: 0,
           metragemEsperadaProduto: 0,
           metragemEsperadaMaquina: 0,
           tempoTotal: 0,
+          eficiencia: 0,
           registros: []
         };
       }
-      porDataMap[d.data].metragemReal += d.metragemReal;
-      porDataMap[d.data].metragemEsperadaProduto += d.metragemEsperadaProduto;
-      porDataMap[d.data].metragemEsperadaMaquina += d.metragemEsperadaMaquina;
-      porDataMap[d.data].tempoTotal += d.tempoMinutos;
-      porDataMap[d.data].registros.push(d);
+      porDataMap[d.dataISO].metragemReal += d.metragemReal;
+      porDataMap[d.dataISO].metragemEsperadaProduto += d.metragemEsperadaProduto;
+      porDataMap[d.dataISO].metragemEsperadaMaquina += d.metragemEsperadaMaquina;
+      porDataMap[d.dataISO].tempoTotal += d.tempoMinutos;
+      porDataMap[d.dataISO].registros.push(d);
+    });
+
+    // Calcular eficiência por data
+    Object.values(porDataMap).forEach((item: GraficoData) => {
+      const esperado = validated.referencia === 'produto' 
+        ? item.metragemEsperadaProduto 
+        : item.metragemEsperadaMaquina;
+      item.eficiencia = esperado > 0 ? (item.metragemReal / esperado) * 100 : 0;
     });
 
     // Agrupar por estágio
@@ -334,6 +382,62 @@ export async function POST(request: Request) {
         : 0;
     });
 
+    // 🔴 PROCESSAMENTO POR MÁQUINA PARA OS GRÁFICOS
+    const maquinasMap = new Map<string, DadosMaquina>();
+    
+    dadosFiltrados.forEach(d => {
+      const chave = d.maquinaId;
+      if (!maquinasMap.has(chave)) {
+        maquinasMap.set(chave, {
+          nome: d.maquina || 'Não identificada',
+          metragemReal: 0,
+          metragemEsperada: 0,
+          tempoApontado: 0,
+          tempoDisponivel: 0,
+          eficiencia: 0,
+          registros: []
+        });
+      }
+      const maq = maquinasMap.get(chave)!;
+      maq.metragemReal += d.metragemReal;
+      maq.metragemEsperada += validated.referencia === 'produto' 
+        ? d.metragemEsperadaProduto 
+        : d.metragemEsperadaMaquina;
+      maq.tempoApontado += d.tempoMinutos;
+      maq.registros.push(d);
+    });
+
+    // Buscar tempo disponível das máquinas
+    const maquinasInfo = await db
+      .select({
+        id: maquinas.id,
+        nome: maquinas.nome,
+        tempoDiarioDisponivel: maquinas.tempoDiarioDisponivel,
+      })
+      .from(maquinas)
+      .where(
+        maquinasFilter.length > 0 
+          ? inArray(maquinas.id, maquinasFilter) 
+          : undefined
+      );
+
+    const maquinasInfoMap = new Map(
+      maquinasInfo.map(m => [m.id, m])
+    );
+
+    // Calcular tempo disponível total baseado nos dias de operação
+    maquinasMap.forEach((maq, id) => {
+      const info = maquinasInfoMap.get(id);
+      if (info) {
+        // Calcular dias únicos no período
+        const diasUnicos = new Set(maq.registros.map(r => r.dataISO)).size;
+        maq.tempoDisponivel = (info.tempoDiarioDisponivel || 1440) * diasUnicos;
+      }
+      maq.eficiencia = maq.metragemEsperada > 0 
+        ? (maq.metragemReal / maq.metragemEsperada) * 100 
+        : 0;
+    });
+
     const resposta = {
       dados: dadosFiltrados,
       totais: {
@@ -346,14 +450,23 @@ export async function POST(request: Request) {
         eficienciaMediaMaquina: Math.round(totais.eficienciaMediaMaquina * 100) / 100,
       },
       graficos: {
-        porData: Object.values(porDataMap),
+        porData: Object.values(porDataMap).sort((a, b) => a.dataISO.localeCompare(b.dataISO)),
         porEstagio: Object.values(porEstagioMap),
+        porMaquina: Array.from(maquinasMap.values()).map(m => ({
+          nome: m.nome,
+          metragemReal: Math.round(m.metragemReal * 100) / 100,
+          metragemEsperada: Math.round(m.metragemEsperada * 100) / 100,
+          tempoApontado: Math.round(m.tempoApontado * 100) / 100,
+          tempoDisponivel: Math.round(m.tempoDisponivel * 100) / 100,
+          eficiencia: Math.round(m.eficiencia * 100) / 100,
+        })),
       },
       filtrosAplicados: validated,
     };
 
     console.log('✅ Resposta preparada com', dadosFiltrados.length, 'registros');
     console.log('📊 Totais:', resposta.totais);
+    console.log('📊 Máquinas:', resposta.graficos.porMaquina.length);
     
     return NextResponse.json(resposta);
 
