@@ -43,17 +43,35 @@ const formatarNumeroCompleto = (valor: number): string => {
   }) + ' m';
 };
 
-// Função para formatar data (apenas dia/mês)
-const formatarDataCurta = (dataStr: string): string => {
+// Função para extrair apenas a data (DD/MM) de qualquer formato
+const extrairData = (dataStr: string): string => {
   if (!dataStr) return '-';
-  // Se já vier formatado como DD/MM/AAAA, extrair DD/MM
-  const match = dataStr.match(/^(\d{2})\/(\d{2})/);
-  if (match) return `${match[1]}/${match[2]}`;
-  return dataStr;
+  
+  // Se for ISO (YYYY-MM-DD)
+  const isoMatch = dataStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return `${isoMatch[3]}/${isoMatch[2]}`;
+  }
+  
+  // Se for formato brasileiro com hora (DD/MM/AAAA, HH:MM:SS)
+  const brMatch = dataStr.match(/^(\d{2})\/(\d{2})\/\d{4}/);
+  if (brMatch) {
+    return `${brMatch[1]}/${brMatch[2]}`;
+  }
+  
+  // Se for só a data
+  const brOnlyMatch = dataStr.match(/^(\d{2})\/(\d{2})\/\d{4}/);
+  if (brOnlyMatch) {
+    return `${brOnlyMatch[1]}/${brOnlyMatch[2]}`;
+  }
+  
+  return dataStr.substring(0, 5); // fallback
 };
 
 export function GraficoProducao({ dados, tipo }: GraficoProducaoProps) {
   const titulo = tipo === 'diario' ? 'Produção Diária' : 'Produção Acumulada';
+
+  console.log('📊 Dados recebidos no gráfico:', dados);
 
   if (!dados || dados.length === 0) {
     return (
@@ -68,33 +86,50 @@ export function GraficoProducao({ dados, tipo }: GraficoProducaoProps) {
     );
   }
 
-  // ✅ AGRUPAMENTO POR DIA - Usando objeto para garantir agrupamento correto
-  const agrupadoPorDia: Record<string, { data: string; dataISO: string; metragemReal: number }> = {};
+  // ✅ AGRUPAMENTO SIMPLES POR DIA
+  const producaoPorDia: Record<string, number> = {};
 
   dados.forEach((item: any) => {
-    // Extrair a data ISO (YYYY-MM-DD) para agrupar
-    const dataISO = item.dataISO || '';
-    if (!dataISO) return;
+    // Pegar a data do item (pode estar em lugares diferentes)
+    const dataStr = item.data || item.dataCompleta || item.dataFim || '';
+    if (!dataStr) return;
     
-    // Formatar para exibição (DD/MM/AAAA)
-    const [ano, mes, dia] = dataISO.split('-');
-    const dataFormatada = `${dia}/${mes}/${ano}`;
+    // Extrair a chave do dia (YYYY-MM-DD)
+    let chaveDia = '';
+    
+    // Se for ISO (2026-03-16)
+    const isoMatch = dataStr.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (isoMatch) {
+      chaveDia = isoMatch[1];
+    } else {
+      // Se for formato brasileiro, converter para ISO para agrupar
+      const brMatch = dataStr.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+      if (brMatch) {
+        chaveDia = `${brMatch[3]}-${brMatch[2]}-${brMatch[1]}`;
+      }
+    }
+    
+    if (!chaveDia) return;
     
     const metragem = item.metragemReal || item.metragem || 0;
     
-    if (agrupadoPorDia[dataISO]) {
-      agrupadoPorDia[dataISO].metragemReal += metragem;
+    if (producaoPorDia[chaveDia]) {
+      producaoPorDia[chaveDia] += metragem;
     } else {
-      agrupadoPorDia[dataISO] = {
-        data: dataFormatada,
-        dataISO: dataISO,
-        metragemReal: metragem,
-      };
+      producaoPorDia[chaveDia] = metragem;
     }
   });
 
-  // Converter para array e ordenar por data
-  const dadosAgrupados = Object.values(agrupadoPorDia)
+  // Converter para o formato do gráfico
+  const dadosAgrupados = Object.entries(producaoPorDia)
+    .map(([chave, valor]) => {
+      const [ano, mes, dia] = chave.split('-');
+      return {
+        data: `${dia}/${mes}`, // Apenas DD/MM para exibição
+        dataISO: chave,
+        metragemReal: valor,
+      };
+    })
     .sort((a, b) => a.dataISO.localeCompare(b.dataISO));
 
   console.log('📊 Dados agrupados por dia:', dadosAgrupados);
@@ -110,10 +145,7 @@ export function GraficoProducao({ dados, tipo }: GraficoProducaoProps) {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={dadosAgrupados} margin={{ top: 30, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="data" 
-                  tickFormatter={formatarDataCurta}
-                />
+                <XAxis dataKey="data" />
                 <YAxis tickFormatter={(value) => formatarNumeroAbreviado(value)} />
                 <Tooltip 
                   formatter={(value: any) => [formatarNumeroCompleto(value), 'Metragem']}
@@ -157,10 +189,7 @@ export function GraficoProducao({ dados, tipo }: GraficoProducaoProps) {
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={dadosAcumulados} margin={{ top: 30, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis 
-                dataKey="data" 
-                tickFormatter={formatarDataCurta}
-              />
+              <XAxis dataKey="data" />
               <YAxis tickFormatter={(value) => formatarNumeroAbreviado(value)} />
               <Tooltip 
                 formatter={(value: any) => [formatarNumeroCompleto(value), 'Metros Acumulados']}
