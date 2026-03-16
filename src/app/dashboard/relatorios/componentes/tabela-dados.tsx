@@ -1,356 +1,269 @@
 // src/app/dashboard/relatorios/componentes/tabela-dados.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { MultiSelect } from './multi-select';
-import { ChevronDown, ChevronUp, Filter, X } from 'lucide-react';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-interface Option {
-  id: string;
-  label: string;
-  value: string;
+interface TabelaDadosProps {
+  dados: any[];
+  tipo: 'producao' | 'paradas' | 'operadores' | 'maquinas';
 }
 
-interface FiltrosAvancadosProps {
-  onChange: (filtros: any) => void;
-  carregando?: boolean;
-}
-
-export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps) {
-  const [isOpen, setIsOpen] = useState(true);
-  const [maquinas, setMaquinas] = useState<Option[]>([]);
-  const [operadores, setOperadores] = useState<Option[]>([]);
-  const [estagios, setEstagios] = useState<Option[]>([]);
-  const [grupos, setGrupos] = useState<Option[]>([]);
-  const [datasDisponiveis, setDatasDisponiveis] = useState<Option[]>([]);
-  
-  const [filtros, setFiltros] = useState({
-    periodo: {
-      inicio: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
-      fim: new Date().toISOString().split('T')[0],
-    },
-    maquinas: [] as string[],
-    operadores: [] as string[],
-    datas: [] as string[],
-    grupos: [] as string[],
-    estagios: [] as string[],
-    referencia: 'produto' as 'produto' | 'maquina',
+// Função para formatar número no padrão brasileiro
+const formatarNumeroBR = (valor: number, casasDecimais: number = 2): string => {
+  if (valor === null || valor === undefined || isNaN(valor)) return '-';
+  return valor.toLocaleString('pt-BR', {
+    minimumFractionDigits: casasDecimais,
+    maximumFractionDigits: casasDecimais,
   });
+};
 
-  // Carregar opções iniciais
-  useEffect(() => {
-    carregarOpcoes();
-  }, []);
+// ✅ APENAS esta linha - já exporta automaticamente
+export function TabelaDados({ dados, tipo }: TabelaDadosProps) {
+  console.log(`📊 TabelaDados - tipo: ${tipo}, dados:`, dados);
 
-  // Atualizar datas disponíveis quando o período mudar
-  useEffect(() => {
-    gerarDatasDoPeriodo();
-  }, [filtros.periodo.inicio, filtros.periodo.fim]);
+  const titulos = {
+    producao: 'Detalhamento da Produção',
+    paradas: 'Detalhamento das Paradas',
+    operadores: 'Produção por Operador',
+    maquinas: 'Produção por Máquina',
+  };
 
-  // Notificar mudanças com período incluído
-  useEffect(() => {
-    onChange(filtros);
-  }, [filtros, onChange]);
+  const renderTabela = () => {
+    console.log(`🔍 Renderizando tabela do tipo: ${tipo}`);
+    
+    if (!dados || dados.length === 0) {
+      console.log('⚠️ Nenhum dado para exibir');
+      return (
+        <div className="text-center py-8 text-gray-500">
+          Nenhum dado encontrado para o período
+        </div>
+      );
+    }
 
-  async function carregarOpcoes() {
     try {
-      // Carregar máquinas
-      const maquinasRes = await fetch('/api/maquinas');
-      const maquinasData = await maquinasRes.json();
-      setMaquinas(
-        maquinasData.map((m: any) => ({
-          id: m.id,
-          label: `${m.codigo} - ${m.nome}`,
-          value: m.id,
-        }))
-      );
+      switch (tipo) {
+        case 'producao':
+          console.log('📋 Primeiro item de produção:', dados[0]);
+          return (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data/Hora</TableHead>
+                  <TableHead>OP</TableHead>
+                  <TableHead>Produto</TableHead>
+                  <TableHead>Máquina</TableHead>
+                  <TableHead>Operador</TableHead>
+                  <TableHead>Estágio</TableHead>
+                  <TableHead className="text-right">Metragem</TableHead>
+                  <TableHead className="text-right">Tempo (min)</TableHead>
+                  <TableHead className="text-right">M/min</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {dados.map((item, index) => {
+                  try {
+                    const metragem = item.metragemReal || item.metragem || 0;
+                    const tempo = item.tempoMinutos || item.tempoProdução || 0;
+                    
+                    // Calcular metros por minuto com 2 casas decimais
+                    const metrosPorMinuto = tempo > 0 
+                      ? (metragem / tempo).toFixed(2).replace('.', ',')
+                      : '0,00';
+                    
+                    // Usar data que já vem formatada da API (sempre com hora)
+                    const dataExibicao = item.data || item.dataCompleta || item.dataFim || '-';
+                    
+                    return (
+                      <TableRow key={index}>
+                        <TableCell>{dataExibicao}</TableCell>
+                        <TableCell>OP {item.op || item.opNumero}</TableCell>
+                        <TableCell className="max-w-[200px] truncate" title={item.produtoOp || item.produto}>
+                          {item.produtoOp || item.produto || '-'}
+                        </TableCell>
+                        <TableCell>{item.maquina || item.maquinaNome}</TableCell>
+                        <TableCell>{item.operador || item.operadorNome}</TableCell>
+                        <TableCell>{item.estagio || '-'}</TableCell>
+                        <TableCell className="text-right">
+                          {formatarNumeroBR(metragem)} m
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatarNumeroBR(tempo, 0)} min
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {metrosPorMinuto} m/min
+                        </TableCell>
+                      </TableRow>
+                    );
+                  } catch (err) {
+                    console.error('❌ Erro ao renderizar linha de produção:', err, item);
+                    return null;
+                  }
+                })}
+              </TableBody>
+            </Table>
+          );
 
-      // Carregar operadores
-      const operadoresRes = await fetch('/api/usuarios?nivel=OPERADOR');
-      const operadoresData = await operadoresRes.json();
-      setOperadores(
-        operadoresData.map((o: any) => ({
-          id: o.id,
-          label: `${o.matricula} - ${o.nome}`,
-          value: o.id,
-        }))
-      );
+        case 'paradas':
+          console.log('📋 Primeiro item de paradas:', dados[0]);
+          return (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Motivo</TableHead>
+                  <TableHead className="text-right">Quantidade</TableHead>
+                  <TableHead className="text-right">Tempo Total (min)</TableHead>
+                  <TableHead className="text-right">Média por Parada (min)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {dados.map((item, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{item.motivo}</TableCell>
+                    <TableCell className="text-right">{item.quantidade}</TableCell>
+                    <TableCell className="text-right">
+                      {formatarNumeroBR(item.minutos, 0)} min
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {item.quantidade > 0 
+                        ? formatarNumeroBR(item.minutos / item.quantidade, 0)
+                        : '0'} min
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          );
 
-      // Carregar estágios
-      const estagiosRes = await fetch('/api/estagios?ativos=true');
-      const estagiosData = await estagiosRes.json();
-      setEstagios(
-        estagiosData.map((e: any) => ({
-          id: e.id,
-          label: `${e.codigo} - ${e.nome}`,
-          value: e.id,
-        }))
-      );
+        case 'operadores':
+          console.log('📋 Primeiro item de operadores:', dados[0]);
+          return (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Operador</TableHead>
+                  <TableHead className="text-right">Total Produzido</TableHead>
+                  <TableHead className="text-right">Tempo Total</TableHead>
+                  <TableHead className="text-right">Produções</TableHead>
+                  <TableHead className="text-right">M/min</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {dados.map((item, index) => {
+                  const metrosPorMinuto = item.tempoTotal > 0 
+                    ? (item.totalMetragem / item.tempoTotal).toFixed(2).replace('.', ',')
+                    : '0,00';
+                  
+                  return (
+                    <TableRow key={index}>
+                      <TableCell className="font-medium">{item.nome || item.operador}</TableCell>
+                      <TableCell className="text-right">
+                        {formatarNumeroBR(item.totalMetragem)} m
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatarNumeroBR(item.tempoTotal, 0)} min
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {item.quantidadeProducoes || 0}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {metrosPorMinuto} m/min
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          );
 
-      // Carregar grupos dos produtos
-      const produtosRes = await fetch('/api/produtos?limit=1000');
-      const produtosData = await produtosRes.json();
-      
-      const gruposUnicos = new Set();
-      const gruposList: Option[] = [];
-      
-      (produtosData.data || []).forEach((p: any) => {
-        if (p.codigo && !gruposUnicos.has(p.codigo)) {
-          gruposUnicos.add(p.codigo);
-          gruposList.push({
-            id: p.codigo,
-            label: p.codigo,
-            value: p.codigo,
-          });
-        }
-      });
-      
-      setGrupos(gruposList);
+        case 'maquinas':
+          console.log('📋 Primeiro item de máquinas:', dados[0]);
+          return (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Máquina</TableHead>
+                  <TableHead className="text-right">Total Produzido</TableHead>
+                  <TableHead className="text-right">Tempo Produção</TableHead>
+                  <TableHead className="text-right">Tempo Parada</TableHead>
+                  <TableHead className="text-right">Disponibilidade</TableHead>
+                  <TableHead className="text-right">Eficiência</TableHead>
+                  <TableHead className="text-right">M/min</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {dados.map((item, index) => {
+                  const metrosPorMinuto = item.tempoProducao > 0 
+                    ? (item.totalMetragem / item.tempoProducao).toFixed(2).replace('.', ',')
+                    : '0,00';
+                  
+                  return (
+                    <TableRow key={index}>
+                      <TableCell className="font-medium">{item.nome}</TableCell>
+                      <TableCell className="text-right">
+                        {formatarNumeroBR(item.totalMetragem)} m
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatarNumeroBR(item.tempoProducao, 0)} min
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatarNumeroBR(item.tempoParada, 0)} min
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span className={
+                          item.disponibilidade < 50 ? 'text-red-600' : 
+                          item.disponibilidade < 80 ? 'text-yellow-600' : 
+                          'text-green-600'
+                        }>
+                          {item.disponibilidade?.toFixed(1).replace('.', ',')}%
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span className={
+                          item.eficiencia < 50 ? 'text-red-600' : 
+                          item.eficiencia < 80 ? 'text-yellow-600' : 
+                          'text-green-600'
+                        }>
+                          {item.eficiencia?.toFixed(1).replace('.', ',')}%
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {metrosPorMinuto} m/min
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          );
 
-      // Gerar datas iniciais
-      gerarDatasDoPeriodo();
-
+        default:
+          return null;
+      }
     } catch (error) {
-      console.error('Erro ao carregar opções:', error);
+      console.error('❌ Erro ao renderizar tabela:', error);
+      return (
+        <div className="text-center py-8 text-red-500">
+          Erro ao renderizar tabela. Verifique o console.
+        </div>
+      );
     }
-  }
-
-  // ✅ CORREÇÃO: Função para gerar datas dentro do período selecionado (considerando fuso horário)
-  const gerarDatasDoPeriodo = () => {
-    if (!filtros.periodo.inicio || !filtros.periodo.fim) return;
-
-    // Criar datas no fuso horário local (Brasil)
-    const [anoInicio, mesInicio, diaInicio] = filtros.periodo.inicio.split('-').map(Number);
-    const [anoFim, mesFim, diaFim] = filtros.periodo.fim.split('-').map(Number);
-    
-    // Criar objetos Date no fuso horário local (00:00:00)
-    const inicio = new Date(anoInicio, mesInicio - 1, diaInicio, 0, 0, 0);
-    const fim = new Date(anoFim, mesFim - 1, diaFim, 0, 0, 0);
-    
-    const datas: Option[] = [];
-
-    // Garantir que início não seja maior que fim
-    if (inicio > fim) return;
-
-    // Calcular diferença em dias
-    const diffTime = fim.getTime() - inicio.getTime();
-    const dias = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    for (let i = 0; i <= dias; i++) {
-      const data = new Date(inicio);
-      data.setDate(inicio.getDate() + i);
-      
-      // Formatar para YYYY-MM-DD (mantendo fuso local)
-      const ano = data.getFullYear();
-      const mes = (data.getMonth() + 1).toString().padStart(2, '0');
-      const dia = data.getDate().toString().padStart(2, '0');
-      const dataStr = `${ano}-${mes}-${dia}`;
-      
-      const dataFormatada = data.toLocaleDateString('pt-BR');
-      
-      datas.push({
-        id: dataStr,
-        label: dataFormatada,
-        value: dataStr,
-      });
-    }
-
-    setDatasDisponiveis(datas);
-    
-    // Limpar datas selecionadas que não estão mais no período
-    setFiltros(prev => ({
-      ...prev,
-      datas: prev.datas.filter(d => datas.some(opt => opt.value === d))
-    }));
-
-    console.log('📅 Datas disponíveis geradas:', datas.map(d => d.label));
-  };
-
-  const atualizarFiltro = (campo: string, valor: any) => {
-    setFiltros(prev => ({ ...prev, [campo]: valor }));
-  };
-
-  const limparFiltros = () => {
-    setFiltros({
-      periodo: {
-        inicio: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
-        fim: new Date().toISOString().split('T')[0],
-      },
-      maquinas: [],
-      operadores: [],
-      datas: [],
-      grupos: [],
-      estagios: [],
-      referencia: 'produto',
-    });
-  };
-
-  const temFiltrosAtivos = () => {
-    return (
-      filtros.maquinas.length > 0 ||
-      filtros.operadores.length > 0 ||
-      filtros.datas.length > 0 ||
-      filtros.grupos.length > 0 ||
-      filtros.estagios.length > 0
-    );
   };
 
   return (
     <Card>
-      <CardContent className="pt-6">
-        {/* Cabeçalho */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Filter className="h-5 w-5 text-primary" />
-            <h3 className="text-lg font-semibold">Filtros</h3>
-            {temFiltrosAtivos() && (
-              <span className="bg-primary/10 text-primary text-xs px-2 py-1 rounded-full">
-                {Object.values(filtros).reduce((acc, val) => 
-                  acc + (Array.isArray(val) ? val.length : 0), 0
-                )} ativos
-              </span>
-            )}
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsOpen(!isOpen)}
-            className="h-8 w-8 p-0"
-          >
-            {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </Button>
-        </div>
-
-        {isOpen && (
-          <div className="space-y-4">
-            {/* Período */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="dataInicio">Data Início</Label>
-                <Input
-                  id="dataInicio"
-                  type="date"
-                  value={filtros.periodo.inicio}
-                  onChange={(e) => {
-                    const novaData = e.target.value;
-                    setFiltros(prev => ({
-                      ...prev,
-                      periodo: { ...prev.periodo, inicio: novaData }
-                    }));
-                  }}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dataFim">Data Fim</Label>
-                <Input
-                  id="dataFim"
-                  type="date"
-                  value={filtros.periodo.fim}
-                  onChange={(e) => {
-                    const novaData = e.target.value;
-                    setFiltros(prev => ({
-                      ...prev,
-                      periodo: { ...prev.periodo, fim: novaData }
-                    }));
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Máquinas e Operadores */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <MultiSelect
-                label="Máquinas"
-                options={maquinas}
-                selected={filtros.maquinas}
-                onChange={(val) => atualizarFiltro('maquinas', val)}
-                placeholder="Todas as máquinas"
-              />
-              <MultiSelect
-                label="Operadores"
-                options={operadores}
-                selected={filtros.operadores}
-                onChange={(val) => atualizarFiltro('operadores', val)}
-                placeholder="Todos os operadores"
-              />
-            </div>
-
-            {/* Datas Específicas e Grupos */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <MultiSelect
-                label="Datas Específicas"
-                options={datasDisponiveis}
-                selected={filtros.datas}
-                onChange={(val) => atualizarFiltro('datas', val)}
-                placeholder="Todas as datas do período"
-              />
-              <MultiSelect
-                label="Grupos de Produto"
-                options={grupos}
-                selected={filtros.grupos}
-                onChange={(val) => atualizarFiltro('grupos', val)}
-                placeholder="Todos os grupos"
-              />
-            </div>
-
-            {/* Estágios */}
-            <div className="grid grid-cols-1 gap-4">
-              <MultiSelect
-                label="Estágios"
-                options={estagios}
-                selected={filtros.estagios}
-                onChange={(val) => atualizarFiltro('estagios', val)}
-                placeholder="Todos os estágios"
-              />
-            </div>
-
-            {/* Referência para eficiência */}
-            <div className="space-y-2">
-              <Label>Referência para Cálculo de Eficiência</Label>
-              <RadioGroup
-                value={filtros.referencia}
-                onValueChange={(val: 'produto' | 'maquina') => 
-                  atualizarFiltro('referencia', val)
-                }
-                className="flex gap-4"
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="produto" id="ref-produto" />
-                  <Label htmlFor="ref-produto" className="cursor-pointer">
-                    Velocidade do Produto (por estágio)
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="maquina" id="ref-maquina" />
-                  <Label htmlFor="ref-maquina" className="cursor-pointer">
-                    Velocidade da Máquina (fixa)
-                  </Label>
-                </div>
-              </RadioGroup>
-            </div>
-
-            {/* Botão de limpar */}
-            <div className="flex justify-end gap-2 pt-4 border-t">
-              {temFiltrosAtivos() && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={limparFiltros}
-                  size="sm"
-                >
-                  <X className="mr-2 h-4 w-4" />
-                  Limpar Filtros
-                </Button>
-              )}
-            </div>
-          </div>
-        )}
-      </CardContent>
+      <CardHeader>
+        <CardTitle>{titulos[tipo]}</CardTitle>
+      </CardHeader>
+      <CardContent>{renderTabela()}</CardContent>
     </Card>
   );
 }
+
