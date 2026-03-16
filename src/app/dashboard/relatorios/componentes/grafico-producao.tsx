@@ -68,29 +68,33 @@ export function GraficoProducao({ dados, tipo }: GraficoProducaoProps) {
     );
   }
 
-  // ✅ AGRUPAMENTO POR DIA (corrigido)
-  const mapaPorDia = new Map();
-  
+  // ✅ AGRUPAMENTO POR DIA - Usando objeto para garantir agrupamento correto
+  const agrupadoPorDia: Record<string, { data: string; dataISO: string; metragemReal: number }> = {};
+
   dados.forEach((item: any) => {
-    // Extrair apenas a data (YYYY-MM-DD) do ISO
-    const dataISO = item.dataISO || item.data?.split(' ')[0] || '';
-    const dataFormatada = item.data?.split(',')[0] || dataISO;
+    // Extrair a data ISO (YYYY-MM-DD) para agrupar
+    const dataISO = item.dataISO || '';
+    if (!dataISO) return;
+    
+    // Formatar para exibição (DD/MM/AAAA)
+    const [ano, mes, dia] = dataISO.split('-');
+    const dataFormatada = `${dia}/${mes}/${ano}`;
     
     const metragem = item.metragemReal || item.metragem || 0;
     
-    if (mapaPorDia.has(dataISO)) {
-      const existente = mapaPorDia.get(dataISO);
-      existente.metragemReal += metragem;
+    if (agrupadoPorDia[dataISO]) {
+      agrupadoPorDia[dataISO].metragemReal += metragem;
     } else {
-      mapaPorDia.set(dataISO, {
+      agrupadoPorDia[dataISO] = {
         data: dataFormatada,
         dataISO: dataISO,
         metragemReal: metragem,
-      });
+      };
     }
   });
 
-  const dadosAgrupados = Array.from(mapaPorDia.values())
+  // Converter para array e ordenar por data
+  const dadosAgrupados = Object.values(agrupadoPorDia)
     .sort((a, b) => a.dataISO.localeCompare(b.dataISO));
 
   console.log('📊 Dados agrupados por dia:', dadosAgrupados);
@@ -104,7 +108,7 @@ export function GraficoProducao({ dados, tipo }: GraficoProducaoProps) {
         <CardContent>
           <div className="h-[400px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dadosAgrupados} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <BarChart data={dadosAgrupados} margin={{ top: 30, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
                   dataKey="data" 
@@ -117,12 +121,11 @@ export function GraficoProducao({ dados, tipo }: GraficoProducaoProps) {
                 />
                 <Legend />
                 <Bar dataKey="metragemReal" fill="#3b82f6" name="Metros Produzidos">
-                  {/* ✅ Valor abreviado em cima da barra */}
                   <LabelList 
                     dataKey="metragemReal" 
                     position="top" 
                     formatter={(value: any) => formatarNumeroAbreviado(value)}
-                    style={{ fill: '#000', fontSize: 12, fontWeight: 'bold' }}
+                    style={{ fill: '#000', fontSize: 11, fontWeight: 'bold' }}
                   />
                 </Bar>
               </BarChart>
@@ -152,7 +155,7 @@ export function GraficoProducao({ dados, tipo }: GraficoProducaoProps) {
       <CardContent>
         <div className="h-[400px]">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={dadosAcumulados} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+            <LineChart data={dadosAcumulados} margin={{ top: 30, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis 
                 dataKey="data" 
@@ -171,12 +174,11 @@ export function GraficoProducao({ dados, tipo }: GraficoProducaoProps) {
                 name="Metros Acumulados"
                 strokeWidth={2}
               >
-                {/* ✅ Valor abreviado em cada ponto */}
                 <LabelList 
                   dataKey="metragemReal" 
                   position="top" 
                   formatter={(value: any) => formatarNumeroAbreviado(value)}
-                  style={{ fill: '#000', fontSize: 12, fontWeight: 'bold' }}
+                  style={{ fill: '#000', fontSize: 11, fontWeight: 'bold' }}
                 />
               </Line>
             </LineChart>
