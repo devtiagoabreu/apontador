@@ -113,6 +113,10 @@ interface DadosMaquina {
 
 // Schema de validação dos filtros
 const filtrosSchema = z.object({
+  periodo: z.object({
+    inicio: z.string(),
+    fim: z.string(),
+  }).optional(),
   maquinas: z.array(z.string()).optional(),
   operadores: z.array(z.string()).optional(),
   datas: z.array(z.string()).optional(),
@@ -150,35 +154,32 @@ export async function POST(request: Request) {
     const validated = filtrosSchema.parse(body);
     console.log('✅ Filtros validados:', validated);
 
+    // ✅ CORREÇÃO: Definir período
     const hoje = new Date();
     let dataInicio: Date;
     let dataFim: Date;
 
-    // ✅ CORREÇÃO: Se tiver datas específicas, usar APENAS essas datas
-    if (validated.datas && validated.datas.length > 0) {
-      // Usar a menor data como início e a maior como fim
-      const datasOrdenadas = [...validated.datas].sort();
-      dataInicio = new Date(datasOrdenadas[0] + 'T00:00:00');
-      dataFim = new Date(datasOrdenadas[datasOrdenadas.length - 1] + 'T23:59:59');
-      
-      console.log('📅 Datas específicas selecionadas:', validated.datas);
+    // Usar o período do filtro se existir
+    if (validated.periodo?.inicio && validated.periodo?.fim) {
+      dataInicio = new Date(validated.periodo.inicio + 'T00:00:00');
+      dataFim = new Date(validated.periodo.fim + 'T23:59:59');
+      console.log('📅 Usando período do filtro:', { 
+        inicio: validated.periodo.inicio, 
+        fim: validated.periodo.fim 
+      });
     } else {
-      // Se não tiver datas específicas, usar últimos 30 dias
+      // Fallback: últimos 30 dias
       dataInicio = new Date(hoje);
       dataInicio.setDate(hoje.getDate() - 30);
       dataFim = hoje;
+      console.log('📅 Usando período padrão (30 dias)');
     }
 
-    console.log('📅 Período:', { 
-      inicio: dataInicio.toISOString().split('T')[0], 
-      fim: dataFim.toISOString().split('T')[0] 
-    });
-
-    // ✅ Calcular dias no período selecionado
+    // Calcular dias no período selecionado
     const diffTime = Math.abs(dataFim.getTime() - dataInicio.getTime());
     const diasNoPeriodo = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
-    console.log(`📅 Período selecionado: ${diasNoPeriodo} dias (${dataInicio.toISOString().split('T')[0]} a ${dataFim.toISOString().split('T')[0]})`);
+    console.log(`📅 Período: ${diasNoPeriodo} dias (${dataInicio.toISOString().split('T')[0]} a ${dataFim.toISOString().split('T')[0]})`);
 
     // Processar arrays de filtros
     const maquinasFilter = validated.maquinas || [];
@@ -230,10 +231,9 @@ export async function POST(request: Request) {
       LEFT JOIN usuarios u ON p.operador_fim_id = u.id
       LEFT JOIN estagios e ON p.estagio_id = e.id
       WHERE p.data_fim IS NOT NULL
+        AND p.data_fim >= ${dataInicio}
+        AND p.data_fim <= ${dataFim}
     `;
-
-    // Aplicar filtros de período
-    query = sql`${query} AND p.data_fim >= ${dataInicio} AND p.data_fim <= ${dataFim}`;
 
     // Aplicar filtros
     if (maquinasFilter.length > 0) {
@@ -248,8 +248,10 @@ export async function POST(request: Request) {
       query = sql`${query} AND p.estagio_id IN (${sql.join(estagiosFilter, sql`, `)})`;
     }
 
+    // ✅ CORREÇÃO: Datas específicas como filtro ADICIONAL
     if (datasFilter.length > 0) {
       query = sql`${query} AND DATE(p.data_fim) IN (${sql.join(datasFilter.map(d => `'${d}'`), sql`, `)})`;
+      console.log(`📅 Aplicando filtro de datas específicas:`, datasFilter);
     }
 
     query = sql`${query} ORDER BY p.data_fim DESC`;
@@ -322,22 +324,10 @@ export async function POST(request: Request) {
       };
     }));
 
-    // ✅ CORREÇÃO: Filtrar apenas as datas selecionadas ANTES de processar
-    let dadosDoPeriodo = dadosProcessados;
-    
-    if (validated.datas && validated.datas.length > 0) {
-      // Filtrar apenas as datas específicas selecionadas
-      dadosDoPeriodo = dadosProcessados.filter(d => 
-        validated.datas!.includes(d.dataISO)
-      );
-      console.log(`📊 Filtrando para datas específicas:`, validated.datas);
-      console.log(`📊 Registros após filtro: ${dadosDoPeriodo.length}`);
-    }
-
     // Filtrar por grupos se necessário
-    let dadosFiltrados = dadosDoPeriodo;
+    let dadosFiltrados = dadosProcessados;
     if (gruposFilter.length > 0) {
-      dadosFiltrados = dadosDoPeriodo.filter(d => 
+      dadosFiltrados = dadosProcessados.filter(d => 
         d.grupo && gruposFilter.includes(d.grupo)
       );
     }
@@ -429,7 +419,7 @@ export async function POST(request: Request) {
         : 0;
     });
 
-    // 🔴 PROCESSAMENTO POR MÁQUINA (CORRIGIDO)
+    // PROCESSAMENTO POR MÁQUINA
     const maquinasMap = new Map<string, DadosMaquina>();
     
     dadosFiltrados.forEach(d => {
@@ -473,7 +463,7 @@ export async function POST(request: Request) {
       maquinasInfo.map(m => [m.id, m])
     );
 
-    // ✅ Calcular tempo disponível baseado no PERÍODO
+    // Calcular tempo disponível baseado no PERÍODO
     maquinasMap.forEach((maq, id) => {
       const info = maquinasInfoMap.get(id);
       
@@ -482,7 +472,6 @@ export async function POST(request: Request) {
         ? Number(info.tempoDiarioDisponivel) 
         : 1440;
       
-      // ✅ Usar diasNoPeriodo calculado anteriormente
       maq.tempoDisponivel = tempoPorDia * diasNoPeriodo;
       maq.diasNoPeriodo = diasNoPeriodo;
       

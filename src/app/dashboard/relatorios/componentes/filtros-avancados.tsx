@@ -52,7 +52,7 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
     gerarDatasDoPeriodo();
   }, [filtros.periodo.inicio, filtros.periodo.fim]);
 
-  // Notificar mudanças
+  // Notificar mudanças com período incluído
   useEffect(() => {
     onChange(filtros);
   }, [filtros, onChange]);
