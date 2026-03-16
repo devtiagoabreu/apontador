@@ -9,6 +9,7 @@ import { maquinas } from '@/lib/db/schema/maquinas';
 import { usuarios } from '@/lib/db/schema/usuarios';
 import { estagios } from '@/lib/db/schema/estagios';
 import { produtos } from '@/lib/db/schema/produtos';
+import { paradasMaquina } from '@/lib/db/schema/paradas-maquina';
 import { sql, and, gte, lte, eq, isNotNull, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -106,6 +107,7 @@ interface DadosMaquina {
   metragemEsperada: number;
   tempoApontado: number;
   tempoDisponivel: number;
+  tempoParada: number;
   diasNoPeriodo: number;
   eficiencia: number;
   registros: DadoProcessado[];
@@ -174,12 +176,6 @@ export async function POST(request: Request) {
       console.log('📅 Usando período padrão (30 dias)');
     }
 
-    // Calcular dias no período selecionado
-    const diffTime = Math.abs(dataFim.getTime() - dataInicio.getTime());
-    const diasNoPeriodo = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-
-    console.log(`📅 Período: ${diasNoPeriodo} dias (${dataInicio.toISOString().split('T')[0]} a ${dataFim.toISOString().split('T')[0]})`);
-
     // Processar arrays de filtros
     const maquinasFilter = validated.maquinas || [];
     const operadoresFilter = validated.operadores || [];
@@ -195,13 +191,22 @@ export async function POST(request: Request) {
       estagios: estagiosFilter,
     });
 
+    // ✅ CORREÇÃO: Calcular dias no período baseado nas DATAS ESPECÍFICAS selecionadas
+    const diasNoPeriodo = datasFilter.length > 0 
+      ? datasFilter.length  // Se tem datas específicas, usa a QUANTIDADE delas
+      : Math.floor((dataFim.getTime() - dataInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1; // Se não, usa o período
+
+    console.log(`📅 Período base: ${dataInicio.toISOString().split('T')[0]} a ${dataFim.toISOString().split('T')[0]}`);
+    console.log(`📅 Datas específicas: ${datasFilter.length > 0 ? datasFilter.join(', ') : 'Todas do período'}`);
+    console.log(`📅 Dias no período: ${diasNoPeriodo}`);
+
     // Buscar todos os produtos para mapear grupos
     const todosProdutos = await db.select().from(produtos);
     const produtosMap = new Map<string, typeof produtos.$inferSelect>(
       todosProdutos.map(p => [p.codigo, p])
     );
 
-    // Construir query base para produções
+    // 🔴 CORREÇÃO: Construir query base para produções usando SQL direto com aliases
     let query = sql`
       SELECT 
         p.id,
@@ -230,28 +235,39 @@ export async function POST(request: Request) {
       LEFT JOIN usuarios u ON p.operador_fim_id = u.id
       LEFT JOIN estagios e ON p.estagio_id = e.id
       WHERE p.data_fim IS NOT NULL
-        AND p.data_fim >= ${dataInicio}
-        AND p.data_fim <= ${dataFim}
     `;
 
-    // Aplicar filtros
+    // ✅ Construir condições de filtro usando os aliases das tabelas
+    const conditions: any[] = [];
+
+    // Filtro de datas
+    if (datasFilter.length > 0) {
+      conditions.push(sql`DATE(p.data_fim) IN (${sql.join(datasFilter.map(d => `'${d}'`), sql`, `)})`);
+    } else {
+      conditions.push(sql`p.data_fim >= ${dataInicio}`);
+      conditions.push(sql`p.data_fim <= ${dataFim}`);
+    }
+
+    // Outros filtros
     if (maquinasFilter.length > 0) {
-      query = sql`${query} AND p.maquina_id IN (${sql.join(maquinasFilter, sql`, `)})`;
+      conditions.push(sql`p.maquina_id IN (${sql.join(maquinasFilter.map(id => `'${id}'`), sql`, `)})`);
     }
 
     if (operadoresFilter.length > 0) {
-      query = sql`${query} AND p.operador_fim_id IN (${sql.join(operadoresFilter, sql`, `)})`;
+      conditions.push(sql`p.operador_fim_id IN (${sql.join(operadoresFilter.map(id => `'${id}'`), sql`, `)})`);
     }
 
     if (estagiosFilter.length > 0) {
-      query = sql`${query} AND p.estagio_id IN (${sql.join(estagiosFilter, sql`, `)})`;
+      conditions.push(sql`p.estagio_id IN (${sql.join(estagiosFilter.map(id => `'${id}'`), sql`, `)})`);
     }
 
-    if (datasFilter.length > 0) {
-      query = sql`${query} AND DATE(p.data_fim) IN (${sql.join(datasFilter.map(d => `'${d}'`), sql`, `)})`;
-      console.log(`📅 Aplicando filtro de datas específicas:`, datasFilter);
+    // Aplicar todas as condições
+    if (conditions.length > 0) {
+      // @ts-ignore - Ignorar erro de tipagem do drizzle
+      query = sql`${query} AND ${sql.join(conditions, sql` AND `)}`;
     }
 
+    // @ts-ignore
     query = sql`${query} ORDER BY p.data_fim DESC`;
 
     console.log('🔍 Executando query...');
@@ -293,7 +309,7 @@ export async function POST(request: Request) {
         ? (metragemReal / metragemEsperadaMaquina) * 100 
         : 0;
 
-      // ✅ FORMATAR DATA COMPLETA COM HORA (sempre)
+      // FORMATAR DATA COMPLETA COM HORA
       const dataFim = rowData.dataFim ? new Date(rowData.dataFim) : null;
       const dataFormatada = dataFim ? dataFim.toLocaleString('pt-BR', {
         day: '2-digit',
@@ -306,9 +322,9 @@ export async function POST(request: Request) {
       
       return {
         id: rowData.id,
-        data: dataFormatada, // ✅ Sempre com hora
+        data: dataFormatada,
         dataISO: rowData.dataFim?.split('T')[0] || '',
-        dataCompleta: dataFormatada, // ✅ Manter compatibilidade
+        dataCompleta: dataFormatada,
         op: rowData.opNumero,
         grupo,
         produtoOp: rowData.produtoOp,
@@ -437,6 +453,7 @@ export async function POST(request: Request) {
           metragemEsperada: 0,
           tempoApontado: 0,
           tempoDisponivel: 0,
+          tempoParada: 0,
           diasNoPeriodo: 0,
           eficiencia: 0,
           registros: []
@@ -469,7 +486,49 @@ export async function POST(request: Request) {
       maquinasInfo.map(m => [m.id, m])
     );
 
-    // Calcular tempo disponível baseado no PERÍODO
+    // Buscar tempo de parada para as máquinas no período
+    let paradasQuery: any[] = [];
+    if (maquinasMap.size > 0) {
+      // 🔴 CORREÇÃO: Usar SQL direto para paradas sem alias problemáticos
+      let paradasSql = sql`
+        SELECT 
+          maquina_id as "maquinaId",
+          COALESCE(SUM(EXTRACT(EPOCH FROM (data_fim - data_inicio))/60), 0) as "tempoParada"
+        FROM paradas_maquina
+        WHERE data_fim IS NOT NULL
+      `;
+
+      const paradasConditions: any[] = [];
+
+      if (maquinasFilter.length > 0) {
+        paradasConditions.push(sql`maquina_id IN (${sql.join(maquinasFilter.map(id => `'${id}'`), sql`, `)})`);
+      }
+
+      // Aplicar mesmo filtro de datas
+      if (datasFilter.length > 0) {
+        paradasConditions.push(sql`DATE(data_inicio) IN (${sql.join(datasFilter.map(d => `'${d}'`), sql`, `)})`);
+      } else {
+        paradasConditions.push(sql`data_inicio >= ${dataInicio}`);
+        paradasConditions.push(sql`data_fim <= ${dataFim}`);
+      }
+
+      if (paradasConditions.length > 0) {
+        // @ts-ignore
+        paradasSql = sql`${paradasSql} AND ${sql.join(paradasConditions, sql` AND `)}`;
+      }
+
+      // @ts-ignore
+      paradasSql = sql`${paradasSql} GROUP BY maquina_id`;
+
+      const paradasResult = await db.execute(paradasSql);
+      paradasQuery = paradasResult.rows;
+    }
+
+    const paradasMap = new Map(
+      paradasQuery.map((p: any) => [p.maquinaId, Number(p.tempoParada) || 0])
+    );
+
+    // ✅ Calcular tempo disponível baseado nos DIAS DO PERÍODO
     maquinasMap.forEach((maq, id) => {
       const info = maquinasInfoMap.get(id);
       
@@ -478,8 +537,12 @@ export async function POST(request: Request) {
         ? Number(info.tempoDiarioDisponivel) 
         : 1440;
       
+      // Usar diasNoPeriodo calculado (que já considera datas específicas)
       maq.tempoDisponivel = tempoPorDia * diasNoPeriodo;
       maq.diasNoPeriodo = diasNoPeriodo;
+      
+      // Adicionar tempo de parada
+      maq.tempoParada = paradasMap.get(id) || 0;
       
       // Calcular eficiência
       maq.eficiencia = maq.metragemEsperada > 0 
@@ -487,11 +550,12 @@ export async function POST(request: Request) {
         : 0;
       
       console.log(`🔍 Máquina ${maq.nome}:`);
-      console.log(`   - Período: ${diasNoPeriodo} dias`);
+      console.log(`   - Dias no período: ${diasNoPeriodo}`);
       console.log(`   - Registros: ${maq.registros.length}`);
       console.log(`   - Metragem Real: ${maq.metragemReal}`);
       console.log(`   - Tempo Apontado: ${maq.tempoApontado}min`);
       console.log(`   - Tempo Disponível: ${maq.tempoDisponivel}min`);
+      console.log(`   - Tempo Parada: ${maq.tempoParada}min`);
     });
 
     const resposta = {
@@ -515,6 +579,7 @@ export async function POST(request: Request) {
           metragemEsperada: Math.round(m.metragemEsperada * 100) / 100,
           tempoApontado: Math.round(m.tempoApontado * 100) / 100,
           tempoDisponivel: Math.round(m.tempoDisponivel * 100) / 100,
+          tempoParada: Math.round(m.tempoParada * 100) / 100,
           diasNoPeriodo: m.diasNoPeriodo,
           eficiencia: Math.round(m.eficiencia * 100) / 100,
         })),
