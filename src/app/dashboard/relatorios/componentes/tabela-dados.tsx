@@ -25,13 +25,32 @@ const formatarNumeroBR = (valor: number, casasDecimais: number = 2): string => {
   });
 };
 
-// Função para formatar data
+// ✅ FUNÇÃO CORRIGIDA: Formatar data no padrão brasileiro (DD/MM/AAAA)
 const formatarDataBR = (dataStr: string): string => {
   if (!dataStr) return '-';
+  
   try {
+    // Se já estiver no formato DD/MM/AAAA, retorna como está
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(dataStr)) {
+      return dataStr;
+    }
+    
+    // Se for ISO (YYYY-MM-DD), converter para DD/MM/AAAA
+    if (/^\d{4}-\d{2}-\d{2}/.test(dataStr)) {
+      const [ano, mes, dia] = dataStr.split('T')[0].split('-');
+      return `${dia}/${mes}/${ano}`;
+    }
+    
+    // Tentar converter de objeto Date
     const data = new Date(dataStr);
-    if (isNaN(data.getTime())) return dataStr;
-    return data.toLocaleDateString('pt-BR');
+    if (!isNaN(data.getTime())) {
+      const dia = data.getDate().toString().padStart(2, '0');
+      const mes = (data.getMonth() + 1).toString().padStart(2, '0');
+      const ano = data.getFullYear();
+      return `${dia}/${mes}/${ano}`;
+    }
+    
+    return dataStr;
   } catch {
     return dataStr;
   }
@@ -83,11 +102,19 @@ export function TabelaDados({ dados, tipo }: TabelaDadosProps) {
                   try {
                     const metragem = item.metragemReal || item.metragem || 0;
                     const tempo = item.tempoMinutos || item.tempoProdução || 0;
-                    const metrosPorMinuto = tempo > 0 ? (metragem / tempo).toFixed(2) : '0';
+                    
+                    // ✅ Calcular metros por minuto com 2 casas decimais
+                    const metrosPorMinuto = tempo > 0 
+                      ? (metragem / tempo).toFixed(2).replace('.', ',')
+                      : '0,00';
+                    
+                    // ✅ Pegar a data no formato correto
+                    const dataOriginal = item.dataCompleta || item.data || item.dataFim || '';
+                    const dataFormatada = formatarDataBR(dataOriginal);
                     
                     return (
                       <TableRow key={index}>
-                        <TableCell>{formatarDataBR(item.dataCompleta || item.data || item.dataFim)}</TableCell>
+                        <TableCell>{dataFormatada}</TableCell>
                         <TableCell>OP {item.op || item.opNumero}</TableCell>
                         <TableCell className="max-w-[200px] truncate" title={item.produtoOp || item.produto}>
                           {item.produtoOp || item.produto || '-'}
@@ -161,6 +188,10 @@ export function TabelaDados({ dados, tipo }: TabelaDadosProps) {
               </TableHeader>
               <TableBody>
                 {dados.map((item, index) => {
+                  const metrosPorMinuto = item.tempoTotal > 0 
+                    ? (item.totalMetragem / item.tempoTotal).toFixed(2).replace('.', ',')
+                    : '0,00';
+                  
                   return (
                     <TableRow key={index}>
                       <TableCell className="font-medium">{item.nome || item.operador}</TableCell>
@@ -174,7 +205,7 @@ export function TabelaDados({ dados, tipo }: TabelaDadosProps) {
                         {item.quantidadeProducoes || 0}
                       </TableCell>
                       <TableCell className="text-right">
-                        {item.metrosPorMinuto?.toFixed(2) || '0'} m/min
+                        {metrosPorMinuto} m/min
                       </TableCell>
                     </TableRow>
                   );
@@ -200,6 +231,10 @@ export function TabelaDados({ dados, tipo }: TabelaDadosProps) {
               </TableHeader>
               <TableBody>
                 {dados.map((item, index) => {
+                  const metrosPorMinuto = item.tempoProducao > 0 
+                    ? (item.totalMetragem / item.tempoProducao).toFixed(2).replace('.', ',')
+                    : '0,00';
+                  
                   return (
                     <TableRow key={index}>
                       <TableCell className="font-medium">{item.nome}</TableCell>
@@ -218,7 +253,7 @@ export function TabelaDados({ dados, tipo }: TabelaDadosProps) {
                           item.disponibilidade < 80 ? 'text-yellow-600' : 
                           'text-green-600'
                         }>
-                          {item.disponibilidade?.toFixed(1)}%
+                          {item.disponibilidade?.toFixed(1).replace('.', ',')}%
                         </span>
                       </TableCell>
                       <TableCell className="text-right">
@@ -227,11 +262,11 @@ export function TabelaDados({ dados, tipo }: TabelaDadosProps) {
                           item.eficiencia < 80 ? 'text-yellow-600' : 
                           'text-green-600'
                         }>
-                          {item.eficiencia?.toFixed(1)}%
+                          {item.eficiencia?.toFixed(1).replace('.', ',')}%
                         </span>
                       </TableCell>
                       <TableCell className="text-right">
-                        {item.metrosPorMinuto?.toFixed(2) || '0'} m/min
+                        {metrosPorMinuto} m/min
                       </TableCell>
                     </TableRow>
                   );
