@@ -70,51 +70,6 @@ interface ParametrosProduto {
   [key: string]: ParametroEstagio;
 }
 
-interface Totais {
-  totalRegistros: number;
-  metragemReal: number;
-  metragemEsperadaProduto: number;
-  metragemEsperadaMaquina: number;
-  tempoTotal: number;
-  eficienciaMediaProduto: number;
-  eficienciaMediaMaquina: number;
-  diasNoPeriodo: number;
-}
-
-interface GraficoData {
-  data: string;
-  dataISO: string;
-  metragemReal: number;
-  metragemEsperadaProduto: number;
-  metragemEsperadaMaquina: number;
-  tempoTotal: number;
-  eficiencia: number;
-  registros: DadoProcessado[];
-}
-
-interface GraficoEstagio {
-  estagio: string;
-  estagioId: string;
-  metragemReal: number;
-  metragemEsperadaProduto: number;
-  metragemEsperadaMaquina: number;
-  tempoTotal: number;
-  eficienciaProduto: number;
-  eficienciaMaquina: number;
-  registros: DadoProcessado[];
-}
-
-interface DadosMaquina {
-  nome: string;
-  metragemReal: number;
-  metragemEsperada: number;
-  tempoApontado: number;
-  tempoDisponivel: number;
-  diasNoPeriodo: number;
-  eficiencia: number;
-  registros: DadoProcessado[];
-}
-
 // Schema de validação dos filtros
 const filtrosSchema = z.object({
   inicio: z.string(),
@@ -128,10 +83,9 @@ const filtrosSchema = z.object({
   referencia: z.enum(['produto', 'maquina']).optional().default('produto'),
 });
 
-// Função para formatar data no fuso horário de São Paulo (Brasil)
+// Função para formatar data
 function formatarDataBR(data: Date | null): string {
   if (!data) return '';
-  
   return data.toLocaleString('pt-BR', {
     timeZone: 'America/Sao_Paulo',
     day: '2-digit',
@@ -170,13 +124,13 @@ export async function GET(request: Request) {
       referencia: searchParams.get('referencia') as 'produto' | 'maquina' || 'produto',
     };
 
-    console.log('📦 Parâmetros recebidos:', params);
+    console.log('📦 Parâmetros recebidos:', JSON.stringify(params, null, 2));
 
     // Validar filtros
     const validated = filtrosSchema.parse(params);
     console.log('✅ Filtros validados:', validated);
 
-    // ✅ CORREÇÃO: Usar fuso horário de São Paulo
+    // Datas com fuso brasileiro
     const dataInicio = new Date(validated.inicio + 'T00:00:00.000-03:00');
     const dataFim = new Date(validated.fim + 'T23:59:59.999-03:00');
 
@@ -185,7 +139,7 @@ export async function GET(request: Request) {
       fim: dataFim.toISOString(),
     });
 
-    // ✅ CORREÇÃO: Processar arrays de filtros corretamente
+    // Processar arrays de filtros
     const maquinasFilter = validated.maquinas ? validated.maquinas.split(',').filter(Boolean) : [];
     const operadoresFilter = validated.operadores ? validated.operadores.split(',').filter(Boolean) : [];
     const datasFilter = validated.datas ? validated.datas.split(',').filter(Boolean) : [];
@@ -200,7 +154,7 @@ export async function GET(request: Request) {
       estagios: estagiosFilter,
     });
 
-    // ✅ CORREÇÃO: Calcular dias no período
+    // Calcular dias no período
     const diasNoPeriodo = datasFilter.length > 0 
       ? datasFilter.length
       : Math.floor((dataFim.getTime() - dataInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
@@ -209,13 +163,15 @@ export async function GET(request: Request) {
     console.log(`📅 Datas específicas: ${datasFilter.length > 0 ? datasFilter.join(', ') : 'Todas do período'}`);
     console.log(`📅 Dias no período: ${diasNoPeriodo}`);
 
-    // Buscar todos os produtos para mapear grupos
+    // Buscar produtos
     const todosProdutos = await db.select().from(produtos);
     const produtosMap = new Map<string, typeof produtos.$inferSelect>(
       todosProdutos.map(p => [p.codigo, p])
     );
 
-    // Construir query base para produções
+    // 🔴 CONSTRUIR QUERY PASSO A PASSO PARA DEBUG
+    console.log('🔨 Construindo query...');
+    
     let query = sql`
       SELECT 
         p.id,
@@ -247,40 +203,52 @@ export async function GET(request: Request) {
       WHERE p.data_fim IS NOT NULL
     `;
 
-    // ✅ CORREÇÃO: Construir condições de filtro de forma segura
-    const conditions: any[] = [];
+    console.log('📝 Query base criada');
+
+    // Construir condições
+    const conditions: string[] = [];
 
     // Filtro de datas
     if (datasFilter.length > 0) {
-      conditions.push(sql`DATE(p.data_fim) IN (${sql.join(datasFilter.map(d => `'${d}'`), sql`, `)})`);
+      const datasStr = datasFilter.map(d => `'${d}'`).join(', ');
+      conditions.push(`DATE(p.data_fim) IN (${datasStr})`);
+      console.log(`📅 Adicionando filtro de datas específicas: ${datasStr}`);
     } else {
-      conditions.push(sql`p.data_fim >= ${dataInicio}`);
-      conditions.push(sql`p.data_fim <= ${dataFim}`);
+      conditions.push(`p.data_fim >= '${dataInicio.toISOString()}'`);
+      conditions.push(`p.data_fim <= '${dataFim.toISOString()}'`);
+      console.log(`📅 Adicionando filtro de período: ${dataInicio.toISOString()} a ${dataFim.toISOString()}`);
     }
 
     // Filtro de máquinas
     if (maquinasFilter.length > 0) {
-      conditions.push(sql`p.maquina_id IN (${sql.join(maquinasFilter.map(id => `'${id}'`), sql`, `)})`);
+      const maquinasStr = maquinasFilter.map(id => `'${id}'`).join(', ');
+      conditions.push(`p.maquina_id IN (${maquinasStr})`);
+      console.log(`🔧 Adicionando filtro de ${maquinasFilter.length} máquinas`);
     }
 
     // Filtro de operadores
     if (operadoresFilter.length > 0) {
-      conditions.push(sql`p.operador_fim_id IN (${sql.join(operadoresFilter.map(id => `'${id}'`), sql`, `)})`);
+      const operadoresStr = operadoresFilter.map(id => `'${id}'`).join(', ');
+      conditions.push(`p.operador_fim_id IN (${operadoresStr})`);
+      console.log(`👤 Adicionando filtro de ${operadoresFilter.length} operadores`);
     }
 
     // Filtro de estágios
     if (estagiosFilter.length > 0) {
-      conditions.push(sql`p.estagio_id IN (${sql.join(estagiosFilter.map(id => `'${id}'`), sql`, `)})`);
+      const estagiosStr = estagiosFilter.map(id => `'${id}'`).join(', ');
+      conditions.push(`p.estagio_id IN (${estagiosStr})`);
+      console.log(`🏭 Adicionando filtro de ${estagiosFilter.length} estágios`);
     }
 
-    // Aplicar todas as condições
+    // Aplicar condições
     if (conditions.length > 0) {
-      // @ts-ignore
-      query = sql`${query} AND ${sql.join(conditions, sql` AND `)}`;
+      const whereClause = conditions.join(' AND ');
+      query = sql`${query} AND ${sql.raw(whereClause)}`;
+      console.log('📝 Where clause:', whereClause);
     }
 
-    // @ts-ignore
     query = sql`${query} ORDER BY p.data_fim DESC`;
+    console.log('✅ Query final construída');
 
     console.log('🔍 Executando query...');
     const result = await db.execute(query);
@@ -290,29 +258,23 @@ export async function GET(request: Request) {
     const dadosProcessados: DadoProcessado[] = await Promise.all(result.rows.map(async (row: any) => {
       const rowData = row as RowData;
       
-      // Extrair grupo do produto da OP
       const produtoOp = rowData.produtoOp || '';
       const partes = produtoOp.split('.');
       const grupo = partes.length > 1 ? partes[1] : '';
 
-      // Buscar parâmetros do produto
       const produto = produtosMap.get(grupo);
       const parametrosProduto = (produto?.parametrosEficiencia as ParametrosProduto) || {};
 
-      // Calcular metragem esperada baseada na referência
       const tempoMinutos = Number(rowData.tempoMinutos) || 0;
       const velocidadeMaquina = Number(rowData.velocidadeMaquina) || 0;
       
-      // Buscar velocidade do produto para este estágio
       const estagioKey = rowData.estagioNome?.toLowerCase() || '';
       const velocidadeProduto = parametrosProduto[estagioKey]?.velocidade || 0;
 
       const metragemEsperadaProduto = tempoMinutos * velocidadeProduto;
       const metragemEsperadaMaquina = tempoMinutos * velocidadeMaquina;
-
       const metragemReal = Number(rowData.metragemProcessada) || 0;
 
-      // Calcular eficiência
       const eficienciaProduto = metragemEsperadaProduto > 0 
         ? (metragemReal / metragemEsperadaProduto) * 100 
         : 0;
@@ -321,7 +283,6 @@ export async function GET(request: Request) {
         ? (metragemReal / metragemEsperadaMaquina) * 100 
         : 0;
 
-      // Formatar data
       const dataFim = rowData.dataFim ? new Date(rowData.dataFim) : null;
       const dataFormatada = formatarDataBR(dataFim);
       
@@ -352,7 +313,7 @@ export async function GET(request: Request) {
       };
     }));
 
-    // Filtrar por grupos se necessário
+    // Filtrar por grupos
     let dadosFiltrados = dadosProcessados;
     if (gruposFilter.length > 0) {
       dadosFiltrados = dadosProcessados.filter(d => 
@@ -360,7 +321,7 @@ export async function GET(request: Request) {
       );
     }
 
-    // PROCESSAMENTO PARA OPERADORES (AGRUPADO)
+    // Processar operadores
     const operadoresMap = new Map();
     dadosFiltrados.forEach(d => {
       if (!d.operadorId) return;
@@ -380,7 +341,7 @@ export async function GET(request: Request) {
       op.quantidadeProducoes += 1;
     });
 
-    // PROCESSAMENTO PARA MÁQUINAS (AGRUPADO)
+    // Processar máquinas
     const maquinasMap = new Map();
     dadosFiltrados.forEach(d => {
       const chave = d.maquinaId;
@@ -397,10 +358,12 @@ export async function GET(request: Request) {
       maq.tempoProducao += d.tempoMinutos;
     });
 
-    // BUSCAR DADOS DE PARADA PARA MÁQUINAS
+    // Buscar paradas
     let paradasQuery: any[] = [];
     if (validated.tipo === 'maquinas' || validated.tipo === 'eficiencia') {
-      let paradasSql = sql`
+      console.log('🔍 Buscando dados de paradas...');
+      
+      let paradasSql = `
         SELECT 
           maquina_id as "maquinaId",
           COALESCE(SUM(EXTRACT(EPOCH FROM (data_fim - data_inicio))/60), 0) as "tempoParada"
@@ -408,32 +371,35 @@ export async function GET(request: Request) {
         WHERE data_fim IS NOT NULL
       `;
 
-      const paradasConditions: any[] = [];
+      const paradasConditions: string[] = [];
 
       if (maquinasFilter.length > 0) {
-        paradasConditions.push(sql`maquina_id IN (${sql.join(maquinasFilter.map(id => `'${id}'`), sql`, `)})`);
+        const maquinasStr = maquinasFilter.map(id => `'${id}'`).join(', ');
+        paradasConditions.push(`maquina_id IN (${maquinasStr})`);
       }
 
       if (datasFilter.length > 0) {
-        paradasConditions.push(sql`DATE(data_inicio) IN (${sql.join(datasFilter.map(d => `'${d}'`), sql`, `)})`);
+        const datasStr = datasFilter.map(d => `'${d}'`).join(', ');
+        paradasConditions.push(`DATE(data_inicio) IN (${datasStr})`);
       } else {
-        paradasConditions.push(sql`data_inicio >= ${dataInicio}`);
-        paradasConditions.push(sql`data_fim <= ${dataFim}`);
+        paradasConditions.push(`data_inicio >= '${dataInicio.toISOString()}'`);
+        paradasConditions.push(`data_fim <= '${dataFim.toISOString()}'`);
       }
 
       if (paradasConditions.length > 0) {
-        // @ts-ignore
-        paradasSql = sql`${paradasSql} AND ${sql.join(paradasConditions, sql` AND `)}`;
+        paradasSql += ' AND ' + paradasConditions.join(' AND ');
       }
 
-      // @ts-ignore
-      paradasSql = sql`${paradasSql} GROUP BY maquina_id`;
-
-      const paradasResult = await db.execute(paradasSql);
+      paradasSql += ' GROUP BY maquina_id';
+      
+      console.log('📝 Query de paradas:', paradasSql);
+      
+      const paradasResult = await db.execute(sql.raw(paradasSql));
       paradasQuery = paradasResult.rows;
+      console.log(`✅ Encontradas paradas para ${paradasQuery.length} máquinas`);
     }
 
-    // Adicionar tempo de parada às máquinas
+    // Adicionar tempo de parada
     paradasQuery.forEach((p: any) => {
       const maq = maquinasMap.get(p.maquinaId);
       if (maq) {
@@ -441,7 +407,7 @@ export async function GET(request: Request) {
       }
     });
 
-    // CALCULAR MÉTRICAS DAS MÁQUINAS
+    // Calcular métricas das máquinas
     maquinasMap.forEach(maq => {
       const tempoTotal = maq.tempoProducao + maq.tempoParada;
       maq.disponibilidade = tempoTotal > 0 
@@ -474,7 +440,7 @@ export async function GET(request: Request) {
       ? (totais.metragemReal / totais.metragemEsperadaMaquina) * 100 
       : 0;
 
-    // Agrupar por data para gráficos
+    // Agrupar por data
     const porDataMap: Record<string, any> = {};
     dadosFiltrados.forEach(d => {
       if (!porDataMap[d.dataISO]) {
@@ -496,7 +462,6 @@ export async function GET(request: Request) {
       porDataMap[d.dataISO].registros.push(d);
     });
 
-    // Calcular eficiência por data
     Object.values(porDataMap).forEach((item: any) => {
       const esperado = validated.referencia === 'produto' 
         ? item.metragemEsperadaProduto 
@@ -529,7 +494,6 @@ export async function GET(request: Request) {
       porEstagioMap[d.estagio].registros.push(d);
     });
 
-    // Calcular eficiência por estágio
     Object.values(porEstagioMap).forEach((item: any) => {
       item.eficienciaProduto = item.metragemEsperadaProduto > 0 
         ? (item.metragemReal / item.metragemEsperadaProduto) * 100 
@@ -539,10 +503,12 @@ export async function GET(request: Request) {
         : 0;
     });
 
-    // Para relatório de paradas, buscar dados específicos
+    // Para relatório de paradas
     let dadosParadas: any[] = [];
     if (validated.tipo === 'paradas') {
-      let paradasMotivoSql = sql`
+      console.log('🔍 Buscando dados de paradas por motivo...');
+      
+      let paradasMotivoSql = `
         SELECT 
           mp.descricao as motivo,
           mp.codigo,
@@ -554,32 +520,35 @@ export async function GET(request: Request) {
         WHERE pm.data_fim IS NOT NULL
       `;
 
-      const paradasMotivoConditions: any[] = [];
+      const paradasMotivoConditions: string[] = [];
 
       if (datasFilter.length > 0) {
-        paradasMotivoConditions.push(sql`DATE(pm.data_inicio) IN (${sql.join(datasFilter.map(d => `'${d}'`), sql`, `)})`);
+        const datasStr = datasFilter.map(d => `'${d}'`).join(', ');
+        paradasMotivoConditions.push(`DATE(pm.data_inicio) IN (${datasStr})`);
       } else {
-        paradasMotivoConditions.push(sql`pm.data_inicio >= ${dataInicio}`);
-        paradasMotivoConditions.push(sql`pm.data_fim <= ${dataFim}`);
+        paradasMotivoConditions.push(`pm.data_inicio >= '${dataInicio.toISOString()}'`);
+        paradasMotivoConditions.push(`pm.data_fim <= '${dataFim.toISOString()}'`);
       }
 
       if (maquinasFilter.length > 0) {
-        paradasMotivoConditions.push(sql`pm.maquina_id IN (${sql.join(maquinasFilter.map(id => `'${id}'`), sql`, `)})`);
+        const maquinasStr = maquinasFilter.map(id => `'${id}'`).join(', ');
+        paradasMotivoConditions.push(`pm.maquina_id IN (${maquinasStr})`);
       }
 
       if (paradasMotivoConditions.length > 0) {
-        // @ts-ignore
-        paradasMotivoSql = sql`${paradasMotivoSql} AND ${sql.join(paradasMotivoConditions, sql` AND `)}`;
+        paradasMotivoSql += ' AND ' + paradasMotivoConditions.join(' AND ');
       }
 
-      // @ts-ignore
-      paradasMotivoSql = sql`${paradasMotivoSql} GROUP BY mp.descricao, mp.codigo`;
-
-      const paradasMotivoResult = await db.execute(paradasMotivoSql);
+      paradasMotivoSql += ' GROUP BY mp.descricao, mp.codigo';
+      
+      console.log('📝 Query de paradas por motivo:', paradasMotivoSql);
+      
+      const paradasMotivoResult = await db.execute(sql.raw(paradasMotivoSql));
       dadosParadas = paradasMotivoResult.rows;
+      console.log(`✅ Encontrados ${dadosParadas.length} motivos de parada`);
     }
 
-    // PREPARAR RESPOSTA BASEADA NO TIPO
+    // Preparar resposta
     let resposta: any = {
       dados: dadosFiltrados,
       totais: {
@@ -598,7 +567,6 @@ export async function GET(request: Request) {
       },
     };
 
-    // Adicionar dados específicos para cada tipo
     if (validated.tipo === 'paradas') {
       resposta.dados = dadosParadas;
       resposta.graficos.porMotivo = dadosParadas;
@@ -635,7 +603,8 @@ export async function GET(request: Request) {
     return NextResponse.json(resposta);
 
   } catch (error) {
-    console.error('❌ ERRO:', error);
+    console.error('❌ ERRO DETALHADO:', error);
+    console.error('❌ Stack:', error instanceof Error ? error.stack : 'No stack');
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -645,7 +614,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json(
-      { error: 'Erro interno ao gerar relatório' },
+      { error: 'Erro interno ao gerar relatório', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }
