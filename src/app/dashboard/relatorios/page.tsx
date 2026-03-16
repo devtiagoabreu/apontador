@@ -27,6 +27,7 @@ interface DadosRelatorio {
     tempoTotal: number;
     eficienciaMediaProduto: number;
     eficienciaMediaMaquina: number;
+    diasNoPeriodo?: number;
   };
   graficos?: {
     porData?: any[];
@@ -326,7 +327,6 @@ export default function RelatoriosPage() {
                   <GraficoEficienciaMelhorado
                     dados={dadosRelatorio.graficos.porMaquina}
                     tipo="metragem"
-                    referencia={filtros?.referencia || 'produto'}
                   />
                 )}
 
@@ -335,7 +335,6 @@ export default function RelatoriosPage() {
                   <GraficoEficienciaMelhorado
                     dados={dadosRelatorio.graficos.porMaquina}
                     tipo="tempo"
-                    referencia={filtros?.referencia || 'produto'}
                   />
                 )}
 

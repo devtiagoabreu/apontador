@@ -10,21 +10,17 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  Line,
-  ComposedChart,
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface GraficoEficienciaMelhoradoProps {
   dados: any[];
   tipo: 'metragem' | 'tempo';
-  referencia: 'produto' | 'maquina';
 }
 
 const COLORS = {
   real: '#3b82f6',
   esperado: '#10b981',
-  eficiencia: '#ef4444',
   disponivel: '#94a3b8',
   apontado: '#f59e0b',
 };
@@ -53,7 +49,7 @@ const formatarPercentual = (valor: number) => {
   return valor.toFixed(1) + '%';
 };
 
-export function GraficoEficienciaMelhorado({ dados, tipo, referencia }: GraficoEficienciaMelhoradoProps) {
+export function GraficoEficienciaMelhorado({ dados, tipo }: GraficoEficienciaMelhoradoProps) {
   const titulo = tipo === 'metragem' 
     ? 'Metragem por Máquina' 
     : 'Tempo Disponível vs Apontado';
@@ -80,7 +76,7 @@ export function GraficoEficienciaMelhorado({ dados, tipo, referencia }: GraficoE
         <CardContent>
           <div className="h-[400px]">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={dados} layout="vertical">
+              <BarChart data={dados} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis type="number" />
                 <YAxis 
@@ -91,8 +87,9 @@ export function GraficoEficienciaMelhorado({ dados, tipo, referencia }: GraficoE
                 />
                 <Tooltip 
                   formatter={(value: any, name: string) => {
-                    if (name === 'Eficiência') return [formatarPercentual(value), name];
-                    return [formatarValor(value), name];
+                    if (name === 'Metragem Real') return [formatarValor(value), name];
+                    if (name === 'Metragem Esperada') return [formatarValor(value), name];
+                    return [value, name];
                   }}
                 />
                 <Legend />
@@ -108,14 +105,7 @@ export function GraficoEficienciaMelhorado({ dados, tipo, referencia }: GraficoE
                   name="Metragem Esperada" 
                   barSize={20}
                 />
-                <Line
-                  type="monotone"
-                  dataKey="eficiencia"
-                  stroke={COLORS.eficiencia}
-                  name="Eficiência %"
-                  strokeWidth={2}
-                />
-              </ComposedChart>
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </CardContent>
@@ -142,8 +132,8 @@ export function GraficoEficienciaMelhorado({ dados, tipo, referencia }: GraficoE
               />
               <Tooltip 
                 formatter={(value: any, name: string) => {
-                  if (name === 'Disponível') return [formatarTempo(value), name];
-                  if (name === 'Apontado') return [formatarTempo(value), name];
+                  if (name === 'Tempo Disponível') return [formatarTempo(value), name];
+                  if (name === 'Tempo Apontado') return [formatarTempo(value), name];
                   return [value, name];
                 }}
               />

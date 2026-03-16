@@ -74,6 +74,7 @@ interface Totais {
   tempoTotal: number;
   eficienciaMediaProduto: number;
   eficienciaMediaMaquina: number;
+  diasNoPeriodo: number;
 }
 
 interface GraficoData {
@@ -105,7 +106,7 @@ interface DadosMaquina {
   metragemEsperada: number;
   tempoApontado: number;
   tempoDisponivel: number;
-  diasOperacao: number;
+  diasNoPeriodo: number;
   eficiencia: number;
   registros: DadoProcessado[];
 }
@@ -120,7 +121,7 @@ const filtrosSchema = z.object({
   referencia: z.enum(['produto', 'maquina']).default('produto'),
 });
 
-// Função auxiliar para formatar tempo em horas e minutos
+// Função auxiliar para formatar tempo em horas e minutos (apenas para debug)
 function formatarTempo(minutos: number): string {
   const horas = Math.floor(minutos / 60);
   const mins = Math.floor(minutos % 60);
@@ -149,16 +150,33 @@ export async function POST(request: Request) {
     const validated = filtrosSchema.parse(body);
     console.log('✅ Filtros validados:', validated);
 
-    // Obter período dos filtros (se não tiver, usar últimos 30 dias)
+    // Obter período dos filtros
     const hoje = new Date();
-    const dataInicio = new Date(hoje);
-    dataInicio.setDate(hoje.getDate() - 30);
-    const dataFim = hoje;
+    let dataInicio: Date;
+    let dataFim: Date;
+
+    // Se tiver datas específicas, usar a menor e maior
+    if (validated.datas && validated.datas.length > 0) {
+      const datasOrdenadas = validated.datas.sort();
+      dataInicio = new Date(datasOrdenadas[0] + 'T00:00:00');
+      dataFim = new Date(datasOrdenadas[datasOrdenadas.length - 1] + 'T23:59:59');
+    } else {
+      // Se não tiver datas específicas, usar últimos 30 dias
+      dataInicio = new Date(hoje);
+      dataInicio.setDate(hoje.getDate() - 30);
+      dataFim = hoje;
+    }
 
     console.log('📅 Período:', { 
       inicio: dataInicio.toISOString().split('T')[0], 
       fim: dataFim.toISOString().split('T')[0] 
     });
+
+    // ✅ Calcular dias no período selecionado
+    const diffTime = Math.abs(dataFim.getTime() - dataInicio.getTime());
+    const diasNoPeriodo = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 para incluir ambos
+
+    console.log(`📅 Período selecionado: ${diasNoPeriodo} dias (${dataInicio.toISOString().split('T')[0]} a ${dataFim.toISOString().split('T')[0]})`);
 
     // Processar arrays de filtros
     const maquinasFilter = validated.maquinas || [];
@@ -319,6 +337,7 @@ export async function POST(request: Request) {
       tempoTotal: dadosFiltrados.reduce((acc, d) => acc + d.tempoMinutos, 0),
       eficienciaMediaProduto: 0,
       eficienciaMediaMaquina: 0,
+      diasNoPeriodo,
     };
 
     totais.eficienciaMediaProduto = totais.metragemEsperadaProduto > 0 
@@ -408,7 +427,7 @@ export async function POST(request: Request) {
           metragemEsperada: 0,
           tempoApontado: 0,
           tempoDisponivel: 0,
-          diasOperacao: 0,
+          diasNoPeriodo: 0,
           eficiencia: 0,
           registros: []
         });
@@ -440,29 +459,25 @@ export async function POST(request: Request) {
       maquinasInfo.map(m => [m.id, m])
     );
 
-    // 🔴 CORREÇÃO: Calcular tempo disponível baseado em DIAS, não em produções
+    // ✅ Calcular tempo disponível baseado no PERÍODO, não nas produções
     maquinasMap.forEach((maq, id) => {
       const info = maquinasInfoMap.get(id);
-      
-      // Calcular dias únicos no período
-      const datasUnicas = new Set(maq.registros.map(r => r.dataISO));
-      const diasOperacao = datasUnicas.size;
       
       // Tempo disponível por dia (padrão 1440 min = 24h)
       const tempoPorDia = info?.tempoDiarioDisponivel 
         ? Number(info.tempoDiarioDisponivel) 
         : 1440;
       
-      // 🔴 Multiplicar pelo número de DIAS, não pelo número de produções
-      maq.tempoDisponivel = tempoPorDia * diasOperacao;
-      maq.diasOperacao = diasOperacao;
+      // ✅ Multiplicar pelo número de DIAS NO PERÍODO
+      maq.tempoDisponivel = tempoPorDia * diasNoPeriodo;
+      maq.diasNoPeriodo = diasNoPeriodo;
       
-      // Calcular eficiência
+      // Calcular eficiência (baseada em metragem)
       maq.eficiencia = maq.metragemEsperada > 0 
         ? (maq.metragemReal / maq.metragemEsperada) * 100 
         : 0;
       
-      console.log(`🔍 Máquina ${maq.nome}: ${diasOperacao} dias × ${formatarTempo(tempoPorDia)}/dia = ${formatarTempo(maq.tempoDisponivel)}`);
+      console.log(`🔍 Máquina ${maq.nome}: ${diasNoPeriodo} dias no período × ${formatarTempo(tempoPorDia)}/dia = ${formatarTempo(maq.tempoDisponivel)} (apontado: ${formatarTempo(maq.tempoApontado)})`);
     });
 
     const resposta = {
@@ -475,6 +490,7 @@ export async function POST(request: Request) {
         tempoTotal: Math.round(totais.tempoTotal * 100) / 100,
         eficienciaMediaProduto: Math.round(totais.eficienciaMediaProduto * 100) / 100,
         eficienciaMediaMaquina: Math.round(totais.eficienciaMediaMaquina * 100) / 100,
+        diasNoPeriodo,
       },
       graficos: {
         porData: Object.values(porDataMap).sort((a, b) => a.dataISO.localeCompare(b.dataISO)),
@@ -485,7 +501,7 @@ export async function POST(request: Request) {
           metragemEsperada: Math.round(m.metragemEsperada * 100) / 100,
           tempoApontado: Math.round(m.tempoApontado * 100) / 100,
           tempoDisponivel: Math.round(m.tempoDisponivel * 100) / 100,
-          diasOperacao: m.diasOperacao,
+          diasNoPeriodo: m.diasNoPeriodo,
           eficiencia: Math.round(m.eficiencia * 100) / 100,
         })),
       },
