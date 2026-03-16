@@ -120,24 +120,40 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
     }
   }
 
-  // Função para gerar datas dentro do período selecionado
+  // ✅ CORREÇÃO DEFINITIVA: Função para gerar datas sem problemas de fuso
   const gerarDatasDoPeriodo = () => {
     if (!filtros.periodo.inicio || !filtros.periodo.fim) return;
 
-    const inicio = new Date(filtros.periodo.inicio);
-    const fim = new Date(filtros.periodo.fim);
+    // Extrair ano, mês, dia diretamente da string (YYYY-MM-DD)
+    const [anoInicio, mesInicio, diaInicio] = filtros.periodo.inicio.split('-').map(Number);
+    const [anoFim, mesFim, diaFim] = filtros.periodo.fim.split('-').map(Number);
+    
+    // Criar datas no fuso horário local usando os componentes numéricos
+    // Isso evita qualquer conversão UTC
+    const inicio = new Date(anoInicio, mesInicio - 1, diaInicio, 12, 0, 0); // Meio-dia para evitar problemas de fuso
+    const fim = new Date(anoFim, mesFim - 1, diaFim, 12, 0, 0);
+    
     const datas: Option[] = [];
 
     // Garantir que início não seja maior que fim
     if (inicio > fim) return;
 
-    const dias = Math.ceil((fim.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24));
+    // Calcular diferença em dias usando datas no meio-dia
+    const diffTime = fim.getTime() - inicio.getTime();
+    const dias = Math.round(diffTime / (1000 * 60 * 60 * 24));
     
     for (let i = 0; i <= dias; i++) {
       const data = new Date(inicio);
       data.setDate(inicio.getDate() + i);
-      const dataStr = data.toISOString().split('T')[0];
-      const dataFormatada = data.toLocaleDateString('pt-BR');
+      
+      // Formatar para YYYY-MM-DD usando os componentes locais
+      const ano = data.getFullYear();
+      const mes = (data.getMonth() + 1).toString().padStart(2, '0');
+      const dia = data.getDate().toString().padStart(2, '0');
+      const dataStr = `${ano}-${mes}-${dia}`;
+      
+      // Formatar para exibição DD/MM/AAAA
+      const dataFormatada = `${dia}/${mes}/${ano}`;
       
       datas.push({
         id: dataStr,
@@ -145,6 +161,9 @@ export function FiltrosAvancados({ onChange, carregando }: FiltrosAvancadosProps
         value: dataStr,
       });
     }
+
+    console.log('📅 Período selecionado:', filtros.periodo.inicio, 'a', filtros.periodo.fim);
+    console.log('📅 Datas geradas:', datas.map(d => d.label));
 
     setDatasDisponiveis(datas);
     
