@@ -127,10 +127,9 @@ const filtrosSchema = z.object({
   referencia: z.enum(['produto', 'maquina']).default('produto'),
 });
 
-// ✅ Função para formatar data no fuso horário de São Paulo (Brasil)
+// Função para formatar data
 function formatarDataBR(data: Date | null): string {
   if (!data) return '';
-  
   return data.toLocaleString('pt-BR', {
     timeZone: 'America/Sao_Paulo',
     day: '2-digit',
@@ -165,7 +164,7 @@ export async function POST(request: Request) {
     let dataInicio: Date;
     let dataFim: Date;
 
-    // Usar o período do filtro se existir - ✅ COM FUSO BRASILEIRO
+    // Usar o período do filtro se existir
     if (validated.periodo?.inicio && validated.periodo?.fim) {
       dataInicio = new Date(validated.periodo.inicio + 'T00:00:00.000-03:00');
       dataFim = new Date(validated.periodo.fim + 'T23:59:59.999-03:00');
@@ -184,8 +183,6 @@ export async function POST(request: Request) {
     console.log('📅 Datas de filtro:', {
       inicio: dataInicio.toISOString(),
       fim: dataFim.toISOString(),
-      inicioLocal: formatarDataBR(dataInicio),
-      fimLocal: formatarDataBR(dataFim)
     });
 
     // Processar arrays de filtros
@@ -203,7 +200,7 @@ export async function POST(request: Request) {
       estagios: estagiosFilter,
     });
 
-    // ✅ CORREÇÃO: Calcular dias no período baseado nas DATAS ESPECÍFICAS selecionadas
+    // Calcular dias no período
     const diasNoPeriodo = datasFilter.length > 0 
       ? datasFilter.length
       : Math.floor((dataFim.getTime() - dataInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
@@ -214,11 +211,16 @@ export async function POST(request: Request) {
 
     // Buscar todos os produtos para mapear grupos
     const todosProdutos = await db.select().from(produtos);
+    console.log(`📦 Encontrados ${todosProdutos.length} produtos`);
+    
     const produtosMap = new Map<string, typeof produtos.$inferSelect>(
       todosProdutos.map(p => [p.codigo, p])
     );
 
-    // Construir query base para produções
+    // 🔴 CONSTRUIR QUERY PRINCIPAL
+    console.log('🔨 Construindo query principal...');
+
+    // Query base
     let query = sql`
       SELECT 
         p.id,
@@ -249,44 +251,79 @@ export async function POST(request: Request) {
       WHERE p.data_fim IS NOT NULL
     `;
 
-    // Construir condições de filtro
-    const conditions: any[] = [];
+    // Construir condições
+    const conditions: string[] = [];
 
     // Filtro de datas
     if (datasFilter.length > 0) {
-      conditions.push(sql`DATE(p.data_fim) IN (${sql.join(datasFilter.map(d => `'${d}'`), sql`, `)})`);
+      const datasStr = datasFilter.map(d => `'${d}'`).join(', ');
+      conditions.push(`DATE(p.data_fim) IN (${datasStr})`);
+      console.log(`📅 Adicionando filtro de datas específicas: ${datasStr}`);
     } else {
-      conditions.push(sql`p.data_fim >= ${dataInicio}`);
-      conditions.push(sql`p.data_fim <= ${dataFim}`);
+      conditions.push(`p.data_fim >= '${dataInicio.toISOString()}'`);
+      conditions.push(`p.data_fim <= '${dataFim.toISOString()}'`);
+      console.log(`📅 Adicionando filtro de período: ${dataInicio.toISOString()} a ${dataFim.toISOString()}`);
     }
 
-    // Outros filtros
+    // Filtro de máquinas
     if (maquinasFilter.length > 0) {
-      conditions.push(sql`p.maquina_id IN (${sql.join(maquinasFilter.map(id => `'${id}'`), sql`, `)})`);
+      const maquinasStr = maquinasFilter.map(id => `'${id}'`).join(', ');
+      conditions.push(`p.maquina_id IN (${maquinasStr})`);
+      console.log(`🔧 Adicionando filtro de ${maquinasFilter.length} máquinas`);
     }
 
+    // Filtro de operadores
     if (operadoresFilter.length > 0) {
-      conditions.push(sql`p.operador_fim_id IN (${sql.join(operadoresFilter.map(id => `'${id}'`), sql`, `)})`);
+      const operadoresStr = operadoresFilter.map(id => `'${id}'`).join(', ');
+      conditions.push(`p.operador_fim_id IN (${operadoresStr})`);
+      console.log(`👤 Adicionando filtro de ${operadoresFilter.length} operadores`);
     }
 
+    // Filtro de estágios
     if (estagiosFilter.length > 0) {
-      conditions.push(sql`p.estagio_id IN (${sql.join(estagiosFilter.map(id => `'${id}'`), sql`, `)})`);
+      const estagiosStr = estagiosFilter.map(id => `'${id}'`).join(', ');
+      conditions.push(`p.estagio_id IN (${estagiosStr})`);
+      console.log(`🏭 Adicionando filtro de ${estagiosFilter.length} estágios`);
     }
 
-    // Aplicar todas as condições
+    // Aplicar condições
     if (conditions.length > 0) {
-      // @ts-ignore
-      query = sql`${query} AND ${sql.join(conditions, sql` AND `)}`;
+      const whereClause = conditions.join(' AND ');
+      query = sql`${query} AND ${sql.raw(whereClause)}`;
+      console.log('📝 Where clause:', whereClause);
     }
 
-    // @ts-ignore
     query = sql`${query} ORDER BY p.data_fim DESC`;
 
-    console.log('🔍 Executando query...');
+    console.log('🔍 Executando query principal...');
     const result = await db.execute(query);
     console.log(`✅ Encontrados ${result.rows.length} registros`);
 
+    if (result.rows.length === 0) {
+      console.log('⚠️ Nenhum registro encontrado, retornando dados vazios');
+      return NextResponse.json({
+        dados: [],
+        totais: {
+          totalRegistros: 0,
+          metragemReal: 0,
+          metragemEsperadaProduto: 0,
+          metragemEsperadaMaquina: 0,
+          tempoTotal: 0,
+          eficienciaMediaProduto: 0,
+          eficienciaMediaMaquina: 0,
+          diasNoPeriodo,
+        },
+        graficos: {
+          porData: [],
+          porEstagio: [],
+          porMaquina: [],
+        },
+        filtrosAplicados: validated,
+      });
+    }
+
     // Processar dados
+    console.log('🔄 Processando dados...');
     const dadosProcessados: DadoProcessado[] = await Promise.all(result.rows.map(async (row: any) => {
       const rowData = row as RowData;
       
@@ -299,20 +336,17 @@ export async function POST(request: Request) {
       const produto = produtosMap.get(grupo);
       const parametrosProduto = (produto?.parametrosEficiencia as ParametrosProduto) || {};
 
-      // Calcular metragem esperada baseada na referência
+      // Calcular metragem esperada
       const tempoMinutos = Number(rowData.tempoMinutos) || 0;
       const velocidadeMaquina = Number(rowData.velocidadeMaquina) || 0;
       
-      // Buscar velocidade do produto para este estágio
       const estagioKey = rowData.estagioNome?.toLowerCase() || '';
       const velocidadeProduto = parametrosProduto[estagioKey]?.velocidade || 0;
 
       const metragemEsperadaProduto = tempoMinutos * velocidadeProduto;
       const metragemEsperadaMaquina = tempoMinutos * velocidadeMaquina;
-
       const metragemReal = Number(rowData.metragemProcessada) || 0;
 
-      // Calcular eficiência
       const eficienciaProduto = metragemEsperadaProduto > 0 
         ? (metragemReal / metragemEsperadaProduto) * 100 
         : 0;
@@ -321,7 +355,6 @@ export async function POST(request: Request) {
         ? (metragemReal / metragemEsperadaMaquina) * 100 
         : 0;
 
-      // ✅ CORREÇÃO: FORMATAR DATA COMPLETA COM HORA NO FUSO BRASILEIRO
       const dataFim = rowData.dataFim ? new Date(rowData.dataFim) : null;
       const dataFormatada = formatarDataBR(dataFim);
       
@@ -351,12 +384,15 @@ export async function POST(request: Request) {
       };
     }));
 
+    console.log(`✅ Processados ${dadosProcessados.length} registros`);
+
     // Filtrar por grupos se necessário
     let dadosFiltrados = dadosProcessados;
     if (gruposFilter.length > 0) {
       dadosFiltrados = dadosProcessados.filter(d => 
         d.grupo && gruposFilter.includes(d.grupo)
       );
+      console.log(`📊 Após filtro de grupos: ${dadosFiltrados.length} registros`);
     }
 
     // Calcular totais
@@ -379,7 +415,9 @@ export async function POST(request: Request) {
       ? (totais.metragemReal / totais.metragemEsperadaMaquina) * 100 
       : 0;
 
-    // Agrupar por data para gráficos
+    console.log('📊 Totais calculados:', totais);
+
+    // Agrupar por data
     const porDataMap: Record<string, GraficoData> = {};
     
     dadosFiltrados.forEach(d => {
@@ -447,6 +485,7 @@ export async function POST(request: Request) {
     });
 
     // PROCESSAMENTO POR MÁQUINA
+    console.log('🔨 Processando dados por máquina...');
     const maquinasMap = new Map<string, DadosMaquina>();
     
     dadosFiltrados.forEach(d => {
@@ -473,7 +512,10 @@ export async function POST(request: Request) {
       maq.registros.push(d);
     });
 
+    console.log(`📊 Encontradas ${maquinasMap.size} máquinas com produção`);
+
     // Buscar tempo disponível das máquinas
+    console.log('🔍 Buscando informações das máquinas...');
     const maquinasInfo = await db
       .select({
         id: maquinas.id,
@@ -487,6 +529,8 @@ export async function POST(request: Request) {
           : undefined
       );
 
+    console.log(`📦 Encontradas informações para ${maquinasInfo.length} máquinas`);
+
     const maquinasInfoMap = new Map(
       maquinasInfo.map(m => [m.id, m])
     );
@@ -494,7 +538,9 @@ export async function POST(request: Request) {
     // Buscar tempo de parada para as máquinas no período
     let paradasQuery: any[] = [];
     if (maquinasMap.size > 0) {
-      let paradasSql = sql`
+      console.log('🔍 Buscando dados de paradas...');
+      
+      let paradasSql = `
         SELECT 
           maquina_id as "maquinaId",
           COALESCE(SUM(EXTRACT(EPOCH FROM (data_fim - data_inicio))/60), 0) as "tempoParada"
@@ -502,36 +548,40 @@ export async function POST(request: Request) {
         WHERE data_fim IS NOT NULL
       `;
 
-      const paradasConditions: any[] = [];
+      const paradasConditions: string[] = [];
 
       if (maquinasFilter.length > 0) {
-        paradasConditions.push(sql`maquina_id IN (${sql.join(maquinasFilter.map(id => `'${id}'`), sql`, `)})`);
+        const maquinasStr = maquinasFilter.map(id => `'${id}'`).join(', ');
+        paradasConditions.push(`maquina_id IN (${maquinasStr})`);
       }
 
       if (datasFilter.length > 0) {
-        paradasConditions.push(sql`DATE(data_inicio) IN (${sql.join(datasFilter.map(d => `'${d}'`), sql`, `)})`);
+        const datasStr = datasFilter.map(d => `'${d}'`).join(', ');
+        paradasConditions.push(`DATE(data_inicio) IN (${datasStr})`);
       } else {
-        paradasConditions.push(sql`data_inicio >= ${dataInicio}`);
-        paradasConditions.push(sql`data_fim <= ${dataFim}`);
+        paradasConditions.push(`data_inicio >= '${dataInicio.toISOString()}'`);
+        paradasConditions.push(`data_fim <= '${dataFim.toISOString()}'`);
       }
 
       if (paradasConditions.length > 0) {
-        // @ts-ignore
-        paradasSql = sql`${paradasSql} AND ${sql.join(paradasConditions, sql` AND `)}`;
+        paradasSql += ' AND ' + paradasConditions.join(' AND ');
       }
 
-      // @ts-ignore
-      paradasSql = sql`${paradasSql} GROUP BY maquina_id`;
-
-      const paradasResult = await db.execute(paradasSql);
+      paradasSql += ' GROUP BY maquina_id';
+      
+      console.log('📝 Query de paradas:', paradasSql);
+      
+      const paradasResult = await db.execute(sql.raw(paradasSql));
       paradasQuery = paradasResult.rows;
+      console.log(`✅ Encontradas paradas para ${paradasQuery.length} máquinas`);
     }
 
     const paradasMap = new Map(
       paradasQuery.map((p: any) => [p.maquinaId, Number(p.tempoParada) || 0])
     );
 
-    // Calcular tempo disponível baseado nos DIAS DO PERÍODO
+    // Calcular tempo disponível
+    console.log('📊 Calculando tempo disponível...');
     maquinasMap.forEach((maq, id) => {
       const info = maquinasInfoMap.get(id);
       
@@ -541,7 +591,6 @@ export async function POST(request: Request) {
       
       maq.tempoDisponivel = tempoPorDia * diasNoPeriodo;
       maq.diasNoPeriodo = diasNoPeriodo;
-      
       maq.tempoParada = paradasMap.get(id) || 0;
       
       maq.eficiencia = maq.metragemEsperada > 0 
@@ -555,6 +604,7 @@ export async function POST(request: Request) {
       console.log(`   - Tempo Apontado: ${maq.tempoApontado}min`);
       console.log(`   - Tempo Disponível: ${maq.tempoDisponivel}min`);
       console.log(`   - Tempo Parada: ${maq.tempoParada}min`);
+      console.log(`   - Eficiência: ${maq.eficiencia}%`);
     });
 
     const resposta = {
@@ -593,7 +643,8 @@ export async function POST(request: Request) {
     return NextResponse.json(resposta);
 
   } catch (error) {
-    console.error('❌ ERRO:', error);
+    console.error('❌ ERRO DETALHADO:', error);
+    console.error('❌ Stack:', error instanceof Error ? error.stack : 'No stack');
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -603,7 +654,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(
-      { error: 'Erro interno ao gerar relatório' },
+      { error: 'Erro interno ao gerar relatório', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }
