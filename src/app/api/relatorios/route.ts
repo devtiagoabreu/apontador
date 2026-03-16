@@ -128,7 +128,7 @@ const filtrosSchema = z.object({
   referencia: z.enum(['produto', 'maquina']).optional().default('produto'),
 });
 
-// ✅ Função para formatar data no fuso horário de São Paulo (Brasil)
+// Função para formatar data no fuso horário de São Paulo (Brasil)
 function formatarDataBR(data: Date | null): string {
   if (!data) return '';
   
@@ -176,23 +176,21 @@ export async function GET(request: Request) {
     const validated = filtrosSchema.parse(params);
     console.log('✅ Filtros validados:', validated);
 
-    // ✅ CORREÇÃO: Usar fuso horário de São Paulo para as datas de filtro
+    // ✅ CORREÇÃO: Usar fuso horário de São Paulo
     const dataInicio = new Date(validated.inicio + 'T00:00:00.000-03:00');
     const dataFim = new Date(validated.fim + 'T23:59:59.999-03:00');
 
     console.log('📅 Datas de filtro:', {
       inicio: dataInicio.toISOString(),
       fim: dataFim.toISOString(),
-      inicioLocal: formatarDataBR(dataInicio),
-      fimLocal: formatarDataBR(dataFim)
     });
 
-    // Processar arrays de filtros
-    const maquinasFilter = validated.maquinas?.split(',').filter(Boolean) || [];
-    const operadoresFilter = validated.operadores?.split(',').filter(Boolean) || [];
-    const datasFilter = validated.datas?.split(',').filter(Boolean) || [];
-    const gruposFilter = validated.grupos?.split(',').filter(Boolean) || [];
-    const estagiosFilter = validated.estagios?.split(',').filter(Boolean) || [];
+    // ✅ CORREÇÃO: Processar arrays de filtros corretamente
+    const maquinasFilter = validated.maquinas ? validated.maquinas.split(',').filter(Boolean) : [];
+    const operadoresFilter = validated.operadores ? validated.operadores.split(',').filter(Boolean) : [];
+    const datasFilter = validated.datas ? validated.datas.split(',').filter(Boolean) : [];
+    const gruposFilter = validated.grupos ? validated.grupos.split(',').filter(Boolean) : [];
+    const estagiosFilter = validated.estagios ? validated.estagios.split(',').filter(Boolean) : [];
 
     console.log('🔍 Filtros processados:', {
       maquinas: maquinasFilter,
@@ -202,7 +200,7 @@ export async function GET(request: Request) {
       estagios: estagiosFilter,
     });
 
-    // ✅ CORREÇÃO: Calcular dias no período baseado nas DATAS ESPECÍFICAS selecionadas
+    // ✅ CORREÇÃO: Calcular dias no período
     const diasNoPeriodo = datasFilter.length > 0 
       ? datasFilter.length
       : Math.floor((dataFim.getTime() - dataInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
@@ -249,7 +247,7 @@ export async function GET(request: Request) {
       WHERE p.data_fim IS NOT NULL
     `;
 
-    // Construir condições de filtro
+    // ✅ CORREÇÃO: Construir condições de filtro de forma segura
     const conditions: any[] = [];
 
     // Filtro de datas
@@ -260,15 +258,17 @@ export async function GET(request: Request) {
       conditions.push(sql`p.data_fim <= ${dataFim}`);
     }
 
-    // Outros filtros
+    // Filtro de máquinas
     if (maquinasFilter.length > 0) {
       conditions.push(sql`p.maquina_id IN (${sql.join(maquinasFilter.map(id => `'${id}'`), sql`, `)})`);
     }
 
+    // Filtro de operadores
     if (operadoresFilter.length > 0) {
       conditions.push(sql`p.operador_fim_id IN (${sql.join(operadoresFilter.map(id => `'${id}'`), sql`, `)})`);
     }
 
+    // Filtro de estágios
     if (estagiosFilter.length > 0) {
       conditions.push(sql`p.estagio_id IN (${sql.join(estagiosFilter.map(id => `'${id}'`), sql`, `)})`);
     }
@@ -321,7 +321,7 @@ export async function GET(request: Request) {
         ? (metragemReal / metragemEsperadaMaquina) * 100 
         : 0;
 
-      // ✅ CORREÇÃO: FORMATAR DATA COMPLETA COM HORA NO FUSO BRASILEIRO
+      // Formatar data
       const dataFim = rowData.dataFim ? new Date(rowData.dataFim) : null;
       const dataFormatada = formatarDataBR(dataFim);
       
