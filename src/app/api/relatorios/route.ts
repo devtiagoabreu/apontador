@@ -70,6 +70,51 @@ interface ParametrosProduto {
   [key: string]: ParametroEstagio;
 }
 
+interface Totais {
+  totalRegistros: number;
+  metragemReal: number;
+  metragemEsperadaProduto: number;
+  metragemEsperadaMaquina: number;
+  tempoTotal: number;
+  eficienciaMediaProduto: number;
+  eficienciaMediaMaquina: number;
+  diasNoPeriodo: number;
+}
+
+interface GraficoData {
+  data: string;
+  dataISO: string;
+  metragemReal: number;
+  metragemEsperadaProduto: number;
+  metragemEsperadaMaquina: number;
+  tempoTotal: number;
+  eficiencia: number;
+  registros: DadoProcessado[];
+}
+
+interface GraficoEstagio {
+  estagio: string;
+  estagioId: string;
+  metragemReal: number;
+  metragemEsperadaProduto: number;
+  metragemEsperadaMaquina: number;
+  tempoTotal: number;
+  eficienciaProduto: number;
+  eficienciaMaquina: number;
+  registros: DadoProcessado[];
+}
+
+interface DadosMaquina {
+  nome: string;
+  metragemReal: number;
+  metragemEsperada: number;
+  tempoApontado: number;
+  tempoDisponivel: number;
+  diasNoPeriodo: number;
+  eficiencia: number;
+  registros: DadoProcessado[];
+}
+
 // Schema de validação dos filtros
 const filtrosSchema = z.object({
   inicio: z.string(),
@@ -82,6 +127,21 @@ const filtrosSchema = z.object({
   estagios: z.string().optional(),
   referencia: z.enum(['produto', 'maquina']).optional().default('produto'),
 });
+
+// ✅ Função para formatar data no fuso horário de São Paulo (Brasil)
+function formatarDataBR(data: Date | null): string {
+  if (!data) return '';
+  
+  return data.toLocaleString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
 
 export async function GET(request: Request) {
   console.log('='.repeat(50));
@@ -116,9 +176,16 @@ export async function GET(request: Request) {
     const validated = filtrosSchema.parse(params);
     console.log('✅ Filtros validados:', validated);
 
-    // ✅ CORREÇÃO: Ajustar fuso horário para UTC-3 (Brasil)
+    // ✅ CORREÇÃO: Usar fuso horário de São Paulo para as datas de filtro
     const dataInicio = new Date(validated.inicio + 'T00:00:00.000-03:00');
     const dataFim = new Date(validated.fim + 'T23:59:59.999-03:00');
+
+    console.log('📅 Datas de filtro:', {
+      inicio: dataInicio.toISOString(),
+      fim: dataFim.toISOString(),
+      inicioLocal: formatarDataBR(dataInicio),
+      fimLocal: formatarDataBR(dataFim)
+    });
 
     // Processar arrays de filtros
     const maquinasFilter = validated.maquinas?.split(',').filter(Boolean) || [];
@@ -140,7 +207,7 @@ export async function GET(request: Request) {
       ? datasFilter.length
       : Math.floor((dataFim.getTime() - dataInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
-    console.log(`📅 Período base: ${dataInicio.toISOString().split('T')[0]} a ${dataFim.toISOString().split('T')[0]}`);
+    console.log(`📅 Período base: ${validated.inicio} a ${validated.fim}`);
     console.log(`📅 Datas específicas: ${datasFilter.length > 0 ? datasFilter.join(', ') : 'Todas do período'}`);
     console.log(`📅 Dias no período: ${diasNoPeriodo}`);
 
@@ -254,16 +321,9 @@ export async function GET(request: Request) {
         ? (metragemReal / metragemEsperadaMaquina) * 100 
         : 0;
 
-      // FORMATAR DATA COMPLETA COM HORA
+      // ✅ CORREÇÃO: FORMATAR DATA COMPLETA COM HORA NO FUSO BRASILEIRO
       const dataFim = rowData.dataFim ? new Date(rowData.dataFim) : null;
-      const dataFormatada = dataFim ? dataFim.toLocaleString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      }) : '';
+      const dataFormatada = formatarDataBR(dataFim);
       
       return {
         id: rowData.id,
@@ -300,10 +360,10 @@ export async function GET(request: Request) {
       );
     }
 
-    // ✅ CORREÇÃO: Processamento para OPERADORES (AGRUPADO CORRETAMENTE)
+    // PROCESSAMENTO PARA OPERADORES (AGRUPADO)
     const operadoresMap = new Map();
     dadosFiltrados.forEach(d => {
-      if (!d.operadorId) return; // Ignorar operadores nulos
+      if (!d.operadorId) return;
       
       const chave = d.operadorId;
       if (!operadoresMap.has(chave)) {
@@ -545,7 +605,6 @@ export async function GET(request: Request) {
     }
 
     if (validated.tipo === 'operadores') {
-      // ✅ CORREÇÃO: Converter Map para array apenas com valores não-zero
       resposta.dados = Array.from(operadoresMap.values())
         .filter(op => op.totalMetragem > 0 || op.quantidadeProducoes > 0)
         .map(op => ({

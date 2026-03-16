@@ -127,14 +127,19 @@ const filtrosSchema = z.object({
   referencia: z.enum(['produto', 'maquina']).default('produto'),
 });
 
-// Função auxiliar para formatar tempo em horas e minutos (apenas para debug)
-function formatarTempo(minutos: number): string {
-  const horas = Math.floor(minutos / 60);
-  const mins = Math.floor(minutos % 60);
-  if (horas > 0) {
-    return `${horas}h ${mins > 0 ? `${mins}min` : ''}`;
-  }
-  return `${mins}min`;
+// ✅ Função para formatar data no fuso horário de São Paulo (Brasil)
+function formatarDataBR(data: Date | null): string {
+  if (!data) return '';
+  
+  return data.toLocaleString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
 }
 
 export async function POST(request: Request) {
@@ -160,7 +165,7 @@ export async function POST(request: Request) {
     let dataInicio: Date;
     let dataFim: Date;
 
-    // Usar o período do filtro se existir
+    // Usar o período do filtro se existir - ✅ COM FUSO BRASILEIRO
     if (validated.periodo?.inicio && validated.periodo?.fim) {
       dataInicio = new Date(validated.periodo.inicio + 'T00:00:00.000-03:00');
       dataFim = new Date(validated.periodo.fim + 'T23:59:59.999-03:00');
@@ -175,6 +180,13 @@ export async function POST(request: Request) {
       dataFim = hoje;
       console.log('📅 Usando período padrão (30 dias)');
     }
+
+    console.log('📅 Datas de filtro:', {
+      inicio: dataInicio.toISOString(),
+      fim: dataFim.toISOString(),
+      inicioLocal: formatarDataBR(dataInicio),
+      fimLocal: formatarDataBR(dataFim)
+    });
 
     // Processar arrays de filtros
     const maquinasFilter = validated.maquinas || [];
@@ -193,10 +205,10 @@ export async function POST(request: Request) {
 
     // ✅ CORREÇÃO: Calcular dias no período baseado nas DATAS ESPECÍFICAS selecionadas
     const diasNoPeriodo = datasFilter.length > 0 
-      ? datasFilter.length  // Se tem datas específicas, usa a QUANTIDADE delas
-      : Math.floor((dataFim.getTime() - dataInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1; // Se não, usa o período
+      ? datasFilter.length
+      : Math.floor((dataFim.getTime() - dataInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
-    console.log(`📅 Período base: ${dataInicio.toISOString().split('T')[0]} a ${dataFim.toISOString().split('T')[0]}`);
+    console.log(`📅 Período base: ${validated.periodo?.inicio || dataInicio.toISOString().split('T')[0]} a ${validated.periodo?.fim || dataFim.toISOString().split('T')[0]}`);
     console.log(`📅 Datas específicas: ${datasFilter.length > 0 ? datasFilter.join(', ') : 'Todas do período'}`);
     console.log(`📅 Dias no período: ${diasNoPeriodo}`);
 
@@ -206,7 +218,7 @@ export async function POST(request: Request) {
       todosProdutos.map(p => [p.codigo, p])
     );
 
-    // 🔴 CORREÇÃO: Construir query base para produções usando SQL direto com aliases
+    // Construir query base para produções
     let query = sql`
       SELECT 
         p.id,
@@ -237,7 +249,7 @@ export async function POST(request: Request) {
       WHERE p.data_fim IS NOT NULL
     `;
 
-    // ✅ Construir condições de filtro usando os aliases das tabelas
+    // Construir condições de filtro
     const conditions: any[] = [];
 
     // Filtro de datas
@@ -263,7 +275,7 @@ export async function POST(request: Request) {
 
     // Aplicar todas as condições
     if (conditions.length > 0) {
-      // @ts-ignore - Ignorar erro de tipagem do drizzle
+      // @ts-ignore
       query = sql`${query} AND ${sql.join(conditions, sql` AND `)}`;
     }
 
@@ -309,16 +321,9 @@ export async function POST(request: Request) {
         ? (metragemReal / metragemEsperadaMaquina) * 100 
         : 0;
 
-      // FORMATAR DATA COMPLETA COM HORA
+      // ✅ CORREÇÃO: FORMATAR DATA COMPLETA COM HORA NO FUSO BRASILEIRO
       const dataFim = rowData.dataFim ? new Date(rowData.dataFim) : null;
-      const dataFormatada = dataFim ? dataFim.toLocaleString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      }) : '';
+      const dataFormatada = formatarDataBR(dataFim);
       
       return {
         id: rowData.id,
@@ -489,7 +494,6 @@ export async function POST(request: Request) {
     // Buscar tempo de parada para as máquinas no período
     let paradasQuery: any[] = [];
     if (maquinasMap.size > 0) {
-      // 🔴 CORREÇÃO: Usar SQL direto para paradas sem alias problemáticos
       let paradasSql = sql`
         SELECT 
           maquina_id as "maquinaId",
@@ -504,7 +508,6 @@ export async function POST(request: Request) {
         paradasConditions.push(sql`maquina_id IN (${sql.join(maquinasFilter.map(id => `'${id}'`), sql`, `)})`);
       }
 
-      // Aplicar mesmo filtro de datas
       if (datasFilter.length > 0) {
         paradasConditions.push(sql`DATE(data_inicio) IN (${sql.join(datasFilter.map(d => `'${d}'`), sql`, `)})`);
       } else {
@@ -528,23 +531,19 @@ export async function POST(request: Request) {
       paradasQuery.map((p: any) => [p.maquinaId, Number(p.tempoParada) || 0])
     );
 
-    // ✅ Calcular tempo disponível baseado nos DIAS DO PERÍODO
+    // Calcular tempo disponível baseado nos DIAS DO PERÍODO
     maquinasMap.forEach((maq, id) => {
       const info = maquinasInfoMap.get(id);
       
-      // Tempo disponível por dia
       const tempoPorDia = info?.tempoDiarioDisponivel 
         ? Number(info.tempoDiarioDisponivel) 
         : 1440;
       
-      // Usar diasNoPeriodo calculado (que já considera datas específicas)
       maq.tempoDisponivel = tempoPorDia * diasNoPeriodo;
       maq.diasNoPeriodo = diasNoPeriodo;
       
-      // Adicionar tempo de parada
       maq.tempoParada = paradasMap.get(id) || 0;
       
-      // Calcular eficiência
       maq.eficiencia = maq.metragemEsperada > 0 
         ? (maq.metragemReal / maq.metragemEsperada) * 100 
         : 0;
