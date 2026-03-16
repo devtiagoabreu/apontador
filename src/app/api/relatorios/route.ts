@@ -70,6 +70,51 @@ interface ParametrosProduto {
   [key: string]: ParametroEstagio;
 }
 
+interface Totais {
+  totalRegistros: number;
+  metragemReal: number;
+  metragemEsperadaProduto: number;
+  metragemEsperadaMaquina: number;
+  tempoTotal: number;
+  eficienciaMediaProduto: number;
+  eficienciaMediaMaquina: number;
+  diasNoPeriodo: number;
+}
+
+interface GraficoData {
+  data: string;
+  dataISO: string;
+  metragemReal: number;
+  metragemEsperadaProduto: number;
+  metragemEsperadaMaquina: number;
+  tempoTotal: number;
+  eficiencia: number;
+  registros: DadoProcessado[];
+}
+
+interface GraficoEstagio {
+  estagio: string;
+  estagioId: string;
+  metragemReal: number;
+  metragemEsperadaProduto: number;
+  metragemEsperadaMaquina: number;
+  tempoTotal: number;
+  eficienciaProduto: number;
+  eficienciaMaquina: number;
+  registros: DadoProcessado[];
+}
+
+interface DadosMaquina {
+  nome: string;
+  metragemReal: number;
+  metragemEsperada: number;
+  tempoApontado: number;
+  tempoDisponivel: number;
+  diasNoPeriodo: number;
+  eficiencia: number;
+  registros: DadoProcessado[];
+}
+
 // Schema de validação dos filtros
 const filtrosSchema = z.object({
   inicio: z.string(),
@@ -82,6 +127,16 @@ const filtrosSchema = z.object({
   estagios: z.string().optional(),
   referencia: z.enum(['produto', 'maquina']).optional().default('produto'),
 });
+
+// Função auxiliar para formatar tempo em horas e minutos (apenas para debug)
+function formatarTempo(minutos: number): string {
+  const horas = Math.floor(minutos / 60);
+  const mins = Math.floor(minutos % 60);
+  if (horas > 0) {
+    return `${horas}h ${mins > 0 ? `${mins}min` : ''}`;
+  }
+  return `${mins}min`;
+}
 
 export async function GET(request: Request) {
   console.log('='.repeat(50));
@@ -118,6 +173,12 @@ export async function GET(request: Request) {
 
     const dataInicio = new Date(validated.inicio);
     const dataFim = new Date(validated.fim);
+
+    // Calcular dias no período selecionado
+    const diffTime = Math.abs(dataFim.getTime() - dataInicio.getTime());
+    const diasNoPeriodo = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+    console.log(`📅 Período: ${diasNoPeriodo} dias (${dataInicio.toISOString().split('T')[0]} a ${dataFim.toISOString().split('T')[0]})`);
 
     // Processar arrays de filtros
     const maquinasFilter = validated.maquinas?.split(',').filter(Boolean) || [];
@@ -210,16 +271,20 @@ export async function GET(request: Request) {
       const produto = produtosMap.get(grupo);
       const parametrosProduto = (produto?.parametrosEficiencia as ParametrosProduto) || {};
 
+      // Calcular metragem esperada baseada na referência
       const tempoMinutos = Number(rowData.tempoMinutos) || 0;
       const velocidadeMaquina = Number(rowData.velocidadeMaquina) || 0;
       
+      // Buscar velocidade do produto para este estágio
       const estagioKey = rowData.estagioNome?.toLowerCase() || '';
       const velocidadeProduto = parametrosProduto[estagioKey]?.velocidade || 0;
 
       const metragemEsperadaProduto = tempoMinutos * velocidadeProduto;
       const metragemEsperadaMaquina = tempoMinutos * velocidadeMaquina;
+
       const metragemReal = Number(rowData.metragemProcessada) || 0;
 
+      // Calcular eficiência
       const eficienciaProduto = metragemEsperadaProduto > 0 
         ? (metragemReal / metragemEsperadaProduto) * 100 
         : 0;
@@ -228,14 +293,22 @@ export async function GET(request: Request) {
         ? (metragemReal / metragemEsperadaMaquina) * 100 
         : 0;
 
-      // Formatar datas
+      // ✅ FORMATAR DATA COMPLETA COM HORA (sempre)
       const dataFim = rowData.dataFim ? new Date(rowData.dataFim) : null;
+      const dataFormatada = dataFim ? dataFim.toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      }) : '';
       
       return {
         id: rowData.id,
-        data: dataFim ? dataFim.toLocaleDateString('pt-BR') : '',
+        data: dataFormatada, // ✅ Sempre com hora
         dataISO: rowData.dataFim?.split('T')[0] || '',
-        dataCompleta: dataFim ? dataFim.toLocaleString('pt-BR') : '',
+        dataCompleta: dataFormatada, // ✅ Manter compatibilidade
         op: rowData.opNumero,
         grupo,
         produtoOp: rowData.produtoOp,
@@ -266,7 +339,7 @@ export async function GET(request: Request) {
       );
     }
 
-    // 🔴 PROCESSAMENTO PARA OPERADORES (AGRUPADO)
+    // PROCESSAMENTO PARA OPERADORES (AGRUPADO)
     const operadoresMap = new Map();
     dadosFiltrados.forEach(d => {
       const chave = d.operadorId || 'sem-operador';
@@ -284,7 +357,7 @@ export async function GET(request: Request) {
       op.quantidadeProducoes += 1;
     });
 
-    // 🔴 PROCESSAMENTO PARA MÁQUINAS (AGRUPADO)
+    // PROCESSAMENTO PARA MÁQUINAS (AGRUPADO)
     const maquinasMap = new Map();
     dadosFiltrados.forEach(d => {
       const chave = d.maquinaId;
@@ -301,7 +374,7 @@ export async function GET(request: Request) {
       maq.tempoProducao += d.tempoMinutos;
     });
 
-    // 🔴 BUSCAR DADOS DE PARADA PARA MÁQUINAS
+    // BUSCAR DADOS DE PARADA PARA MÁQUINAS
     const paradasQuery = await db
       .select({
         maquinaId: paradasMaquina.maquinaId,
@@ -326,14 +399,14 @@ export async function GET(request: Request) {
       }
     });
 
-    // 🔴 CALCULAR MÉTRICAS DAS MÁQUINAS
+    // CALCULAR MÉTRICAS DAS MÁQUINAS
     maquinasMap.forEach(maq => {
       const tempoTotal = maq.tempoProducao + maq.tempoParada;
       maq.disponibilidade = tempoTotal > 0 
         ? Math.round((maq.tempoProducao / tempoTotal) * 10000) / 100 
         : 100;
       
-      maq.eficiencia = maq.tempoProducao > 0 ? 100 : 0; // Simplificado
+      maq.eficiencia = maq.tempoProducao > 0 ? 100 : 0;
       maq.metrosPorMinuto = maq.tempoProducao > 0 
         ? Math.round((maq.totalMetragem / maq.tempoProducao) * 100) / 100 
         : 0;
@@ -348,6 +421,7 @@ export async function GET(request: Request) {
       tempoTotal: dadosFiltrados.reduce((acc, d) => acc + d.tempoMinutos, 0),
       eficienciaMediaProduto: 0,
       eficienciaMediaMaquina: 0,
+      diasNoPeriodo,
     };
 
     totais.eficienciaMediaProduto = totais.metragemEsperadaProduto > 0 
@@ -449,7 +523,7 @@ export async function GET(request: Request) {
       dadosParadas = paradasQuery;
     }
 
-    // 🔴 PREPARAR RESPOSTA BASEADA NO TIPO
+    // PREPARAR RESPOSTA BASEADA NO TIPO
     let resposta: any = {
       dados: dadosFiltrados,
       totais: {
@@ -460,6 +534,7 @@ export async function GET(request: Request) {
         tempoTotal: Math.round(totais.tempoTotal * 100) / 100,
         eficienciaMediaProduto: Math.round(totais.eficienciaMediaProduto * 100) / 100,
         eficienciaMediaMaquina: Math.round(totais.eficienciaMediaMaquina * 100) / 100,
+        diasNoPeriodo,
       },
       graficos: {
         porData: Object.values(porDataMap).sort((a, b) => a.dataISO.localeCompare(b.dataISO)),
@@ -474,7 +549,6 @@ export async function GET(request: Request) {
     }
 
     if (validated.tipo === 'operadores') {
-      // 🔴 Converter Map para array para operadores
       resposta.dados = Array.from(operadoresMap.values()).map(op => ({
         ...op,
         metrosPorMinuto: op.tempoTotal > 0 
@@ -484,7 +558,6 @@ export async function GET(request: Request) {
     }
 
     if (validated.tipo === 'maquinas') {
-      // 🔴 Converter Map para array para máquinas (sem campo código)
       resposta.dados = Array.from(maquinasMap.values()).map(maq => ({
         nome: maq.nome,
         totalMetragem: maq.totalMetragem,

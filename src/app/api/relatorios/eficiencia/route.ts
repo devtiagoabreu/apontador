@@ -154,7 +154,6 @@ export async function POST(request: Request) {
     const validated = filtrosSchema.parse(body);
     console.log('✅ Filtros validados:', validated);
 
-    // ✅ CORREÇÃO: Definir período
     const hoje = new Date();
     let dataInicio: Date;
     let dataFim: Date;
@@ -248,7 +247,6 @@ export async function POST(request: Request) {
       query = sql`${query} AND p.estagio_id IN (${sql.join(estagiosFilter, sql`, `)})`;
     }
 
-    // ✅ CORREÇÃO: Datas específicas como filtro ADICIONAL
     if (datasFilter.length > 0) {
       query = sql`${query} AND DATE(p.data_fim) IN (${sql.join(datasFilter.map(d => `'${d}'`), sql`, `)})`;
       console.log(`📅 Aplicando filtro de datas específicas:`, datasFilter);
@@ -295,14 +293,22 @@ export async function POST(request: Request) {
         ? (metragemReal / metragemEsperadaMaquina) * 100 
         : 0;
 
-      // Formatar datas
+      // ✅ FORMATAR DATA COMPLETA COM HORA (sempre)
       const dataFim = rowData.dataFim ? new Date(rowData.dataFim) : null;
+      const dataFormatada = dataFim ? dataFim.toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      }) : '';
       
       return {
         id: rowData.id,
-        data: dataFim ? dataFim.toLocaleDateString('pt-BR') : '',
+        data: dataFormatada, // ✅ Sempre com hora
         dataISO: rowData.dataFim?.split('T')[0] || '',
-        dataCompleta: dataFim ? dataFim.toLocaleString('pt-BR') : '',
+        dataCompleta: dataFormatada, // ✅ Manter compatibilidade
         op: rowData.opNumero,
         grupo,
         produtoOp: rowData.produtoOp,

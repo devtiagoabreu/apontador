@@ -25,37 +25,6 @@ const formatarNumeroBR = (valor: number, casasDecimais: number = 2): string => {
   });
 };
 
-// ✅ FUNÇÃO CORRIGIDA: Formatar data no padrão brasileiro (DD/MM/AAAA)
-const formatarDataBR = (dataStr: string): string => {
-  if (!dataStr) return '-';
-  
-  try {
-    // Se já estiver no formato DD/MM/AAAA, retorna como está
-    if (/^\d{2}\/\d{2}\/\d{4}$/.test(dataStr)) {
-      return dataStr;
-    }
-    
-    // Se for ISO (YYYY-MM-DD), converter para DD/MM/AAAA
-    if (/^\d{4}-\d{2}-\d{2}/.test(dataStr)) {
-      const [ano, mes, dia] = dataStr.split('T')[0].split('-');
-      return `${dia}/${mes}/${ano}`;
-    }
-    
-    // Tentar converter de objeto Date
-    const data = new Date(dataStr);
-    if (!isNaN(data.getTime())) {
-      const dia = data.getDate().toString().padStart(2, '0');
-      const mes = (data.getMonth() + 1).toString().padStart(2, '0');
-      const ano = data.getFullYear();
-      return `${dia}/${mes}/${ano}`;
-    }
-    
-    return dataStr;
-  } catch {
-    return dataStr;
-  }
-};
-
 export function TabelaDados({ dados, tipo }: TabelaDadosProps) {
   console.log(`📊 TabelaDados - tipo: ${tipo}, dados:`, dados);
 
@@ -86,7 +55,7 @@ export function TabelaDados({ dados, tipo }: TabelaDadosProps) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Data</TableHead>
+                  <TableHead>Data/Hora</TableHead>
                   <TableHead>OP</TableHead>
                   <TableHead>Produto</TableHead>
                   <TableHead>Máquina</TableHead>
@@ -103,18 +72,17 @@ export function TabelaDados({ dados, tipo }: TabelaDadosProps) {
                     const metragem = item.metragemReal || item.metragem || 0;
                     const tempo = item.tempoMinutos || item.tempoProdução || 0;
                     
-                    // ✅ Calcular metros por minuto com 2 casas decimais
+                    // Calcular metros por minuto com 2 casas decimais
                     const metrosPorMinuto = tempo > 0 
                       ? (metragem / tempo).toFixed(2).replace('.', ',')
                       : '0,00';
                     
-                    // ✅ Pegar a data no formato correto
-                    const dataOriginal = item.dataCompleta || item.data || item.dataFim || '';
-                    const dataFormatada = formatarDataBR(dataOriginal);
+                    // ✅ Usar data que já vem formatada da API (sempre com hora)
+                    const dataExibicao = item.data || item.dataCompleta || item.dataFim || '-';
                     
                     return (
                       <TableRow key={index}>
-                        <TableCell>{dataFormatada}</TableCell>
+                        <TableCell>{dataExibicao}</TableCell>
                         <TableCell>OP {item.op || item.opNumero}</TableCell>
                         <TableCell className="max-w-[200px] truncate" title={item.produtoOp || item.produto}>
                           {item.produtoOp || item.produto || '-'}
