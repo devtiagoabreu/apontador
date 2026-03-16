@@ -12,6 +12,7 @@ import {
   ResponsiveContainer,
   LineChart,
   Line,
+  LabelList,
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -20,8 +21,21 @@ interface GraficoProducaoProps {
   tipo: 'diario' | 'acumulado';
 }
 
-// Função para formatar número no padrão brasileiro
-const formatarNumeroBR = (valor: number): string => {
+// Função para formatar número no padrão brasileiro com abreviação (K, M)
+const formatarNumeroAbreviado = (valor: number): string => {
+  if (valor === null || valor === undefined || isNaN(valor)) return '-';
+  
+  if (valor >= 1000000) {
+    return (valor / 1000000).toFixed(1).replace('.', ',') + 'M';
+  }
+  if (valor >= 1000) {
+    return (valor / 1000).toFixed(1).replace('.', ',') + 'K';
+  }
+  return valor.toString();
+};
+
+// Função para formatar número completo no tooltip
+const formatarNumeroCompleto = (valor: number): string => {
   if (valor === null || valor === undefined || isNaN(valor)) return '-';
   return valor.toLocaleString('pt-BR', {
     minimumFractionDigits: 2,
@@ -29,12 +43,12 @@ const formatarNumeroBR = (valor: number): string => {
   }) + ' m';
 };
 
-// Função para formatar data (apenas dia)
-const formatarData = (dataStr: string): string => {
+// Função para formatar data (apenas dia/mês)
+const formatarDataCurta = (dataStr: string): string => {
   if (!dataStr) return '-';
-  // Se já vier formatado como DD/MM/AAAA, extrair apenas a data
-  const match = dataStr.match(/^(\d{2}\/\d{2}\/\d{4})/);
-  if (match) return match[1];
+  // Se já vier formatado como DD/MM/AAAA, extrair DD/MM
+  const match = dataStr.match(/^(\d{2})\/(\d{2})/);
+  if (match) return `${match[1]}/${match[2]}`;
   return dataStr;
 };
 
@@ -54,24 +68,30 @@ export function GraficoProducao({ dados, tipo }: GraficoProducaoProps) {
     );
   }
 
-  // ✅ AGRUPAMENTO POR DIA
-  const dadosAgrupados = dados.reduce((acc: any[], item: any) => {
-    // Extrair apenas a data (sem hora)
-    const dataKey = item.dataISO || item.data?.split(' ')[0] || '';
-    const dataFormatada = formatarData(item.data);
+  // ✅ AGRUPAMENTO POR DIA (corrigido)
+  const mapaPorDia = new Map();
+  
+  dados.forEach((item: any) => {
+    // Extrair apenas a data (YYYY-MM-DD) do ISO
+    const dataISO = item.dataISO || item.data?.split(' ')[0] || '';
+    const dataFormatada = item.data?.split(',')[0] || dataISO;
     
-    const existing = acc.find(d => d.dataISO === dataKey);
-    if (existing) {
-      existing.metragemReal += item.metragemReal || 0;
+    const metragem = item.metragemReal || item.metragem || 0;
+    
+    if (mapaPorDia.has(dataISO)) {
+      const existente = mapaPorDia.get(dataISO);
+      existente.metragemReal += metragem;
     } else {
-      acc.push({
+      mapaPorDia.set(dataISO, {
         data: dataFormatada,
-        dataISO: dataKey,
-        metragemReal: item.metragemReal || 0,
+        dataISO: dataISO,
+        metragemReal: metragem,
       });
     }
-    return acc;
-  }, []).sort((a, b) => a.dataISO.localeCompare(b.dataISO));
+  });
+
+  const dadosAgrupados = Array.from(mapaPorDia.values())
+    .sort((a, b) => a.dataISO.localeCompare(b.dataISO));
 
   console.log('📊 Dados agrupados por dia:', dadosAgrupados);
 
@@ -82,18 +102,29 @@ export function GraficoProducao({ dados, tipo }: GraficoProducaoProps) {
           <CardTitle>{titulo}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-[350px]">
+          <div className="h-[400px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dadosAgrupados}>
+              <BarChart data={dadosAgrupados} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="data" />
-                <YAxis tickFormatter={(value) => value.toLocaleString('pt-BR')} />
+                <XAxis 
+                  dataKey="data" 
+                  tickFormatter={formatarDataCurta}
+                />
+                <YAxis tickFormatter={(value) => formatarNumeroAbreviado(value)} />
                 <Tooltip 
-                  formatter={(value: any) => [formatarNumeroBR(value), 'Metragem']}
+                  formatter={(value: any) => [formatarNumeroCompleto(value), 'Metragem']}
                   labelFormatter={(label) => `Data: ${label}`}
                 />
                 <Legend />
-                <Bar dataKey="metragemReal" fill="#3b82f6" name="Metros Produzidos" />
+                <Bar dataKey="metragemReal" fill="#3b82f6" name="Metros Produzidos">
+                  {/* ✅ Valor abreviado em cima da barra */}
+                  <LabelList 
+                    dataKey="metragemReal" 
+                    position="top" 
+                    formatter={(value: any) => formatarNumeroAbreviado(value)}
+                    style={{ fill: '#000', fontSize: 12, fontWeight: 'bold' }}
+                  />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -119,14 +150,17 @@ export function GraficoProducao({ dados, tipo }: GraficoProducaoProps) {
         <CardTitle>{titulo}</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="h-[350px]">
+        <div className="h-[400px]">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={dadosAcumulados}>
+            <LineChart data={dadosAcumulados} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="data" />
-              <YAxis tickFormatter={(value) => value.toLocaleString('pt-BR')} />
+              <XAxis 
+                dataKey="data" 
+                tickFormatter={formatarDataCurta}
+              />
+              <YAxis tickFormatter={(value) => formatarNumeroAbreviado(value)} />
               <Tooltip 
-                formatter={(value: any) => [formatarNumeroBR(value), 'Metros Acumulados']}
+                formatter={(value: any) => [formatarNumeroCompleto(value), 'Metros Acumulados']}
                 labelFormatter={(label) => `Data: ${label}`}
               />
               <Legend />
@@ -136,7 +170,15 @@ export function GraficoProducao({ dados, tipo }: GraficoProducaoProps) {
                 stroke="#10b981"
                 name="Metros Acumulados"
                 strokeWidth={2}
-              />
+              >
+                {/* ✅ Valor abreviado em cada ponto */}
+                <LabelList 
+                  dataKey="metragemReal" 
+                  position="top" 
+                  formatter={(value: any) => formatarNumeroAbreviado(value)}
+                  style={{ fill: '#000', fontSize: 12, fontWeight: 'bold' }}
+                />
+              </Line>
             </LineChart>
           </ResponsiveContainer>
         </div>
