@@ -162,8 +162,8 @@ export async function POST(request: Request) {
 
     // Usar o período do filtro se existir
     if (validated.periodo?.inicio && validated.periodo?.fim) {
-      dataInicio = new Date(validated.periodo.inicio + 'T00:00:00');
-      dataFim = new Date(validated.periodo.fim + 'T23:59:59');
+      dataInicio = new Date(validated.periodo.inicio + 'T00:00:00.000-03:00');
+      dataFim = new Date(validated.periodo.fim + 'T23:59:59.999-03:00');
       console.log('📅 Usando período do filtro:', { 
         inicio: validated.periodo.inicio, 
         fim: validated.periodo.fim 
