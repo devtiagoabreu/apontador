@@ -150,16 +150,18 @@ export async function POST(request: Request) {
     const validated = filtrosSchema.parse(body);
     console.log('✅ Filtros validados:', validated);
 
-    // Obter período dos filtros
     const hoje = new Date();
     let dataInicio: Date;
     let dataFim: Date;
 
-    // Se tiver datas específicas, usar a menor e maior
+    // ✅ CORREÇÃO: Se tiver datas específicas, usar APENAS essas datas
     if (validated.datas && validated.datas.length > 0) {
-      const datasOrdenadas = validated.datas.sort();
+      // Usar a menor data como início e a maior como fim
+      const datasOrdenadas = [...validated.datas].sort();
       dataInicio = new Date(datasOrdenadas[0] + 'T00:00:00');
       dataFim = new Date(datasOrdenadas[datasOrdenadas.length - 1] + 'T23:59:59');
+      
+      console.log('📅 Datas específicas selecionadas:', validated.datas);
     } else {
       // Se não tiver datas específicas, usar últimos 30 dias
       dataInicio = new Date(hoje);
@@ -174,7 +176,7 @@ export async function POST(request: Request) {
 
     // ✅ Calcular dias no período selecionado
     const diffTime = Math.abs(dataFim.getTime() - dataInicio.getTime());
-    const diasNoPeriodo = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 para incluir ambos
+    const diasNoPeriodo = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
     console.log(`📅 Período selecionado: ${diasNoPeriodo} dias (${dataInicio.toISOString().split('T')[0]} a ${dataFim.toISOString().split('T')[0]})`);
 
@@ -320,10 +322,22 @@ export async function POST(request: Request) {
       };
     }));
 
+    // ✅ CORREÇÃO: Filtrar apenas as datas selecionadas ANTES de processar
+    let dadosDoPeriodo = dadosProcessados;
+    
+    if (validated.datas && validated.datas.length > 0) {
+      // Filtrar apenas as datas específicas selecionadas
+      dadosDoPeriodo = dadosProcessados.filter(d => 
+        validated.datas!.includes(d.dataISO)
+      );
+      console.log(`📊 Filtrando para datas específicas:`, validated.datas);
+      console.log(`📊 Registros após filtro: ${dadosDoPeriodo.length}`);
+    }
+
     // Filtrar por grupos se necessário
-    let dadosFiltrados = dadosProcessados;
+    let dadosFiltrados = dadosDoPeriodo;
     if (gruposFilter.length > 0) {
-      dadosFiltrados = dadosProcessados.filter(d => 
+      dadosFiltrados = dadosDoPeriodo.filter(d => 
         d.grupo && gruposFilter.includes(d.grupo)
       );
     }
@@ -415,7 +429,7 @@ export async function POST(request: Request) {
         : 0;
     });
 
-    // 🔴 PROCESSAMENTO POR MÁQUINA PARA OS GRÁFICOS (CORRIGIDO)
+    // 🔴 PROCESSAMENTO POR MÁQUINA (CORRIGIDO)
     const maquinasMap = new Map<string, DadosMaquina>();
     
     dadosFiltrados.forEach(d => {
@@ -459,25 +473,30 @@ export async function POST(request: Request) {
       maquinasInfo.map(m => [m.id, m])
     );
 
-    // ✅ Calcular tempo disponível baseado no PERÍODO, não nas produções
+    // ✅ Calcular tempo disponível baseado no PERÍODO
     maquinasMap.forEach((maq, id) => {
       const info = maquinasInfoMap.get(id);
       
-      // Tempo disponível por dia (padrão 1440 min = 24h)
+      // Tempo disponível por dia
       const tempoPorDia = info?.tempoDiarioDisponivel 
         ? Number(info.tempoDiarioDisponivel) 
         : 1440;
       
-      // ✅ Multiplicar pelo número de DIAS NO PERÍODO
+      // ✅ Usar diasNoPeriodo calculado anteriormente
       maq.tempoDisponivel = tempoPorDia * diasNoPeriodo;
       maq.diasNoPeriodo = diasNoPeriodo;
       
-      // Calcular eficiência (baseada em metragem)
+      // Calcular eficiência
       maq.eficiencia = maq.metragemEsperada > 0 
         ? (maq.metragemReal / maq.metragemEsperada) * 100 
         : 0;
       
-      console.log(`🔍 Máquina ${maq.nome}: ${diasNoPeriodo} dias no período × ${formatarTempo(tempoPorDia)}/dia = ${formatarTempo(maq.tempoDisponivel)} (apontado: ${formatarTempo(maq.tempoApontado)})`);
+      console.log(`🔍 Máquina ${maq.nome}:`);
+      console.log(`   - Período: ${diasNoPeriodo} dias`);
+      console.log(`   - Registros: ${maq.registros.length}`);
+      console.log(`   - Metragem Real: ${maq.metragemReal}`);
+      console.log(`   - Tempo Apontado: ${maq.tempoApontado}min`);
+      console.log(`   - Tempo Disponível: ${maq.tempoDisponivel}min`);
     });
 
     const resposta = {
