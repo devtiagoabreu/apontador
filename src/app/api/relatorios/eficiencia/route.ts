@@ -18,6 +18,7 @@ interface RowData {
   id: string;
   opId: number;
   maquinaId: string;
+  operadorInicioId: string | null;
   operadorFimId: string | null;
   estagioId: string;
   dataFim: string | null;
@@ -209,7 +210,7 @@ export async function POST(request: Request) {
     console.log(`📅 Datas específicas: ${datasFilter.length > 0 ? datasFilter.join(', ') : 'Todas do período'}`);
     console.log(`📅 Dias no período: ${diasNoPeriodo}`);
 
-    // Buscar todos os produtos para mapear grupos
+    // Buscar todos os produtos
     const todosProdutos = await db.select().from(produtos);
     console.log(`📦 Encontrados ${todosProdutos.length} produtos`);
     
@@ -220,12 +221,13 @@ export async function POST(request: Request) {
     // 🔴 CONSTRUIR QUERY PRINCIPAL
     console.log('🔨 Construindo query principal...');
 
-    // Query base
+    // Query base - usando operador_inicio_id
     let query = sql`
       SELECT 
         p.id,
         p.op_id as "opId",
         p.maquina_id as "maquinaId",
+        p.operador_inicio_id as "operadorInicioId",
         p.operador_fim_id as "operadorFimId",
         p.estagio_id as "estagioId",
         p.data_fim as "dataFim",
@@ -238,7 +240,7 @@ export async function POST(request: Request) {
         m.nome as "maquinaNome",
         m.velocidade_padrao as "velocidadeMaquina",
         
-        u.nome as "operadorNome",
+        ui.nome as "operadorNome",
         
         e.nome as "estagioNome",
         e.codigo as "estagioCodigo"
@@ -246,7 +248,7 @@ export async function POST(request: Request) {
       FROM producoes p
       LEFT JOIN ops o ON p.op_id = o.op
       LEFT JOIN maquinas m ON p.maquina_id = m.id
-      LEFT JOIN usuarios u ON p.operador_fim_id = u.id
+      LEFT JOIN usuarios ui ON p.operador_inicio_id = ui.id
       LEFT JOIN estagios e ON p.estagio_id = e.id
       WHERE p.data_fim IS NOT NULL
     `;
@@ -272,11 +274,11 @@ export async function POST(request: Request) {
       console.log(`🔧 Adicionando filtro de ${maquinasFilter.length} máquinas`);
     }
 
-    // Filtro de operadores
+    // Filtro de operadores (agora usando operador_inicio_id)
     if (operadoresFilter.length > 0) {
       const operadoresStr = operadoresFilter.map(id => `'${id}'`).join(', ');
-      conditions.push(`p.operador_fim_id IN (${operadoresStr})`);
-      console.log(`👤 Adicionando filtro de ${operadoresFilter.length} operadores`);
+      conditions.push(`p.operador_inicio_id IN (${operadoresStr})`);
+      console.log(`👤 Adicionando filtro de ${operadoresFilter.length} operadores (início)`);
     }
 
     // Filtro de estágios
@@ -295,31 +297,12 @@ export async function POST(request: Request) {
 
     query = sql`${query} ORDER BY p.data_fim DESC`;
 
-    console.log('🔍 Executando query principal...');
+    console.log('🔍 Executando query...');
     const result = await db.execute(query);
     console.log(`✅ Encontrados ${result.rows.length} registros`);
 
     if (result.rows.length === 0) {
-      console.log('⚠️ Nenhum registro encontrado, retornando dados vazios');
-      return NextResponse.json({
-        dados: [],
-        totais: {
-          totalRegistros: 0,
-          metragemReal: 0,
-          metragemEsperadaProduto: 0,
-          metragemEsperadaMaquina: 0,
-          tempoTotal: 0,
-          eficienciaMediaProduto: 0,
-          eficienciaMediaMaquina: 0,
-          diasNoPeriodo,
-        },
-        graficos: {
-          porData: [],
-          porEstagio: [],
-          porMaquina: [],
-        },
-        filtrosAplicados: validated,
-      });
+      console.log('⚠️ Nenhum registro encontrado');
     }
 
     // Processar dados
@@ -371,7 +354,7 @@ export async function POST(request: Request) {
         estagioCodigo: rowData.estagioCodigo,
         maquinaId: rowData.maquinaId,
         maquina: rowData.maquinaNome,
-        operadorId: rowData.operadorFimId,
+        operadorId: rowData.operadorInicioId, // ✅ Usando operador de início
         operador: rowData.operadorNome,
         metragemReal,
         tempoMinutos,
@@ -386,7 +369,7 @@ export async function POST(request: Request) {
 
     console.log(`✅ Processados ${dadosProcessados.length} registros`);
 
-    // Filtrar por grupos se necessário
+    // Filtrar por grupos
     let dadosFiltrados = dadosProcessados;
     if (gruposFilter.length > 0) {
       dadosFiltrados = dadosProcessados.filter(d => 
@@ -440,7 +423,6 @@ export async function POST(request: Request) {
       porDataMap[d.dataISO].registros.push(d);
     });
 
-    // Calcular eficiência por data
     Object.values(porDataMap).forEach((item: GraficoData) => {
       const esperado = validated.referencia === 'produto' 
         ? item.metragemEsperadaProduto 
@@ -474,7 +456,6 @@ export async function POST(request: Request) {
       porEstagioMap[d.estagio].registros.push(d);
     });
 
-    // Calcular eficiência por estágio
     Object.values(porEstagioMap).forEach((item: GraficoEstagio) => {
       item.eficienciaProduto = item.metragemEsperadaProduto > 0 
         ? (item.metragemReal / item.metragemEsperadaProduto) * 100 
@@ -484,7 +465,7 @@ export async function POST(request: Request) {
         : 0;
     });
 
-    // PROCESSAMENTO POR MÁQUINA
+    // Processamento por máquina
     console.log('🔨 Processando dados por máquina...');
     const maquinasMap = new Map<string, DadosMaquina>();
     
@@ -514,7 +495,7 @@ export async function POST(request: Request) {
 
     console.log(`📊 Encontradas ${maquinasMap.size} máquinas com produção`);
 
-    // Buscar tempo disponível das máquinas
+    // Buscar informações das máquinas
     console.log('🔍 Buscando informações das máquinas...');
     const maquinasInfo = await db
       .select({
@@ -535,7 +516,7 @@ export async function POST(request: Request) {
       maquinasInfo.map(m => [m.id, m])
     );
 
-    // Buscar tempo de parada para as máquinas no período
+    // Buscar paradas
     let paradasQuery: any[] = [];
     if (maquinasMap.size > 0) {
       console.log('🔍 Buscando dados de paradas...');

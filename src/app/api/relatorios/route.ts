@@ -19,6 +19,7 @@ interface RowData {
   id: string;
   opId: number;
   maquinaId: string;
+  operadorInicioId: string | null;
   operadorFimId: string | null;
   estagioId: string;
   dataFim: string | null;
@@ -165,18 +166,22 @@ export async function GET(request: Request) {
 
     // Buscar produtos
     const todosProdutos = await db.select().from(produtos);
+    console.log(`📦 Encontrados ${todosProdutos.length} produtos`);
+    
     const produtosMap = new Map<string, typeof produtos.$inferSelect>(
       todosProdutos.map(p => [p.codigo, p])
     );
 
-    // 🔴 CONSTRUIR QUERY PASSO A PASSO PARA DEBUG
-    console.log('🔨 Construindo query...');
-    
+    // 🔴 CONSTRUIR QUERY PRINCIPAL
+    console.log('🔨 Construindo query principal...');
+
+    // Query base - usando operador_inicio_id
     let query = sql`
       SELECT 
         p.id,
         p.op_id as "opId",
         p.maquina_id as "maquinaId",
+        p.operador_inicio_id as "operadorInicioId",
         p.operador_fim_id as "operadorFimId",
         p.estagio_id as "estagioId",
         p.data_fim as "dataFim",
@@ -189,8 +194,8 @@ export async function GET(request: Request) {
         m.nome as "maquinaNome",
         m.velocidade_padrao as "velocidadeMaquina",
         
-        u.nome as "operadorNome",
-        u.matricula as "operadorMatricula",
+        ui.nome as "operadorNome",
+        ui.matricula as "operadorMatricula",
         
         e.nome as "estagioNome",
         e.codigo as "estagioCodigo"
@@ -198,12 +203,10 @@ export async function GET(request: Request) {
       FROM producoes p
       LEFT JOIN ops o ON p.op_id = o.op
       LEFT JOIN maquinas m ON p.maquina_id = m.id
-      LEFT JOIN usuarios u ON p.operador_fim_id = u.id
+      LEFT JOIN usuarios ui ON p.operador_inicio_id = ui.id
       LEFT JOIN estagios e ON p.estagio_id = e.id
       WHERE p.data_fim IS NOT NULL
     `;
-
-    console.log('📝 Query base criada');
 
     // Construir condições
     const conditions: string[] = [];
@@ -226,11 +229,11 @@ export async function GET(request: Request) {
       console.log(`🔧 Adicionando filtro de ${maquinasFilter.length} máquinas`);
     }
 
-    // Filtro de operadores
+    // Filtro de operadores (agora usando operador_inicio_id)
     if (operadoresFilter.length > 0) {
       const operadoresStr = operadoresFilter.map(id => `'${id}'`).join(', ');
-      conditions.push(`p.operador_fim_id IN (${operadoresStr})`);
-      console.log(`👤 Adicionando filtro de ${operadoresFilter.length} operadores`);
+      conditions.push(`p.operador_inicio_id IN (${operadoresStr})`);
+      console.log(`👤 Adicionando filtro de ${operadoresFilter.length} operadores (início)`);
     }
 
     // Filtro de estágios
@@ -248,23 +251,30 @@ export async function GET(request: Request) {
     }
 
     query = sql`${query} ORDER BY p.data_fim DESC`;
-    console.log('✅ Query final construída');
 
     console.log('🔍 Executando query...');
     const result = await db.execute(query);
     console.log(`✅ Encontrados ${result.rows.length} registros`);
 
+    if (result.rows.length === 0) {
+      console.log('⚠️ Nenhum registro encontrado');
+    }
+
     // Processar dados
+    console.log('🔄 Processando dados...');
     const dadosProcessados: DadoProcessado[] = await Promise.all(result.rows.map(async (row: any) => {
       const rowData = row as RowData;
       
+      // Extrair grupo do produto da OP
       const produtoOp = rowData.produtoOp || '';
       const partes = produtoOp.split('.');
       const grupo = partes.length > 1 ? partes[1] : '';
 
+      // Buscar parâmetros do produto
       const produto = produtosMap.get(grupo);
       const parametrosProduto = (produto?.parametrosEficiencia as ParametrosProduto) || {};
 
+      // Calcular metragem esperada
       const tempoMinutos = Number(rowData.tempoMinutos) || 0;
       const velocidadeMaquina = Number(rowData.velocidadeMaquina) || 0;
       
@@ -275,6 +285,7 @@ export async function GET(request: Request) {
       const metragemEsperadaMaquina = tempoMinutos * velocidadeMaquina;
       const metragemReal = Number(rowData.metragemProcessada) || 0;
 
+      // Calcular eficiência
       const eficienciaProduto = metragemEsperadaProduto > 0 
         ? (metragemReal / metragemEsperadaProduto) * 100 
         : 0;
@@ -299,7 +310,7 @@ export async function GET(request: Request) {
         estagioCodigo: rowData.estagioCodigo,
         maquinaId: rowData.maquinaId,
         maquina: rowData.maquinaNome,
-        operadorId: rowData.operadorFimId,
+        operadorId: rowData.operadorInicioId, // ✅ Usando operador de início
         operador: rowData.operadorNome,
         operadorMatricula: rowData.operadorMatricula,
         metragemReal,
@@ -313,15 +324,18 @@ export async function GET(request: Request) {
       };
     }));
 
+    console.log(`✅ Processados ${dadosProcessados.length} registros`);
+
     // Filtrar por grupos
     let dadosFiltrados = dadosProcessados;
     if (gruposFilter.length > 0) {
       dadosFiltrados = dadosProcessados.filter(d => 
         d.grupo && gruposFilter.includes(d.grupo)
       );
+      console.log(`📊 Após filtro de grupos: ${dadosFiltrados.length} registros`);
     }
 
-    // Processar operadores
+    // Processar operadores (agrupado por operador de início)
     const operadoresMap = new Map();
     dadosFiltrados.forEach(d => {
       if (!d.operadorId) return;
@@ -341,6 +355,8 @@ export async function GET(request: Request) {
       op.quantidadeProducoes += 1;
     });
 
+    console.log(`📊 Encontrados ${operadoresMap.size} operadores`);
+
     // Processar máquinas
     const maquinasMap = new Map();
     dadosFiltrados.forEach(d => {
@@ -357,6 +373,8 @@ export async function GET(request: Request) {
       maq.totalMetragem += d.metragemReal;
       maq.tempoProducao += d.tempoMinutos;
     });
+
+    console.log(`📊 Encontradas ${maquinasMap.size} máquinas`);
 
     // Buscar paradas
     let paradasQuery: any[] = [];
