@@ -8,6 +8,8 @@ import { Download, FileText, BarChart3, PieChart, Calendar, LineChart } from 'lu
 import { FiltrosAvancados } from './componentes/filtros-avancados';
 import { GraficoProducao } from './componentes/grafico-producao';
 import { GraficoParadas } from './componentes/grafico-paradas';
+import { GraficoOperadores } from './componentes/grafico-operadores';
+import { GraficoMaquinas } from './componentes/grafico-maquinas';
 import { GraficoEficiencia } from './componentes/grafico-eficiencia';
 import { GraficoEficienciaMelhorado } from './componentes/grafico-eficiencia-melhorado';
 import { TabelaDados } from './componentes/tabela-dados';
@@ -270,7 +272,10 @@ export default function RelatoriosPage() {
           {carregando ? (
             <div className="text-center py-8 text-gray-500">Carregando...</div>
           ) : (
-            <TabelaDados dados={dadosRelatorio.dados} tipo="operadores" />
+            <>
+              <GraficoOperadores dados={dadosRelatorio.dados} />
+              <TabelaDados dados={dadosRelatorio.dados} tipo="operadores" />
+            </>
           )}
         </TabsContent>
 
@@ -278,7 +283,10 @@ export default function RelatoriosPage() {
           {carregando ? (
             <div className="text-center py-8 text-gray-500">Carregando...</div>
           ) : (
-            <TabelaDados dados={dadosRelatorio.dados} tipo="maquinas" />
+            <>
+              <GraficoMaquinas dados={dadosRelatorio.dados} />
+              <TabelaDados dados={dadosRelatorio.dados} tipo="maquinas" />
+            </>
           )}
         </TabsContent>
 
