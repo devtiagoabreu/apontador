@@ -229,7 +229,7 @@ export default function RelatoriosPage() {
             <CardResumoEficiencia
               titulo="Tempo Total"
               valor={dadosRelatorio.totais.tempoTotal}
-              formato="numero"
+              formato="tempo"          // ← agora exibe corretamente como "57h 15 min" ou "3 min"
               cor="yellow"
             />
           </div>
@@ -323,8 +323,8 @@ export default function RelatoriosPage() {
                     />
                     <CardResumoEficiencia
                       titulo="Tempo Total"
-                      valor={dadosRelatorio.totais.tempoTotal}
-                      formato="numero"
+                      valor={dadosRelatorio.totais.tempoTotal} 
+                      formato="tempo"          // ← agora exibe corretamente como "57h 15 min" ou "3 min"
                       cor="yellow"
                     />
                   </div>
