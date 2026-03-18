@@ -23,15 +23,18 @@ const formatarValor = (valor: number, formato?: 'numero' | 'percentual' | 'tempo
   }
 
   if (formato === 'tempo') {
+    if (valor <= 0) return '0 min';
+    
     const horas = Math.floor(valor / 60);
-    const minutos = valor % 60;
+    const minutos = Math.round(valor % 60); // arredonda para evitar decimais
+    
     if (horas === 0) {
       return `${minutos} min`;
     }
-    return `${horas}h ${minutos.toString().padStart(2, '0')} min`;
+    return `${horas}h ${minutos.toString().padStart(2, '0')}min`;
   }
 
-  // Padrão: metragem (para formato 'numero' ou quando não informado)
+  // Padrão: metragem
   return valor.toLocaleString('pt-BR', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
@@ -43,11 +46,7 @@ const getVariacao = (valor: number, comparativo?: number) => {
   const variacao = ((valor - comparativo) / comparativo) * 100;
 
   if (Math.abs(variacao) < 0.1) {
-    return {
-      icone: <Minus className="h-4 w-4" />,
-      texto: 'estável',
-      cor: 'text-gray-500',
-    };
+    return { icone: <Minus className="h-4 w-4" />, texto: 'estável', cor: 'text-gray-500' };
   }
 
   if (variacao > 0) {
@@ -73,7 +72,6 @@ export function CardResumoEficiencia({
   cor = 'blue',
 }: CardResumoEficienciaProps) {
   const variacao = getVariacao(valor, comparativo);
-
   const corClasses = {
     blue: 'bg-blue-50 text-blue-700',
     green: 'bg-green-50 text-green-700',
@@ -81,7 +79,6 @@ export function CardResumoEficiencia({
     red: 'bg-red-50 text-red-700',
     purple: 'bg-purple-50 text-purple-700',
   };
-
   const corClasse = corClasses[cor as keyof typeof corClasses] || corClasses.blue;
 
   return (
