@@ -229,7 +229,7 @@ export default function RelatoriosPage() {
             <CardResumoEficiencia
               titulo="Tempo Total"
               valor={dadosRelatorio.totais.tempoTotal}
-              formato="tempo"          // ← agora exibe corretamente como "57h 15 min" ou "3 min"
+              formato="tempo"
               cor="yellow"
             />
           </div>
@@ -323,8 +323,8 @@ export default function RelatoriosPage() {
                     />
                     <CardResumoEficiencia
                       titulo="Tempo Total"
-                      valor={dadosRelatorio.totais.tempoTotal} 
-                      formato="tempo"          // ← agora exibe corretamente como "57h 15 min" ou "3 min"
+                      valor={dadosRelatorio.totais.tempoTotal}
+                      formato="tempo"
                       cor="yellow"
                     />
                   </div>
@@ -356,9 +356,13 @@ export default function RelatoriosPage() {
                 {/* Gráficos originais */}
                 <div className="grid gap-4 md:grid-cols-2 mt-6">
                   <GraficoEficiencia
-                    dados={dadosRelatorio.graficos?.porData || []}
+                    dados={dadosRelatorio.graficos?.porMaquina || []}
                     tipo="comparativo"
                     referencia={filtros?.referencia || 'produto'}
+                    periodo={{
+                      inicio: filtros?.periodo?.inicio || '',
+                      fim: filtros?.periodo?.fim || ''
+                    }}
                   />
                   <GraficoEficiencia
                     dados={dadosRelatorio.graficos?.porEstagio || []}

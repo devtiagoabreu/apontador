@@ -11,6 +11,8 @@ import {
   Legend,
   ResponsiveContainer,
   LabelList,
+  Line,
+  ComposedChart,
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,6 +29,7 @@ interface GraficoEficienciaProps {
   dados: any[];
   tipo: 'comparativo' | 'estagios';
   referencia: 'produto' | 'maquina';
+  periodo?: { inicio: string; fim: string };
 }
 
 const COLORS = {
@@ -139,7 +142,7 @@ const exportarJSON = (dados: any[], tipo: string, referencia: string) => {
   });
 };
 
-export function GraficoEficiencia({ dados, tipo, referencia }: GraficoEficienciaProps) {
+export function GraficoEficiencia({ dados, tipo, referencia, periodo }: GraficoEficienciaProps) {
   const titulo = tipo === 'comparativo' 
     ? 'Metragem Real vs Esperada por Máquina' 
     : 'Eficiência por Estágio';
@@ -176,11 +179,21 @@ export function GraficoEficiencia({ dados, tipo, referencia }: GraficoEficiencia
     // ✅ Dados já devem vir agrupados por máquina da API
     // Cada item tem: nome, metragemReal, metragemEsperada, eficiencia
     const dadosOrdenados = [...dados].sort((a, b) => b.metragemReal - a.metragemReal);
+    
+    // Formatar período para exibição
+    const periodoTexto = periodo?.inicio && periodo?.fim 
+      ? `${periodo.inicio} a ${periodo.fim}`
+      : '';
 
     return (
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>{titulo}</CardTitle>
+          <div>
+            <CardTitle>{titulo}</CardTitle>
+            {periodoTexto && (
+              <p className="text-sm text-gray-500 mt-1">Período: {periodoTexto}</p>
+            )}
+          </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
@@ -198,16 +211,16 @@ export function GraficoEficiencia({ dados, tipo, referencia }: GraficoEficiencia
           </DropdownMenu>
         </CardHeader>
         <CardContent>
-          <div className="h-[450px]">
+          <div className="h-[500px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart 
+              <ComposedChart 
                 data={dadosOrdenados}
-                margin={{ top: 20, right: 30, left: 20, bottom: 50 }}
+                margin={{ top: 30, right: 30, left: 20, bottom: 60 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
                   dataKey="nome" 
-                  tick={{ fontSize: 12 }}
+                  tick={{ fontSize: 11 }}
                   interval={0}
                   angle={-45}
                   textAnchor="end"
@@ -221,12 +234,14 @@ export function GraficoEficiencia({ dados, tipo, referencia }: GraficoEficiencia
                   yAxisId="right"
                   orientation="right"
                   tickFormatter={(value) => value.toFixed(0) + '%'}
+                  domain={[0, 100]}
                 />
                 <Tooltip 
                   formatter={(value: any, name: string, props: any) => {
                     if (name === 'Eficiência') return [formatarPercentual(value), name];
                     return [formatarValor(value), name];
                   }}
+                  labelFormatter={(label) => `Máquina: ${label}`}
                 />
                 <Legend />
                 <Bar 
@@ -234,7 +249,7 @@ export function GraficoEficiencia({ dados, tipo, referencia }: GraficoEficiencia
                   dataKey="metragemReal" 
                   fill={COLORS.real} 
                   name="Metragem Real"
-                  barSize={30}
+                  barSize={35}
                 >
                   <LabelList 
                     dataKey="metragemReal" 
@@ -248,7 +263,7 @@ export function GraficoEficiencia({ dados, tipo, referencia }: GraficoEficiencia
                   dataKey={referencia === 'produto' ? 'metragemEsperadaProduto' : 'metragemEsperadaMaquina'} 
                   fill={referencia === 'produto' ? COLORS.esperadoProduto : COLORS.esperadoMaquina} 
                   name={`Metragem Esperada (${referencia === 'produto' ? 'Produto' : 'Máquina'})`}
-                  barSize={30}
+                  barSize={35}
                 >
                   <LabelList 
                     dataKey={referencia === 'produto' ? 'metragemEsperadaProduto' : 'metragemEsperadaMaquina'} 
@@ -257,7 +272,23 @@ export function GraficoEficiencia({ dados, tipo, referencia }: GraficoEficiencia
                     style={{ fill: '#000', fontSize: 11, fontWeight: 'bold' }}
                   />
                 </Bar>
-              </BarChart>
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="eficiencia"
+                  stroke={COLORS.eficiencia}
+                  name="Eficiência %"
+                  strokeWidth={2}
+                  dot={{ r: 4, fill: COLORS.eficiencia }}
+                >
+                  <LabelList 
+                    dataKey="eficiencia" 
+                    position="top" 
+                    formatter={(value: any) => value.toFixed(0) + '%'}
+                    style={{ fill: '#ef4444', fontSize: 10, fontWeight: 'bold' }}
+                  />
+                </Line>
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </CardContent>
