@@ -11,7 +11,15 @@ import {
 } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-
+import { Button } from '@/components/ui/button';
+import { Download, FileSpreadsheet, FileJson } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { toast } from '@/components/ui/use-toast';
 
 interface TabelaEficienciaProps {
   dados: any[];
@@ -45,6 +53,84 @@ const formatarDataHoraBR = (dataStr: string): string => {
   }
 };
 
+// Função para exportar CSV
+const exportarCSV = (dados: any[], referencia: string) => {
+  if (!dados || dados.length === 0) {
+    toast({
+      title: 'Aviso',
+      description: 'Não há dados para exportar',
+      variant: 'default',
+    });
+    return;
+  }
+
+  const headers = ['Data/Hora', 'OP', 'Grupo', 'Estágio', 'Máquina', 'Operador', 'Metragem (m)', 'Tempo (min)', `Vel.Ref (${referencia === 'produto' ? 'Produto' : 'Máquina'}) (m/min)`, 'Esperado (m)', 'Eficiência (%)'];
+  
+  const linhas = dados.map(item => [
+    formatarDataHoraBR(item.dataCompleta || item.data),
+    `OP ${item.op}`,
+    item.grupo,
+    item.estagio,
+    item.maquina,
+    item.operador,
+    formatarNumeroBR(item.metragemReal),
+    formatarNumeroBR(item.tempoMinutos, 0),
+    formatarNumeroBR(referencia === 'produto' ? item.velocidadeProduto : item.velocidadeMaquina, 1),
+    formatarNumeroBR(referencia === 'produto' ? item.metragemEsperadaProduto : item.metragemEsperadaMaquina),
+    formatarNumeroBR(referencia === 'produto' ? item.eficienciaProduto : item.eficienciaMaquina, 1) + '%',
+  ]);
+
+  const csv = [headers.join(','), ...linhas.map(l => l.join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `detalhamento-eficiencia-${new Date().toISOString().split('T')[0]}.csv`;
+  link.click();
+
+  toast({
+    title: 'Sucesso',
+    description: 'CSV exportado com sucesso',
+  });
+};
+
+// Função para exportar JSON
+const exportarJSON = (dados: any[], referencia: string) => {
+  if (!dados || dados.length === 0) {
+    toast({
+      title: 'Aviso',
+      description: 'Não há dados para exportar',
+      variant: 'default',
+    });
+    return;
+  }
+
+  const data = dados.map(item => ({
+    data: formatarDataHoraBR(item.dataCompleta || item.data),
+    op: item.op,
+    grupo: item.grupo,
+    estagio: item.estagio,
+    maquina: item.maquina,
+    operador: item.operador,
+    metragemReal: item.metragemReal,
+    tempoMinutos: item.tempoMinutos,
+    velocidadeReferencia: referencia === 'produto' ? item.velocidadeProduto : item.velocidadeMaquina,
+    metragemEsperada: referencia === 'produto' ? item.metragemEsperadaProduto : item.metragemEsperadaMaquina,
+    eficiencia: referencia === 'produto' ? item.eficienciaProduto : item.eficienciaMaquina,
+  }));
+
+  const jsonStr = JSON.stringify(data, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `detalhamento-eficiencia-${new Date().toISOString().split('T')[0]}.json`;
+  link.click();
+
+  toast({
+    title: 'Sucesso',
+    description: 'JSON exportado com sucesso',
+  });
+};
+
 export function TabelaEficiencia({ dados, referencia }: TabelaEficienciaProps) {
   const getEficienciaColor = (valor: number) => {
     if (valor >= 90) return 'bg-green-100 text-green-800';
@@ -54,8 +140,23 @@ export function TabelaEficiencia({ dados, referencia }: TabelaEficienciaProps) {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Detalhamento da Eficiência</CardTitle>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Download className="h-4 w-4 mr-1" /> Exportar
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => exportarCSV(dados, referencia)}>
+              <FileSpreadsheet className="mr-2 h-4 w-4" /> CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => exportarJSON(dados, referencia)}>
+              <FileJson className="mr-2 h-4 w-4" /> JSON
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </CardHeader>
       <CardContent>
         <Table>

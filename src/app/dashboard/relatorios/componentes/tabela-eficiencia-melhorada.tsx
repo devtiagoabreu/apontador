@@ -10,6 +10,15 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Download, FileSpreadsheet, FileJson } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { toast } from '@/components/ui/use-toast';
 
 interface TabelaEficienciaMelhoradaProps {
   dados: any[];
@@ -34,6 +43,76 @@ const formatarTempo = (minutos: number): string => {
   return `${mins}min`;
 };
 
+// Função para exportar CSV
+const exportarCSV = (dados: any[]) => {
+  if (!dados || dados.length === 0) {
+    toast({
+      title: 'Aviso',
+      description: 'Não há dados para exportar',
+      variant: 'default',
+    });
+    return;
+  }
+
+  const headers = ['Máquina', 'Dias no Período', 'Metragem Real (m)', 'Metragem Esperada (m)', 'Tempo Disponível', 'Tempo Apontado', 'Eficiência (%)'];
+  
+  const linhas = dados.map(item => [
+    item.nome,
+    `${item.diasNoPeriodo} ${item.diasNoPeriodo === 1 ? 'dia' : 'dias'}`,
+    formatarNumeroBR(item.metragemReal),
+    formatarNumeroBR(item.metragemEsperada),
+    formatarTempo(item.tempoDisponivel),
+    formatarTempo(item.tempoApontado),
+    formatarNumeroBR(item.eficiencia, 1) + '%',
+  ]);
+
+  const csv = [headers.join(','), ...linhas.map(l => l.join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `resumo-maquinas-${new Date().toISOString().split('T')[0]}.csv`;
+  link.click();
+
+  toast({
+    title: 'Sucesso',
+    description: 'CSV exportado com sucesso',
+  });
+};
+
+// Função para exportar JSON
+const exportarJSON = (dados: any[]) => {
+  if (!dados || dados.length === 0) {
+    toast({
+      title: 'Aviso',
+      description: 'Não há dados para exportar',
+      variant: 'default',
+    });
+    return;
+  }
+
+  const data = dados.map(item => ({
+    maquina: item.nome,
+    diasNoPeriodo: item.diasNoPeriodo,
+    metragemReal: item.metragemReal,
+    metragemEsperada: item.metragemEsperada,
+    tempoDisponivel: item.tempoDisponivel,
+    tempoApontado: item.tempoApontado,
+    eficiencia: item.eficiencia,
+  }));
+
+  const jsonStr = JSON.stringify(data, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `resumo-maquinas-${new Date().toISOString().split('T')[0]}.json`;
+  link.click();
+
+  toast({
+    title: 'Sucesso',
+    description: 'JSON exportado com sucesso',
+  });
+};
+
 export function TabelaEficienciaMelhorada({ dados }: TabelaEficienciaMelhoradaProps) {
   const getEficienciaColor = (valor: number) => {
     if (valor >= 90) return 'bg-green-100 text-green-800';
@@ -43,8 +122,23 @@ export function TabelaEficienciaMelhorada({ dados }: TabelaEficienciaMelhoradaPr
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Resumo por Máquina</CardTitle>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Download className="h-4 w-4 mr-1" /> Exportar
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => exportarCSV(dados)}>
+              <FileSpreadsheet className="mr-2 h-4 w-4" /> CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => exportarJSON(dados)}>
+              <FileJson className="mr-2 h-4 w-4" /> JSON
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </CardHeader>
       <CardContent>
         <Table>
