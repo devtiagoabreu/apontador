@@ -10,8 +10,6 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  Line,
-  ComposedChart,
   LabelList,
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -65,17 +63,6 @@ const formatarPercentual = (valor: number) => {
   return valor.toFixed(1) + '%';
 };
 
-// Função para formatar o label do eixo X (apenas texto)
-const formatarLabelEixo = (label: string) => {
-  if (!label) return '';
-  // Se o label for muito longo, pode quebrar em duas linhas
-  if (label.length > 30) {
-    const [data, maquina] = label.split(' | ');
-    return `${data}\n${maquina.substring(0, 20)}...`;
-  }
-  return label;
-};
-
 // Função para exportar CSV
 const exportarCSV = (dados: any[], tipo: string, referencia: string) => {
   if (!dados || dados.length === 0) {
@@ -88,13 +75,12 @@ const exportarCSV = (dados: any[], tipo: string, referencia: string) => {
   }
 
   const headers = tipo === 'comparativo' 
-    ? ['Data', 'Máquina', 'Metragem Real (m)', `Metragem Esperada (${referencia === 'produto' ? 'Produto' : 'Máquina'}) (m)`, 'Eficiência (%)']
+    ? ['Máquina', 'Metragem Real (m)', `Metragem Esperada (${referencia === 'produto' ? 'Produto' : 'Máquina'}) (m)`, 'Eficiência (%)']
     : ['Estágio', `Eficiência (${referencia === 'produto' ? 'Produto' : 'Máquina'}) (%)`];
   
   const linhas = tipo === 'comparativo'
     ? dados.map(item => [
-        item.data,
-        item.maquina || '-',
+        item.nome,
         item.metragemReal || 0,
         referencia === 'produto' ? (item.metragemEsperadaProduto || 0) : (item.metragemEsperadaMaquina || 0),
         item.eficiencia || 0,
@@ -130,8 +116,7 @@ const exportarJSON = (dados: any[], tipo: string, referencia: string) => {
 
   const data = tipo === 'comparativo'
     ? dados.map(item => ({
-        data: item.data,
-        maquina: item.maquina,
+        maquina: item.nome,
         metragemReal: item.metragemReal,
         metragemEsperada: referencia === 'produto' ? item.metragemEsperadaProduto : item.metragemEsperadaMaquina,
         eficiencia: item.eficiencia,
@@ -156,7 +141,7 @@ const exportarJSON = (dados: any[], tipo: string, referencia: string) => {
 
 export function GraficoEficiencia({ dados, tipo, referencia }: GraficoEficienciaProps) {
   const titulo = tipo === 'comparativo' 
-    ? 'Metragem Real vs Esperada' 
+    ? 'Metragem Real vs Esperada por Máquina' 
     : 'Eficiência por Estágio';
 
   if (!dados || dados.length === 0) {
@@ -188,11 +173,9 @@ export function GraficoEficiencia({ dados, tipo, referencia }: GraficoEficiencia
   }
 
   if (tipo === 'comparativo') {
-    // Preparar dados com nome da máquina
-    const dadosComMaquina = dados.map(item => ({
-      ...item,
-      labelEixo: `${item.data} | ${item.maquina || '-'}`,
-    }));
+    // ✅ Agrupar por máquina (os dados já vêm agrupados da API)
+    // Os dados já devem estar no formato por máquina com metragemReal, metragemEsperada e eficiencia
+    const dadosOrdenados = [...dados].sort((a, b) => b.metragemReal - a.metragemReal);
 
     return (
       <Card>
@@ -217,77 +200,57 @@ export function GraficoEficiencia({ dados, tipo, referencia }: GraficoEficiencia
         <CardContent>
           <div className="h-[450px]">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={dadosComMaquina} margin={{ top: 30, right: 30, left: 20, bottom: 100 }}>
+              <BarChart 
+                data={dadosOrdenados} 
+                layout="vertical"
+                margin={{ top: 20, right: 30, left: 120, bottom: 5 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
-                  dataKey="labelEixo" 
-                  tick={{ fontSize: 11 }}
-                  tickFormatter={formatarLabelEixo}
-                  height={100}
-                  interval={0}
-                />
-                <YAxis 
-                  yAxisId="left" 
-                  orientation="left" 
-                  stroke={COLORS.real}
+                  type="number"
                   tickFormatter={(value) => formatarNumeroAbreviado(value)}
                 />
                 <YAxis 
-                  yAxisId="right" 
-                  orientation="right" 
-                  stroke={COLORS.eficiencia}
-                  tickFormatter={(value) => value.toFixed(0) + '%'}
+                  dataKey="nome" 
+                  type="category" 
+                  width={110}
+                  tick={{ fontSize: 12 }}
                 />
                 <Tooltip 
                   formatter={(value: any, name: string) => {
-                    if (name === 'Eficiência %') return [formatarPercentual(value), name];
+                    if (name === 'Eficiência') return [formatarPercentual(value), name];
                     return [formatarValor(value), name];
                   }}
-                  labelFormatter={(label) => label}
+                  labelFormatter={(label) => `Máquina: ${label}`}
                 />
                 <Legend />
                 <Bar 
-                  yAxisId="left" 
                   dataKey="metragemReal" 
                   fill={COLORS.real} 
                   name="Metragem Real"
+                  barSize={25}
                 >
                   <LabelList 
                     dataKey="metragemReal" 
-                    position="top" 
+                    position="right" 
                     formatter={(value: any) => formatarNumeroAbreviado(value)}
-                    style={{ fill: '#000', fontSize: 10, fontWeight: 'bold' }}
+                    style={{ fill: '#000', fontSize: 11, fontWeight: 'bold' }}
                   />
                 </Bar>
                 <Bar 
-                  yAxisId="left" 
                   dataKey={referencia === 'produto' ? 'metragemEsperadaProduto' : 'metragemEsperadaMaquina'} 
                   fill={referencia === 'produto' ? COLORS.esperadoProduto : COLORS.esperadoMaquina} 
                   name={`Metragem Esperada (${referencia === 'produto' ? 'Produto' : 'Máquina'})`}
+                  barSize={25}
                 >
                   <LabelList 
                     dataKey={referencia === 'produto' ? 'metragemEsperadaProduto' : 'metragemEsperadaMaquina'} 
-                    position="top" 
+                    position="right" 
                     formatter={(value: any) => formatarNumeroAbreviado(value)}
-                    style={{ fill: '#000', fontSize: 10, fontWeight: 'bold' }}
+                    style={{ fill: '#000', fontSize: 11, fontWeight: 'bold' }}
                   />
                 </Bar>
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="eficiencia"
-                  stroke={COLORS.eficiencia}
-                  name="Eficiência %"
-                  strokeWidth={2}
-                >
-                  <LabelList 
-                    dataKey="eficiencia" 
-                    position="top" 
-                    formatter={(value: any) => value.toFixed(0) + '%'}
-                    style={{ fill: '#ef4444', fontSize: 10, fontWeight: 'bold' }}
-                  />
-                </Line>
-              </ComposedChart>
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </CardContent>
@@ -295,7 +258,7 @@ export function GraficoEficiencia({ dados, tipo, referencia }: GraficoEficiencia
     );
   }
 
-  // Preparar dados com cores
+  // Preparar dados com cores para eficiência por estágio
   const dadosComCor = dados.map((item) => {
     const valor = referencia === 'produto' ? item.eficienciaProduto : item.eficienciaMaquina;
     let cor = '#10b981'; // verde
@@ -347,6 +310,7 @@ export function GraficoEficiencia({ dados, tipo, referencia }: GraficoEficiencia
               <Bar 
                 dataKey="valorEficiencia" 
                 name={`Eficiência (${referencia === 'produto' ? 'Produto' : 'Máquina'})`}
+                barSize={25}
               >
                 <LabelList 
                   dataKey="valorEficiencia" 
