@@ -65,6 +65,18 @@ const formatarPercentual = (valor: number) => {
   return valor.toFixed(1) + '%';
 };
 
+// Função para formatar o label do eixo X: "20/03/2026 | RAMA 02"
+const formatarLabelEixoX = (item: any) => {
+  if (!item) return '';
+  // Se o item tiver data e maquina, concatena
+  if (item.data && item.maquina) {
+    return `${item.data} | ${item.maquina}`;
+  }
+  // Se tiver apenas data, retorna a data
+  if (item.data) return item.data;
+  return '';
+};
+
 // Função para exportar CSV
 const exportarCSV = (dados: any[], tipo: string, referencia: string) => {
   if (!dados || dados.length === 0) {
@@ -77,12 +89,13 @@ const exportarCSV = (dados: any[], tipo: string, referencia: string) => {
   }
 
   const headers = tipo === 'comparativo' 
-    ? ['Data', 'Metragem Real (m)', `Metragem Esperada (${referencia === 'produto' ? 'Produto' : 'Máquina'}) (m)`, 'Eficiência (%)']
+    ? ['Data', 'Máquina', 'Metragem Real (m)', `Metragem Esperada (${referencia === 'produto' ? 'Produto' : 'Máquina'}) (m)`, 'Eficiência (%)']
     : ['Estágio', `Eficiência (${referencia === 'produto' ? 'Produto' : 'Máquina'}) (%)`];
   
   const linhas = tipo === 'comparativo'
     ? dados.map(item => [
         item.data,
+        item.maquina || '-',
         item.metragemReal || 0,
         referencia === 'produto' ? (item.metragemEsperadaProduto || 0) : (item.metragemEsperadaMaquina || 0),
         item.eficiencia || 0,
@@ -119,6 +132,7 @@ const exportarJSON = (dados: any[], tipo: string, referencia: string) => {
   const data = tipo === 'comparativo'
     ? dados.map(item => ({
         data: item.data,
+        maquina: item.maquina,
         metragemReal: item.metragemReal,
         metragemEsperada: referencia === 'produto' ? item.metragemEsperadaProduto : item.metragemEsperadaMaquina,
         eficiencia: item.eficiencia,
@@ -175,6 +189,12 @@ export function GraficoEficiencia({ dados, tipo, referencia }: GraficoEficiencia
   }
 
   if (tipo === 'comparativo') {
+    // ✅ Preparar dados com nome da máquina
+    const dadosComMaquina = dados.map(item => ({
+      ...item,
+      labelEixo: `${item.data} | ${item.maquina || '-'}`,
+    }));
+
     return (
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -196,13 +216,15 @@ export function GraficoEficiencia({ dados, tipo, referencia }: GraficoEficiencia
           </DropdownMenu>
         </CardHeader>
         <CardContent>
-          <div className="h-[400px]">
+          <div className="h-[450px]">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={dados} margin={{ top: 30, right: 30, left: 20, bottom: 5 }}>
+              <ComposedChart data={dadosComMaquina} margin={{ top: 30, right: 30, left: 20, bottom: 80 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
-                  dataKey="data" 
-                  tickFormatter={(value) => value.split(',')[0]} // Apenas a data, sem hora
+                  dataKey="labelEixo" 
+                  tick={{ fontSize: 11, angle: -45, textAnchor: 'end' }}
+                  height={80}
+                  interval={0}
                 />
                 <YAxis 
                   yAxisId="left" 
@@ -221,7 +243,7 @@ export function GraficoEficiencia({ dados, tipo, referencia }: GraficoEficiencia
                     if (name === 'Eficiência %') return [formatarPercentual(value), name];
                     return [formatarValor(value), name];
                   }}
-                  labelFormatter={(label) => `Data: ${label.split(',')[0]}`}
+                  labelFormatter={(label) => label}
                 />
                 <Legend />
                 <Bar 
@@ -310,14 +332,14 @@ export function GraficoEficiencia({ dados, tipo, referencia }: GraficoEficiencia
       <CardContent>
         <div className="h-[400px]">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={dadosComCor} layout="vertical" margin={{ top: 20, right: 30, left: 100, bottom: 5 }}>
+            <BarChart data={dadosComCor} layout="vertical" margin={{ top: 20, right: 30, left: 120, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis 
                 type="number" 
                 domain={[0, 100]} 
                 tickFormatter={(value) => value.toFixed(0) + '%'}
               />
-              <YAxis dataKey="estagio" type="category" width={120} />
+              <YAxis dataKey="estagio" type="category" width={110} tick={{ fontSize: 12 }} />
               <Tooltip 
                 formatter={(value: any) => [formatarPercentual(value), 'Eficiência']}
               />
