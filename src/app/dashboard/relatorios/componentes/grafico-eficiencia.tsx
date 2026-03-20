@@ -173,8 +173,8 @@ export function GraficoEficiencia({ dados, tipo, referencia }: GraficoEficiencia
   }
 
   if (tipo === 'comparativo') {
-    // ✅ Agrupar por máquina (os dados já vêm agrupados da API)
-    // Os dados já devem estar no formato por máquina com metragemReal, metragemEsperada e eficiencia
+    // ✅ Dados já devem vir agrupados por máquina da API
+    // Cada item tem: nome, metragemReal, metragemEsperada, eficiencia
     const dadosOrdenados = [...dados].sort((a, b) => b.metragemReal - a.metragemReal);
 
     return (
@@ -201,51 +201,58 @@ export function GraficoEficiencia({ dados, tipo, referencia }: GraficoEficiencia
           <div className="h-[450px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart 
-                data={dadosOrdenados} 
-                layout="vertical"
-                margin={{ top: 20, right: 30, left: 120, bottom: 5 }}
+                data={dadosOrdenados}
+                margin={{ top: 20, right: 30, left: 20, bottom: 50 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
-                  type="number"
+                  dataKey="nome" 
+                  tick={{ fontSize: 12 }}
+                  interval={0}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                />
+                <YAxis 
+                  yAxisId="left"
                   tickFormatter={(value) => formatarNumeroAbreviado(value)}
                 />
                 <YAxis 
-                  dataKey="nome" 
-                  type="category" 
-                  width={110}
-                  tick={{ fontSize: 12 }}
+                  yAxisId="right"
+                  orientation="right"
+                  tickFormatter={(value) => value.toFixed(0) + '%'}
                 />
                 <Tooltip 
-                  formatter={(value: any, name: string) => {
+                  formatter={(value: any, name: string, props: any) => {
                     if (name === 'Eficiência') return [formatarPercentual(value), name];
                     return [formatarValor(value), name];
                   }}
-                  labelFormatter={(label) => `Máquina: ${label}`}
                 />
                 <Legend />
                 <Bar 
+                  yAxisId="left"
                   dataKey="metragemReal" 
                   fill={COLORS.real} 
                   name="Metragem Real"
-                  barSize={25}
+                  barSize={30}
                 >
                   <LabelList 
                     dataKey="metragemReal" 
-                    position="right" 
+                    position="top" 
                     formatter={(value: any) => formatarNumeroAbreviado(value)}
                     style={{ fill: '#000', fontSize: 11, fontWeight: 'bold' }}
                   />
                 </Bar>
                 <Bar 
+                  yAxisId="left"
                   dataKey={referencia === 'produto' ? 'metragemEsperadaProduto' : 'metragemEsperadaMaquina'} 
                   fill={referencia === 'produto' ? COLORS.esperadoProduto : COLORS.esperadoMaquina} 
                   name={`Metragem Esperada (${referencia === 'produto' ? 'Produto' : 'Máquina'})`}
-                  barSize={25}
+                  barSize={30}
                 >
                   <LabelList 
                     dataKey={referencia === 'produto' ? 'metragemEsperadaProduto' : 'metragemEsperadaMaquina'} 
-                    position="right" 
+                    position="top" 
                     formatter={(value: any) => formatarNumeroAbreviado(value)}
                     style={{ fill: '#000', fontSize: 11, fontWeight: 'bold' }}
                   />
