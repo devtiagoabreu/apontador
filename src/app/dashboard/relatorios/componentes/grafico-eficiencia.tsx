@@ -65,16 +65,15 @@ const formatarPercentual = (valor: number) => {
   return valor.toFixed(1) + '%';
 };
 
-// Função para formatar o label do eixo X: "20/03/2026 | RAMA 02"
-const formatarLabelEixoX = (item: any) => {
-  if (!item) return '';
-  // Se o item tiver data e maquina, concatena
-  if (item.data && item.maquina) {
-    return `${item.data} | ${item.maquina}`;
+// Função para formatar o label do eixo X (apenas texto)
+const formatarLabelEixo = (label: string) => {
+  if (!label) return '';
+  // Se o label for muito longo, pode quebrar em duas linhas
+  if (label.length > 30) {
+    const [data, maquina] = label.split(' | ');
+    return `${data}\n${maquina.substring(0, 20)}...`;
   }
-  // Se tiver apenas data, retorna a data
-  if (item.data) return item.data;
-  return '';
+  return label;
 };
 
 // Função para exportar CSV
@@ -189,7 +188,7 @@ export function GraficoEficiencia({ dados, tipo, referencia }: GraficoEficiencia
   }
 
   if (tipo === 'comparativo') {
-    // ✅ Preparar dados com nome da máquina
+    // Preparar dados com nome da máquina
     const dadosComMaquina = dados.map(item => ({
       ...item,
       labelEixo: `${item.data} | ${item.maquina || '-'}`,
@@ -218,12 +217,13 @@ export function GraficoEficiencia({ dados, tipo, referencia }: GraficoEficiencia
         <CardContent>
           <div className="h-[450px]">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={dadosComMaquina} margin={{ top: 30, right: 30, left: 20, bottom: 80 }}>
+              <ComposedChart data={dadosComMaquina} margin={{ top: 30, right: 30, left: 20, bottom: 100 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
                   dataKey="labelEixo" 
-                  tick={{ fontSize: 11, angle: -45, textAnchor: 'end' }}
-                  height={80}
+                  tick={{ fontSize: 11 }}
+                  tickFormatter={formatarLabelEixo}
+                  height={100}
                   interval={0}
                 />
                 <YAxis 
