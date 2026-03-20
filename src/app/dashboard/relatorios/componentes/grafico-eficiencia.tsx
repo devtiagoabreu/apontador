@@ -176,8 +176,7 @@ export function GraficoEficiencia({ dados, tipo, referencia, periodo }: GraficoE
   }
 
   if (tipo === 'comparativo') {
-    // ✅ Dados já devem vir agrupados por máquina da API
-    // Cada item tem: nome, metragemReal, metragemEsperada, eficiencia
+    // Dados já devem vir agrupados por máquina da API
     const dadosOrdenados = [...dados].sort((a, b) => b.metragemReal - a.metragemReal);
     
     // Formatar período para exibição
@@ -215,7 +214,7 @@ export function GraficoEficiencia({ dados, tipo, referencia, periodo }: GraficoE
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart 
                 data={dadosOrdenados}
-                margin={{ top: 30, right: 30, left: 20, bottom: 60 }}
+                margin={{ top: 30, right: 30, left: 20, bottom: 80 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
@@ -258,15 +257,16 @@ export function GraficoEficiencia({ dados, tipo, referencia, periodo }: GraficoE
                     style={{ fill: '#000', fontSize: 11, fontWeight: 'bold' }}
                   />
                 </Bar>
+                {/* ✅ CORREÇÃO: Usar metragemEsperada diretamente */}
                 <Bar 
                   yAxisId="left"
-                  dataKey={referencia === 'produto' ? 'metragemEsperadaProduto' : 'metragemEsperadaMaquina'} 
-                  fill={referencia === 'produto' ? COLORS.esperadoProduto : COLORS.esperadoMaquina} 
-                  name={`Metragem Esperada (${referencia === 'produto' ? 'Produto' : 'Máquina'})`}
+                  dataKey="metragemEsperada" 
+                  fill={COLORS.esperadoMaquina} 
+                  name="Metragem Esperada (Máquina)"
                   barSize={35}
                 >
                   <LabelList 
-                    dataKey={referencia === 'produto' ? 'metragemEsperadaProduto' : 'metragemEsperadaMaquina'} 
+                    dataKey="metragemEsperada" 
                     position="top" 
                     formatter={(value: any) => formatarNumeroAbreviado(value)}
                     style={{ fill: '#000', fontSize: 11, fontWeight: 'bold' }}

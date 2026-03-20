@@ -218,7 +218,7 @@ export async function POST(request: Request) {
       todosProdutos.map(p => [p.codigo, p])
     );
 
-    // 🔴 CONSTRUIR QUERY PRINCIPAL
+    // Construir query principal
     console.log('🔨 Construindo query principal...');
 
     // Query base - usando operador_inicio_id
@@ -274,7 +274,7 @@ export async function POST(request: Request) {
       console.log(`🔧 Adicionando filtro de ${maquinasFilter.length} máquinas`);
     }
 
-    // Filtro de operadores (agora usando operador_inicio_id)
+    // Filtro de operadores
     if (operadoresFilter.length > 0) {
       const operadoresStr = operadoresFilter.map(id => `'${id}'`).join(', ');
       conditions.push(`p.operador_inicio_id IN (${operadoresStr})`);
@@ -354,7 +354,7 @@ export async function POST(request: Request) {
         estagioCodigo: rowData.estagioCodigo,
         maquinaId: rowData.maquinaId,
         maquina: rowData.maquinaNome,
-        operadorId: rowData.operadorInicioId, // ✅ Usando operador de início
+        operadorId: rowData.operadorInicioId,
         operador: rowData.operadorNome,
         metragemReal,
         tempoMinutos,
@@ -366,8 +366,6 @@ export async function POST(request: Request) {
         eficienciaMaquina: Math.round(eficienciaMaquina * 100) / 100,
       };
     }));
-
-    console.log(`✅ Processados ${dadosProcessados.length} registros`);
 
     // Filtrar por grupos
     let dadosFiltrados = dadosProcessados;
@@ -397,8 +395,6 @@ export async function POST(request: Request) {
     totais.eficienciaMediaMaquina = totais.metragemEsperadaMaquina > 0 
       ? (totais.metragemReal / totais.metragemEsperadaMaquina) * 100 
       : 0;
-
-    console.log('📊 Totais calculados:', totais);
 
     // Agrupar por data
     const porDataMap: Record<string, GraficoData> = {};
@@ -486,6 +482,7 @@ export async function POST(request: Request) {
       }
       const maq = maquinasMap.get(chave)!;
       maq.metragemReal += d.metragemReal;
+      // ✅ CORREÇÃO: Usar a referência correta para metragem esperada
       maq.metragemEsperada += validated.referencia === 'produto' 
         ? d.metragemEsperadaProduto 
         : d.metragemEsperadaMaquina;
@@ -561,7 +558,7 @@ export async function POST(request: Request) {
       paradasQuery.map((p: any) => [p.maquinaId, Number(p.tempoParada) || 0])
     );
 
-    // Calcular tempo disponível
+    // Calcular tempo disponível e eficiência
     console.log('📊 Calculando tempo disponível...');
     maquinasMap.forEach((maq, id) => {
       const info = maquinasInfoMap.get(id);
@@ -574,6 +571,7 @@ export async function POST(request: Request) {
       maq.diasNoPeriodo = diasNoPeriodo;
       maq.tempoParada = paradasMap.get(id) || 0;
       
+      // ✅ Calcular eficiência
       maq.eficiencia = maq.metragemEsperada > 0 
         ? (maq.metragemReal / maq.metragemEsperada) * 100 
         : 0;
@@ -582,6 +580,7 @@ export async function POST(request: Request) {
       console.log(`   - Dias no período: ${diasNoPeriodo}`);
       console.log(`   - Registros: ${maq.registros.length}`);
       console.log(`   - Metragem Real: ${maq.metragemReal}`);
+      console.log(`   - Metragem Esperada: ${maq.metragemEsperada}`);
       console.log(`   - Tempo Apontado: ${maq.tempoApontado}min`);
       console.log(`   - Tempo Disponível: ${maq.tempoDisponivel}min`);
       console.log(`   - Tempo Parada: ${maq.tempoParada}min`);
@@ -603,6 +602,7 @@ export async function POST(request: Request) {
       graficos: {
         porData: Object.values(porDataMap).sort((a, b) => a.dataISO.localeCompare(b.dataISO)),
         porEstagio: Object.values(porEstagioMap),
+        // ✅ CORREÇÃO: Incluir metragemEsperada no porMaquina
         porMaquina: Array.from(maquinasMap.values()).map(m => ({
           nome: m.nome,
           metragemReal: Math.round(m.metragemReal * 100) / 100,
