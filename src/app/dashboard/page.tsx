@@ -1,3 +1,4 @@
+// src/app/dashboard/page.tsx
 import { db } from '@/lib/db';
 import { sql } from 'drizzle-orm';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';

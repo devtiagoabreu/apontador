@@ -1,3 +1,4 @@
+/* src/app/globals.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -59,30 +60,41 @@
   }
 }
 
-/* Utilitários para mobile */
+/* Responsividade para telas pequenas */
 @layer utilities {
-  /* Tamanho mínimo de fonte para mobile */
-  .text-mobile {
-    @apply text-base; /* 16px */
+  /* Container responsivo */
+  .container-responsive {
+    @apply w-full px-4 mx-auto;
   }
   
-  /* Ícones grandes para acessibilidade */
-  .icon-large {
-    @apply w-8 h-8;
+  /* Tabelas responsivas */
+  .table-responsive {
+    @apply block overflow-x-auto whitespace-nowrap md:whitespace-normal;
   }
   
-  /* Cores de status */
-  .status-success {
-    @apply bg-success text-success-foreground;
+  /* Cards responsivos */
+  .card-grid-responsive {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4;
   }
-  .status-warning {
-    @apply bg-warning text-warning-foreground;
+  
+  /* Texto responsivo */
+  .text-responsive {
+    @apply text-sm md:text-base;
   }
-  .status-danger {
-    @apply bg-danger text-danger-foreground;
+  
+  /* Títulos responsivos */
+  .title-responsive {
+    @apply text-xl md:text-2xl lg:text-3xl font-bold;
   }
-  .status-info {
-    @apply bg-info text-info-foreground;
+  
+  /* Esconder em mobile */
+  .hide-mobile {
+    @apply hidden md:block;
+  }
+  
+  /* Mostrar apenas em mobile */
+  .show-mobile {
+    @apply block md:hidden;
   }
 }
 
@@ -98,4 +110,26 @@
 
 .animate-slide-in {
   animation: slide-in 0.3s ease-out;
+}
+
+/* Scroll suave para mobile */
+html {
+  scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Melhorar toque em mobile */
+button, a, [role="button"] {
+  @apply active:opacity-70 transition-opacity;
+  touch-action: manipulation;
+}
+
+/* Inputs em mobile */
+input, select, textarea {
+  @apply text-base; /* Evita zoom automático em iOS */
+}
+
+/* Botão flutuante para mobile */
+.fab-mobile {
+  @apply fixed bottom-4 right-4 md:hidden z-50 rounded-full shadow-lg;
 }
