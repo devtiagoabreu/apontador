@@ -1,4 +1,7 @@
 //src/app/apontamento/machine/[id]/page.tsx
+'use client';
+
+import { useState, useEffect } from 'react';
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -15,7 +18,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import Link from 'next/link';
 import { ArrowLeft, Play, Pause, CheckCircle, PlayCircle, Layers, Search, X } from 'lucide-react';
-import { useState, useEffect } from 'react';
 
 // Interfaces para tipagem
 interface Maquina {
@@ -53,7 +55,7 @@ interface OPDisp {
   status: string;
 }
 
-// Componente de busca de OP (client component) - MOVER PARA ARQUIVO SEPARADO
+// Componente de busca de OP
 function SearchOP({ maquinaId, onSelect }: { maquinaId: string; onSelect?: (op: any) => void }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -122,7 +124,6 @@ function SearchOP({ maquinaId, onSelect }: { maquinaId: string; onSelect?: (op: 
         </Button>
       </div>
 
-      {/* Resultados da busca */}
       {showResults && searchResults.length > 0 && (
         <div className="absolute z-10 mt-1 w-full bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto">
           {searchResults.map((op) => (
@@ -150,29 +151,61 @@ function SearchOP({ maquinaId, onSelect }: { maquinaId: string; onSelect?: (op: 
   );
 }
 
-// Componente Client (use client)
-function MachineClientContent({ 
-  maquina, 
-  producoesAtivas, 
-  paradaAtiva, 
-  opsDisponiveis, 
-  paramsId 
-}: { 
-  maquina: Maquina;
-  producoesAtivas: ProducaoAtiva[];
-  paradaAtiva: ParadaAtiva | null;
-  opsDisponiveis: OPDisp[];
-  paramsId: string;
-}) {
+// Componente principal
+export default function MachinePage({ params }: { params: { id: string } }) {
+  const [maquina, setMaquina] = useState<Maquina | null>(null);
+  const [producoesAtivas, setProducoesAtivas] = useState<ProducaoAtiva[]>([]);
+  const [paradaAtiva, setParadaAtiva] = useState<ParadaAtiva | null>(null);
+  const [opsDisponiveis, setOpsDisponiveis] = useState<OPDisp[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedOp, setSelectedOp] = useState<any>(null);
-  const [isClient, setIsClient] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setIsClient(true);
-    console.log('✅ MachineClientContent montado');
-  }, []);
+    carregarDados();
+  }, [params.id]);
 
-  if (!isClient) {
+  async function carregarDados() {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Buscar dados da máquina via API
+      const maquinaRes = await fetch(`/api/maquinas/${params.id}`);
+      if (!maquinaRes.ok) throw new Error('Erro ao carregar máquina');
+      const maquinaData = await maquinaRes.json();
+      setMaquina(maquinaData);
+
+      // Buscar produções ativas
+      const producoesRes = await fetch(`/api/producoes?maquinaId=${params.id}&ativas=true`);
+      if (producoesRes.ok) {
+        const producoesData = await producoesRes.json();
+        setProducoesAtivas(producoesData.data || []);
+      }
+
+      // Buscar parada ativa
+      const paradaRes = await fetch(`/api/paradas-maquina/ativas?maquinaId=${params.id}`);
+      if (paradaRes.ok) {
+        const paradaData = await paradaRes.json();
+        setParadaAtiva(paradaData);
+      }
+
+      // Buscar OPs disponíveis
+      const opsRes = await fetch(`/api/ops?status=ABERTA,EM_ANDAMENTO`);
+      if (opsRes.ok) {
+        const opsData = await opsRes.json();
+        setOpsDisponiveis(opsData.data || []);
+      }
+
+    } catch (error) {
+      console.error('❌ Erro ao carregar dados:', error);
+      setError('Erro ao carregar dados da máquina');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loading) {
     return (
       <div className="p-4 flex items-center justify-center min-h-screen">
         <p className="text-gray-500">Carregando...</p>
@@ -180,9 +213,23 @@ function MachineClientContent({
     );
   }
 
+  if (error || !maquina) {
+    return (
+      <div className="p-4">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+          <h2 className="text-red-800 font-medium mb-2">Erro ao carregar página</h2>
+          <p className="text-red-600 text-sm">{error || 'Máquina não encontrada'}</p>
+        </div>
+        <Link href="/apontamento">
+          <Button>Voltar</Button>
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 space-y-4 max-w-2xl mx-auto">
-      {/* Cabeçalho com botão voltar */}
+      {/* Cabeçalho */}
       <div className="flex items-center gap-3">
         <Link href="/apontamento">
           <Button variant="ghost" size="icon" className="h-10 w-10">
@@ -195,12 +242,12 @@ function MachineClientContent({
         </div>
       </div>
 
-      {/* Card de status da máquina */}
+      {/* Status */}
       <MobileCard>
         <div className="flex items-center justify-between">
           <span className="text-gray-600">Status</span>
           <div className="flex items-center gap-2">
-            {producoesAtivas && producoesAtivas.length > 1 && (
+            {producoesAtivas.length > 1 && (
               <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-xs flex items-center gap-1">
                 <Layers className="h-3 w-3" />
                 {producoesAtivas.length} OPs
@@ -218,7 +265,7 @@ function MachineClientContent({
         </div>
       </MobileCard>
 
-      {/* SE TEM PARADA ATIVA */}
+      {/* Parada Ativa */}
       {paradaAtiva && (
         <MobileCard>
           <h2 className="font-medium mb-3 text-yellow-600 flex items-center gap-2">
@@ -240,10 +287,8 @@ function MachineClientContent({
               </p>
             )}
           </div>
-          
-          {/* Botão para finalizar parada */}
           <div className="mt-4">
-            <Link href={`/apontamento/finalizar-parada?paradaId=${paradaAtiva.id}&maquinaId=${paramsId}`}>
+            <Link href={`/apontamento/finalizar-parada?paradaId=${paradaAtiva.id}&maquinaId=${params.id}`}>
               <Button className="w-full bg-green-600 hover:bg-green-700">
                 <PlayCircle className="mr-2 h-4 w-4" />
                 Finalizar Parada
@@ -253,15 +298,15 @@ function MachineClientContent({
         </MobileCard>
       )}
 
-      {/* SE TEM PRODUÇÕES ATIVAS (mostra todas) */}
-      {!paradaAtiva && producoesAtivas && producoesAtivas.length > 0 && (
+      {/* Produções Ativas */}
+      {!paradaAtiva && producoesAtivas.length > 0 && (
         <div className="space-y-3">
           <h2 className="font-medium flex items-center gap-2">
             <Layers className="h-5 w-5 text-blue-600" />
             Produções em andamento ({producoesAtivas.length})
           </h2>
           
-          {producoesAtivas.map((producao: ProducaoAtiva) => (
+          {producoesAtivas.map((producao) => (
             <MobileCard key={producao.id}>
               <div className="space-y-2">
                 <div className="flex justify-between items-start">
@@ -297,7 +342,7 @@ function MachineClientContent({
                       Finalizar
                     </Button>
                   </Link>
-                  <Link href={`/apontamento/parada?maquinaId=${paramsId}&opId=${producao.opId}&producaoId=${producao.id}`} className="flex-1">
+                  <Link href={`/apontamento/parada?maquinaId=${params.id}&opId=${producao.opId}&producaoId=${producao.id}`} className="flex-1">
                     <Button size="sm" className="w-full text-yellow-600" variant="outline">
                       <Pause className="mr-2 h-4 w-4" />
                       Parada
@@ -310,24 +355,23 @@ function MachineClientContent({
         </div>
       )}
 
-      {/* SE NÃO TEM NADA (disponível) OU TEM ESPAÇO PARA MAIS OPs */}
+      {/* Ações */}
       {!paradaAtiva && (
         <>
-          {/* Botão de Parada Rápida */}
-          <Link href={`/apontamento/parada?maquinaId=${paramsId}`}>
+          <Link href={`/apontamento/parada?maquinaId=${params.id}`}>
             <Button className="w-full bg-yellow-600 hover:bg-yellow-700 text-white">
               <Pause className="mr-2 h-4 w-4" />
               Registrar Parada (sem OP)
             </Button>
           </Link>
 
-          {/* 🔍 CAMPO DE BUSCA DE OP */}
+          {/* Busca de OP */}
           <div className="mt-4">
             <label className="text-sm font-medium text-gray-700 mb-1 block">
               Buscar OP por número
             </label>
             <SearchOP 
-              maquinaId={paramsId} 
+              maquinaId={params.id} 
               onSelect={(op) => setSelectedOp(op)}
             />
             {selectedOp && (
@@ -340,7 +384,7 @@ function MachineClientContent({
                       Programado: {Number(selectedOp.qtdeProgramado).toLocaleString('pt-BR')} {selectedOp.um}
                     </p>
                   </div>
-                  <Link href={`/apontamento/iniciar?machine=${paramsId}&op=${selectedOp.op}`}>
+                  <Link href={`/apontamento/iniciar?machine=${params.id}&op=${selectedOp.op}`}>
                     <Button size="sm">
                       <Play className="mr-1 h-4 w-4" />
                       Iniciar
@@ -351,19 +395,19 @@ function MachineClientContent({
             )}
           </div>
 
-          {/* Lista de OPs disponíveis */}
+          {/* Lista de OPs */}
           <div className="space-y-3 mt-4">
             <h2 className="font-medium">OPs disponíveis para iniciar</h2>
             
-            {opsDisponiveis && opsDisponiveis.length === 0 ? (
+            {opsDisponiveis.length === 0 ? (
               <MobileCard>
                 <p className="text-center text-gray-500 py-4">
                   Nenhuma OP disponível no momento
                 </p>
               </MobileCard>
             ) : (
-              opsDisponiveis && opsDisponiveis.map((op: OPDisp) => {
-                const jaEmProducao = producoesAtivas?.some((p: ProducaoAtiva) => p.opId === op.op) || false;
+              opsDisponiveis.map((op) => {
+                const jaEmProducao = producoesAtivas.some(p => p.opId === op.op);
                 
                 return (
                   <MobileCard key={op.op} className={jaEmProducao ? 'opacity-50' : ''}>
@@ -381,7 +425,7 @@ function MachineClientContent({
                         )}
                       </div>
                       {!jaEmProducao && (
-                        <Link href={`/apontamento/iniciar?machine=${paramsId}&op=${op.op}`}>
+                        <Link href={`/apontamento/iniciar?machine=${params.id}&op=${op.op}`}>
                           <Button size="sm" className="ml-2">
                             <Play className="mr-1 h-4 w-4" />
                             Iniciar
@@ -398,151 +442,4 @@ function MachineClientContent({
       )}
     </div>
   );
-}
-
-// Componente Server (sem 'use client')
-export default async function MachinePage({ params }: { params: { id: string } }) {
-  console.log('🔍 MachinePage iniciando para máquina:', params.id);
-  
-  try {
-    const session = await getServerSession(authOptions);
-
-    if (!session) {
-      console.log('❌ Sem sessão, redirecionando para login');
-      redirect('/login');
-    }
-
-    // Buscar dados da máquina
-    const maquina = await db.query.maquinas.findFirst({
-      where: eq(maquinas.id, params.id),
-    });
-
-    if (!maquina) {
-      console.log('❌ Máquina não encontrada:', params.id);
-      redirect('/apontamento');
-    }
-
-    console.log('✅ Máquina encontrada:', maquina.nome);
-
-    // Buscar produções ativas
-    const producoesAtivasRaw = await db
-      .select({
-        id: producoesTable.id,
-        opId: producoesTable.opId,
-        estagioId: producoesTable.estagioId,
-        dataInicio: producoesTable.dataInicio,
-        metragemProgramada: producoesTable.metragemProgramada,
-        metragemProcessada: producoesTable.metragemProcessada,
-        isReprocesso: producoesTable.isReprocesso,
-        opNumero: ops.op,
-        opProduto: ops.produto,
-        opProgramado: ops.qtdeProgramado,
-        opUm: ops.um,
-        estagioNome: estagios.nome,
-        estagioCodigo: estagios.codigo,
-        estagioCor: estagios.cor,
-      })
-      .from(producoesTable)
-      .leftJoin(ops, eq(producoesTable.opId, ops.op))
-      .leftJoin(estagios, eq(producoesTable.estagioId, estagios.id))
-      .where(
-        and(
-          eq(producoesTable.maquinaId, params.id),
-          sql`${producoesTable.dataFim} IS NULL`
-        )
-      );
-
-    console.log(`📊 Encontradas ${producoesAtivasRaw.length} produções ativas`);
-
-    const producoesAtivas: ProducaoAtiva[] = producoesAtivasRaw.map(p => ({
-      id: p.id,
-      opId: p.opId,
-      opNumero: p.opNumero || 0,
-      opProduto: p.opProduto || '',
-      estagioNome: p.estagioNome || '',
-      estagioCor: p.estagioCor || '#666',
-      dataInicio: p.dataInicio,
-      metragemProcessada: p.metragemProcessada ? Number(p.metragemProcessada) : null,
-    }));
-
-    // Buscar parada ativa
-    const paradaAtivaRaw = await db
-      .select({
-        id: paradasMaquina.id,
-        dataInicio: paradasMaquina.dataInicio,
-        opId: paradasMaquina.opId,
-        observacoes: paradasMaquina.observacoes,
-        motivoDescricao: motivosParada.descricao,
-        motivoCodigo: motivosParada.codigo,
-      })
-      .from(paradasMaquina)
-      .leftJoin(motivosParada, eq(paradasMaquina.motivoParadaId, motivosParada.id))
-      .where(
-        and(
-          eq(paradasMaquina.maquinaId, params.id),
-          sql`${paradasMaquina.dataFim} IS NULL`
-        )
-      )
-      .then(rows => rows[0] || null);
-
-    const paradaAtiva: ParadaAtiva | null = paradaAtivaRaw ? {
-      id: paradaAtivaRaw.id,
-      dataInicio: paradaAtivaRaw.dataInicio,
-      opId: paradaAtivaRaw.opId,
-      observacoes: paradaAtivaRaw.observacoes,
-      motivoDescricao: paradaAtivaRaw.motivoDescricao || 'Motivo não especificado',
-      motivoCodigo: paradaAtivaRaw.motivoCodigo || '',
-    } : null;
-
-    // Buscar OPs disponíveis
-    const opsDisponiveisRaw = await db
-      .select()
-      .from(ops)
-      .where(
-        and(
-          sql`${ops.status} != 'FINALIZADA'`,
-          sql`${ops.status} != 'CANCELADA'`
-        )
-      )
-      .orderBy(ops.op)
-      .limit(50);
-
-    const opsDisponiveis: OPDisp[] = opsDisponiveisRaw.map(op => ({
-      op: op.op,
-      produto: op.produto,
-      qtdeProgramado: typeof op.qtdeProgramado === 'string' ? parseFloat(op.qtdeProgramado) : (op.qtdeProgramado || 0),
-      um: op.um || 'M',
-      status: op.status || 'ABERTA',
-    }));
-
-    console.log(`📊 Encontradas ${opsDisponiveis.length} OPs disponíveis`);
-
-    return (
-      <MachineClientContent 
-        maquina={{
-          id: maquina.id,
-          nome: maquina.nome,
-          codigo: maquina.codigo,
-          status: maquina.status as 'DISPONIVEL' | 'EM_PROCESSO' | 'PARADA',
-        }}
-        producoesAtivas={producoesAtivas}
-        paradaAtiva={paradaAtiva}
-        opsDisponiveis={opsDisponiveis}
-        paramsId={params.id}
-      />
-    );
-  } catch (error) {
-    console.error('❌ Erro ao carregar página da máquina:', error);
-    return (
-      <div className="p-4">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-          <h2 className="text-red-800 font-medium mb-2">Erro ao carregar página</h2>
-          <p className="text-red-600 text-sm">{error instanceof Error ? error.message : 'Erro desconhecido'}</p>
-        </div>
-        <Link href="/apontamento">
-          <Button>Voltar</Button>
-        </Link>
-      </div>
-    );
-  }
 }
