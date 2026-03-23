@@ -5,14 +5,6 @@ import { useState, useEffect } from 'react';
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { db } from '@/lib/db';
-import { maquinas } from '@/lib/db/schema/maquinas';
-import { ops } from '@/lib/db/schema/ops';
-import { producoesTable } from '@/lib/db/schema/producoes';
-import { paradasMaquina } from '@/lib/db/schema/paradas-maquina';
-import { motivosParada } from '@/lib/db/schema/motivos-parada';
-import { estagios } from '@/lib/db/schema/estagios';
-import { eq, and, sql } from 'drizzle-orm';
 import { MobileCard } from '@/components/mobile/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,13 +26,13 @@ interface ProducaoAtiva {
   opProduto: string;
   estagioNome: string;
   estagioCor: string;
-  dataInicio: Date;
+  dataInicio: string;
   metragemProcessada: number | null;
 }
 
 interface ParadaAtiva {
   id: string;
-  dataInicio: Date;
+  dataInicio: string;
   opId: number | null;
   observacoes: string | null;
   motivoDescricao: string;
@@ -180,7 +172,22 @@ export default function MachinePage({ params }: { params: { id: string } }) {
       const producoesRes = await fetch(`/api/producoes?maquinaId=${params.id}&ativas=true`);
       if (producoesRes.ok) {
         const producoesData = await producoesRes.json();
-        setProducoesAtivas(producoesData.data || []);
+        console.log('📊 Produções ativas recebidas:', producoesData);
+        
+        // Mapear os dados corretamente
+        const producoes = (producoesData.data || []).map((p: any) => ({
+          id: p.id,
+          opId: p.opId,
+          opNumero: p.op?.op || p.opNumero || p.opId,
+          opProduto: p.op?.produto || p.opProduto || '',
+          estagioNome: p.estagio?.nome || p.estagioNome || '',
+          estagioCor: p.estagio?.cor || p.estagioCor || '#666',
+          dataInicio: p.dataInicio,
+          metragemProcessada: p.metragemProcessada,
+        }));
+        
+        setProducoesAtivas(producoes);
+        console.log('✅ Produções processadas:', producoes);
       }
 
       // Buscar parada ativa
@@ -191,7 +198,7 @@ export default function MachinePage({ params }: { params: { id: string } }) {
       }
 
       // Buscar OPs disponíveis
-      const opsRes = await fetch(`/api/ops?status=ABERTA,EM_ANDAMENTO`);
+      const opsRes = await fetch(`/api/ops?status=ABERTA,EM_ANDAMENTO&limit=50`);
       if (opsRes.ok) {
         const opsData = await opsRes.json();
         setOpsDisponiveis(opsData.data || []);
@@ -226,6 +233,17 @@ export default function MachinePage({ params }: { params: { id: string } }) {
       </div>
     );
   }
+
+  // Função para formatar data
+  const formatarData = (dataStr: string) => {
+    if (!dataStr) return '-';
+    try {
+      const data = new Date(dataStr);
+      return data.toLocaleString('pt-BR');
+    } catch {
+      return dataStr;
+    }
+  };
 
   return (
     <div className="p-4 space-y-4 max-w-2xl mx-auto">
@@ -279,7 +297,7 @@ export default function MachinePage({ params }: { params: { id: string } }) {
               <p className="text-sm text-gray-600">{paradaAtiva.observacoes}</p>
             )}
             <p className="text-xs text-gray-400">
-              Iniciado: {new Date(paradaAtiva.dataInicio).toLocaleString('pt-BR')}
+              Iniciado: {formatarData(paradaAtiva.dataInicio)}
             </p>
             {paradaAtiva.opId && (
               <p className="text-xs text-gray-500">
@@ -311,8 +329,11 @@ export default function MachinePage({ params }: { params: { id: string } }) {
               <div className="space-y-2">
                 <div className="flex justify-between items-start">
                   <div>
-                    <p className="font-medium">OP {producao.opNumero}</p>
-                    <p className="text-sm text-gray-500 line-clamp-2">{producao.opProduto}</p>
+                    {/* ✅ Mostra o número da OP corretamente */}
+                    <p className="font-medium text-base">OP {producao.opNumero}</p>
+                    {producao.opProduto && (
+                      <p className="text-sm text-gray-500 line-clamp-2 mt-1">{producao.opProduto}</p>
+                    )}
                   </div>
                   <span 
                     className="text-xs px-2 py-1 rounded-full"
@@ -321,12 +342,12 @@ export default function MachinePage({ params }: { params: { id: string } }) {
                       color: producao.estagioCor || '#666'
                     }}
                   >
-                    {producao.estagioNome}
+                    {producao.estagioNome || 'Sem estágio'}
                   </span>
                 </div>
                 
                 <p className="text-xs text-gray-400">
-                  Iniciado: {new Date(producao.dataInicio).toLocaleString('pt-BR')}
+                  Iniciado: {formatarData(producao.dataInicio)}
                 </p>
                 
                 {producao.metragemProcessada && (
