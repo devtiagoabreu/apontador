@@ -1,7 +1,4 @@
 //src/app/apontamento/machine/[id]/page.tsx
-'use client';
-
-import { useState, useEffect } from 'react';
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -18,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import Link from 'next/link';
 import { ArrowLeft, Play, Pause, CheckCircle, PlayCircle, Layers, Search, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 // Interfaces para tipagem
 interface Maquina {
@@ -55,11 +53,7 @@ interface OPDisp {
   status: string;
 }
 
-// FORÇA A PÁGINA A SER SEMPRE ATUALIZADA (SEM CACHE)
-export const revalidate = 0;
-export const dynamic = 'force-dynamic';
-
-// Componente de busca de OP (client component)
+// Componente de busca de OP (client component) - MOVER PARA ARQUIVO SEPARADO
 function SearchOP({ maquinaId, onSelect }: { maquinaId: string; onSelect?: (op: any) => void }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -156,8 +150,8 @@ function SearchOP({ maquinaId, onSelect }: { maquinaId: string; onSelect?: (op: 
   );
 }
 
-// Componente Client para gerenciar estado
-function MachineClient({ 
+// Componente Client (use client)
+function MachineClientContent({ 
   maquina, 
   producoesAtivas, 
   paradaAtiva, 
@@ -171,34 +165,17 @@ function MachineClient({
   paramsId: string;
 }) {
   const [selectedOp, setSelectedOp] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
-    console.log('✅ MachineClient montado');
-    console.log('📊 Maquina:', maquina);
-    console.log('📊 Produções ativas:', producoesAtivas);
-    console.log('📊 Parada ativa:', paradaAtiva);
-    console.log('📊 OPs disponíveis:', opsDisponiveis);
-    setIsLoading(false);
+    setIsClient(true);
+    console.log('✅ MachineClientContent montado');
   }, []);
 
-  if (isLoading) {
+  if (!isClient) {
     return (
       <div className="p-4 flex items-center justify-center min-h-screen">
         <p className="text-gray-500">Carregando...</p>
-      </div>
-    );
-  }
-
-  // Verificação de segurança
-  if (!maquina) {
-    console.error('❌ Máquina não encontrada');
-    return (
-      <div className="p-4">
-        <p className="text-red-500">Erro: Máquina não encontrada</p>
-        <Link href="/apontamento">
-          <Button className="mt-4">Voltar</Button>
-        </Link>
       </div>
     );
   }
@@ -423,7 +400,7 @@ function MachineClient({
   );
 }
 
-// Componente Server que busca os dados
+// Componente Server (sem 'use client')
 export default async function MachinePage({ params }: { params: { id: string } }) {
   console.log('🔍 MachinePage iniciando para máquina:', params.id);
   
@@ -541,7 +518,7 @@ export default async function MachinePage({ params }: { params: { id: string } }
     console.log(`📊 Encontradas ${opsDisponiveis.length} OPs disponíveis`);
 
     return (
-      <MachineClient 
+      <MachineClientContent 
         maquina={{
           id: maquina.id,
           nome: maquina.nome,
