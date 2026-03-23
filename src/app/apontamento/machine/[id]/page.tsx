@@ -1,7 +1,7 @@
 //src/app/apontamento/machine/[id]/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -171,6 +171,37 @@ function MachineClient({
   paramsId: string;
 }) {
   const [selectedOp, setSelectedOp] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    console.log('✅ MachineClient montado');
+    console.log('📊 Maquina:', maquina);
+    console.log('📊 Produções ativas:', producoesAtivas);
+    console.log('📊 Parada ativa:', paradaAtiva);
+    console.log('📊 OPs disponíveis:', opsDisponiveis);
+    setIsLoading(false);
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="p-4 flex items-center justify-center min-h-screen">
+        <p className="text-gray-500">Carregando...</p>
+      </div>
+    );
+  }
+
+  // Verificação de segurança
+  if (!maquina) {
+    console.error('❌ Máquina não encontrada');
+    return (
+      <div className="p-4">
+        <p className="text-red-500">Erro: Máquina não encontrada</p>
+        <Link href="/apontamento">
+          <Button className="mt-4">Voltar</Button>
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 space-y-4 max-w-2xl mx-auto">
@@ -192,7 +223,7 @@ function MachineClient({
         <div className="flex items-center justify-between">
           <span className="text-gray-600">Status</span>
           <div className="flex items-center gap-2">
-            {producoesAtivas.length > 1 && (
+            {producoesAtivas && producoesAtivas.length > 1 && (
               <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-xs flex items-center gap-1">
                 <Layers className="h-3 w-3" />
                 {producoesAtivas.length} OPs
@@ -246,7 +277,7 @@ function MachineClient({
       )}
 
       {/* SE TEM PRODUÇÕES ATIVAS (mostra todas) */}
-      {!paradaAtiva && producoesAtivas.length > 0 && (
+      {!paradaAtiva && producoesAtivas && producoesAtivas.length > 0 && (
         <div className="space-y-3">
           <h2 className="font-medium flex items-center gap-2">
             <Layers className="h-5 w-5 text-blue-600" />
@@ -347,15 +378,15 @@ function MachineClient({
           <div className="space-y-3 mt-4">
             <h2 className="font-medium">OPs disponíveis para iniciar</h2>
             
-            {opsDisponiveis.length === 0 ? (
+            {opsDisponiveis && opsDisponiveis.length === 0 ? (
               <MobileCard>
                 <p className="text-center text-gray-500 py-4">
                   Nenhuma OP disponível no momento
                 </p>
               </MobileCard>
             ) : (
-              opsDisponiveis.map((op: OPDisp) => {
-                const jaEmProducao = producoesAtivas.some((p: ProducaoAtiva) => p.opId === op.op);
+              opsDisponiveis && opsDisponiveis.map((op: OPDisp) => {
+                const jaEmProducao = producoesAtivas?.some((p: ProducaoAtiva) => p.opId === op.op) || false;
                 
                 return (
                   <MobileCard key={op.op} className={jaEmProducao ? 'opacity-50' : ''}>
@@ -392,126 +423,149 @@ function MachineClient({
   );
 }
 
+// Componente Server que busca os dados
 export default async function MachinePage({ params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions);
+  console.log('🔍 MachinePage iniciando para máquina:', params.id);
+  
+  try {
+    const session = await getServerSession(authOptions);
 
-  if (!session) {
-    redirect('/login');
-  }
+    if (!session) {
+      console.log('❌ Sem sessão, redirecionando para login');
+      redirect('/login');
+    }
 
-  // Buscar dados da máquina
-  const maquina = await db.query.maquinas.findFirst({
-    where: eq(maquinas.id, params.id),
-  });
+    // Buscar dados da máquina
+    const maquina = await db.query.maquinas.findFirst({
+      where: eq(maquinas.id, params.id),
+    });
 
-  if (!maquina) {
-    redirect('/apontamento');
-  }
+    if (!maquina) {
+      console.log('❌ Máquina não encontrada:', params.id);
+      redirect('/apontamento');
+    }
 
-  // Buscar TODAS as produções ativas nesta máquina
-  const producoesAtivasRaw = await db
-    .select({
-      id: producoesTable.id,
-      opId: producoesTable.opId,
-      estagioId: producoesTable.estagioId,
-      dataInicio: producoesTable.dataInicio,
-      metragemProgramada: producoesTable.metragemProgramada,
-      metragemProcessada: producoesTable.metragemProcessada,
-      isReprocesso: producoesTable.isReprocesso,
-      opNumero: ops.op,
-      opProduto: ops.produto,
-      opProgramado: ops.qtdeProgramado,
-      opUm: ops.um,
-      estagioNome: estagios.nome,
-      estagioCodigo: estagios.codigo,
-      estagioCor: estagios.cor,
-    })
-    .from(producoesTable)
-    .leftJoin(ops, eq(producoesTable.opId, ops.op))
-    .leftJoin(estagios, eq(producoesTable.estagioId, estagios.id))
-    .where(
-      and(
-        eq(producoesTable.maquinaId, params.id),
-        sql`${producoesTable.dataFim} IS NULL`
+    console.log('✅ Máquina encontrada:', maquina.nome);
+
+    // Buscar produções ativas
+    const producoesAtivasRaw = await db
+      .select({
+        id: producoesTable.id,
+        opId: producoesTable.opId,
+        estagioId: producoesTable.estagioId,
+        dataInicio: producoesTable.dataInicio,
+        metragemProgramada: producoesTable.metragemProgramada,
+        metragemProcessada: producoesTable.metragemProcessada,
+        isReprocesso: producoesTable.isReprocesso,
+        opNumero: ops.op,
+        opProduto: ops.produto,
+        opProgramado: ops.qtdeProgramado,
+        opUm: ops.um,
+        estagioNome: estagios.nome,
+        estagioCodigo: estagios.codigo,
+        estagioCor: estagios.cor,
+      })
+      .from(producoesTable)
+      .leftJoin(ops, eq(producoesTable.opId, ops.op))
+      .leftJoin(estagios, eq(producoesTable.estagioId, estagios.id))
+      .where(
+        and(
+          eq(producoesTable.maquinaId, params.id),
+          sql`${producoesTable.dataFim} IS NULL`
+        )
+      );
+
+    console.log(`📊 Encontradas ${producoesAtivasRaw.length} produções ativas`);
+
+    const producoesAtivas: ProducaoAtiva[] = producoesAtivasRaw.map(p => ({
+      id: p.id,
+      opId: p.opId,
+      opNumero: p.opNumero || 0,
+      opProduto: p.opProduto || '',
+      estagioNome: p.estagioNome || '',
+      estagioCor: p.estagioCor || '#666',
+      dataInicio: p.dataInicio,
+      metragemProcessada: p.metragemProcessada ? Number(p.metragemProcessada) : null,
+    }));
+
+    // Buscar parada ativa
+    const paradaAtivaRaw = await db
+      .select({
+        id: paradasMaquina.id,
+        dataInicio: paradasMaquina.dataInicio,
+        opId: paradasMaquina.opId,
+        observacoes: paradasMaquina.observacoes,
+        motivoDescricao: motivosParada.descricao,
+        motivoCodigo: motivosParada.codigo,
+      })
+      .from(paradasMaquina)
+      .leftJoin(motivosParada, eq(paradasMaquina.motivoParadaId, motivosParada.id))
+      .where(
+        and(
+          eq(paradasMaquina.maquinaId, params.id),
+          sql`${paradasMaquina.dataFim} IS NULL`
+        )
       )
+      .then(rows => rows[0] || null);
+
+    const paradaAtiva: ParadaAtiva | null = paradaAtivaRaw ? {
+      id: paradaAtivaRaw.id,
+      dataInicio: paradaAtivaRaw.dataInicio,
+      opId: paradaAtivaRaw.opId,
+      observacoes: paradaAtivaRaw.observacoes,
+      motivoDescricao: paradaAtivaRaw.motivoDescricao || 'Motivo não especificado',
+      motivoCodigo: paradaAtivaRaw.motivoCodigo || '',
+    } : null;
+
+    // Buscar OPs disponíveis
+    const opsDisponiveisRaw = await db
+      .select()
+      .from(ops)
+      .where(
+        and(
+          sql`${ops.status} != 'FINALIZADA'`,
+          sql`${ops.status} != 'CANCELADA'`
+        )
+      )
+      .orderBy(ops.op)
+      .limit(50);
+
+    const opsDisponiveis: OPDisp[] = opsDisponiveisRaw.map(op => ({
+      op: op.op,
+      produto: op.produto,
+      qtdeProgramado: typeof op.qtdeProgramado === 'string' ? parseFloat(op.qtdeProgramado) : (op.qtdeProgramado || 0),
+      um: op.um || 'M',
+      status: op.status || 'ABERTA',
+    }));
+
+    console.log(`📊 Encontradas ${opsDisponiveis.length} OPs disponíveis`);
+
+    return (
+      <MachineClient 
+        maquina={{
+          id: maquina.id,
+          nome: maquina.nome,
+          codigo: maquina.codigo,
+          status: maquina.status as 'DISPONIVEL' | 'EM_PROCESSO' | 'PARADA',
+        }}
+        producoesAtivas={producoesAtivas}
+        paradaAtiva={paradaAtiva}
+        opsDisponiveis={opsDisponiveis}
+        paramsId={params.id}
+      />
     );
-
-  const producoesAtivas: ProducaoAtiva[] = producoesAtivasRaw.map(p => ({
-    id: p.id,
-    opId: p.opId,
-    opNumero: p.opNumero || 0,
-    opProduto: p.opProduto || '',
-    estagioNome: p.estagioNome || '',
-    estagioCor: p.estagioCor || '#666',
-    dataInicio: p.dataInicio,
-    metragemProcessada: p.metragemProcessada ? Number(p.metragemProcessada) : null,
-  }));
-
-  console.log(`📊 Encontradas ${producoesAtivas.length} produções ativas na máquina`);
-
-  // Buscar parada ativa nesta máquina
-  const paradaAtivaRaw = await db
-    .select({
-      id: paradasMaquina.id,
-      dataInicio: paradasMaquina.dataInicio,
-      opId: paradasMaquina.opId,
-      observacoes: paradasMaquina.observacoes,
-      motivoDescricao: motivosParada.descricao,
-      motivoCodigo: motivosParada.codigo,
-    })
-    .from(paradasMaquina)
-    .leftJoin(motivosParada, eq(paradasMaquina.motivoParadaId, motivosParada.id))
-    .where(
-      and(
-        eq(paradasMaquina.maquinaId, params.id),
-        sql`${paradasMaquina.dataFim} IS NULL`
-      )
-    )
-    .then(rows => rows[0] || null);
-
-  const paradaAtiva: ParadaAtiva | null = paradaAtivaRaw ? {
-    id: paradaAtivaRaw.id,
-    dataInicio: paradaAtivaRaw.dataInicio,
-    opId: paradaAtivaRaw.opId,
-    observacoes: paradaAtivaRaw.observacoes,
-    motivoDescricao: paradaAtivaRaw.motivoDescricao || 'Motivo não especificado',
-    motivoCodigo: paradaAtivaRaw.motivoCodigo || '',
-  } : null;
-
-  // Buscar OPs disponíveis (limitado para não sobrecarregar)
-  const opsDisponiveisRaw = await db
-    .select()
-    .from(ops)
-    .where(
-      and(
-        sql`${ops.status} != 'FINALIZADA'`,
-        sql`${ops.status} != 'CANCELADA'`
-      )
-    )
-    .orderBy(ops.op)
-    .limit(50);
-
-  // ✅ CORREÇÃO: Converter corretamente os tipos
-  const opsDisponiveis: OPDisp[] = opsDisponiveisRaw.map(op => ({
-    op: op.op,
-    produto: op.produto,
-    qtdeProgramado: typeof op.qtdeProgramado === 'string' ? parseFloat(op.qtdeProgramado) : (op.qtdeProgramado || 0),
-    um: op.um || 'M',
-    status: op.status || 'ABERTA',
-  }));
-
-  return (
-    <MachineClient 
-      maquina={{
-        id: maquina.id,
-        nome: maquina.nome,
-        codigo: maquina.codigo,
-        status: maquina.status as 'DISPONIVEL' | 'EM_PROCESSO' | 'PARADA',
-      }}
-      producoesAtivas={producoesAtivas}
-      paradaAtiva={paradaAtiva}
-      opsDisponiveis={opsDisponiveis}
-      paramsId={params.id}
-    />
-  );
+  } catch (error) {
+    console.error('❌ Erro ao carregar página da máquina:', error);
+    return (
+      <div className="p-4">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+          <h2 className="text-red-800 font-medium mb-2">Erro ao carregar página</h2>
+          <p className="text-red-600 text-sm">{error instanceof Error ? error.message : 'Erro desconhecido'}</p>
+        </div>
+        <Link href="/apontamento">
+          <Button>Voltar</Button>
+        </Link>
+      </div>
+    );
+  }
 }
