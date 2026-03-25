@@ -12,7 +12,7 @@ export const ops = pgTable('ops', {
   op: integer('op').primaryKey(),
   produto: varchar('produto', { length: 100 }).notNull(),
   depositoFinal: varchar('deposito_final', { length: 100 }),
-  pecasVinculadas: varchar('pecas_vinculadas', { length: 50 }),
+  pecasVinculadas: varchar('pecas_vinculadas', { length: 300 }),
   qtdeProgramado: decimal('qtde_programado', { precision: 10, scale: 2 }),
   qtdeCarregado: decimal('qtde_carregado', { precision: 10, scale: 2 }),
   qtdeProduzida: decimal('qtde_produzida', { precision: 10, scale: 2 }).default('0'),
