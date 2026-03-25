@@ -1,4 +1,4 @@
-// E:\dev\apontador\drizzle.config.ts
+// apontador/drizzle.config.ts
 import type { Config } from 'drizzle-kit';
 import * as dotenv from 'dotenv';
 import { join } from 'path';

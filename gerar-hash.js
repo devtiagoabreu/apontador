@@ -1,3 +1,4 @@
+// apontador/gerar-hash.ts
 const bcrypt = require('bcryptjs');
 
 async function gerarHash() {

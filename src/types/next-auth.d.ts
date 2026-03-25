@@ -1,3 +1,4 @@
+// src/types/next-auth.d.ts
 import 'next-auth';
 import { DefaultSession } from 'next-auth';
 
