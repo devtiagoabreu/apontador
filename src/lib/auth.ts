@@ -13,7 +13,7 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         matricula: { label: 'Matrícula', type: 'text' },
         senha: { label: 'Senha', type: 'password' },
-        loginMode: { type: 'text' } // Campo oculto enviado pelas páginas de login
+        loginMode: { type: 'text' } // Campo oculto enviado pelas páginas de loginn
       },
       async authorize(credentials) {
         if (!credentials?.matricula) return null;
