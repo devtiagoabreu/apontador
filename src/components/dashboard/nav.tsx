@@ -39,6 +39,11 @@ const navItems: NavItem[] = [
     icon: Play,
   },
   {
+    title: 'Prod. Avulsa',
+    href: '/dashboard/producao-avulsa',
+    icon: Package, // Use o ícone Package da lucide-react
+  },
+  {
     title: 'Paradas de Máquina',
     href: '/dashboard/paradas-maquina',
     icon: AlertTriangle,
