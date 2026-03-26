@@ -5,10 +5,10 @@ import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { producoesAvulsas } from '@/lib/db/schema/producoes-avulsas';
 import { maquinas } from '@/lib/db/schema/maquinas';
-import { eq, sql, desc } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
-// Schema de validação para iniciar produção avulsa
+// Schema de validação para iniciar produção avulsa baseado no padrão do sistema [1]
 const iniciarAvulsoSchema = z.object({
   maquinaId: z.string().uuid('Máquina inválida'),
   produtoId: z.string().uuid('Produto inválido'),
@@ -17,12 +17,13 @@ const iniciarAvulsoSchema = z.object({
 });
 
 /**
- * GET: Lista as produções avulsas (Portadas/Carrolões)
- * Utiliza SQL Raw com Joins para performance no Dashboard, seguindo o padrão das rotas de OPs.
+ * GET: Lista as produções avulsas (Portadas e Carrolões) para o Dashboard Administrativo.
+ * Utiliza SQL Raw com JOINs para performance, seguindo a arquitetura de relatórios do sistema [2, 3].
  */
 export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
+    // Verificação de autenticação padrão do sistema [4, 5]
     if (!session) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
@@ -32,7 +33,7 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = (page - 1) * limit;
 
-    // Busca enriquecida com JOINs para o Dashboard Administrativo [1-5]
+    // Busca enriquecida com JOINs para evitar múltiplas chamadas no frontend [2, 6, 7]
     const result = await db.execute(sql`
       SELECT 
         pa.id,
@@ -40,6 +41,7 @@ export async function GET(request: Request) {
         pa.data_inicio,
         pa.data_fim,
         pa.metragem,
+        pa.observacoes,
         p.codigo as produto_codigo,
         p.nome as produto_nome,
         m.nome as maquina_nome,
@@ -57,10 +59,9 @@ export async function GET(request: Request) {
       LIMIT ${limit} OFFSET ${offset}
     `);
 
-    // Contagem total para paginação
+    // Busca o total de registros para a paginação [7]
+    // Correção TS(2339): Acessando o índice  e convertendo para 'any' para capturar o campo 'count'
     const totalRes = await db.execute(sql`SELECT COUNT(*) as count FROM producoes_avulsas`);
-
-    // CORREÇÃO: Acessar o índice  e usar 'as any' para o TypeScript permitir o acesso ao campo 'count'
     const total = parseInt(String((totalRes.rows as any)?.count || '0'));
 
     return NextResponse.json({
@@ -79,8 +80,8 @@ export async function GET(request: Request) {
 }
 
 /**
- * POST: Inicia um novo registro de produção avulsa
- * Realiza operação transacional para garantir que a máquina mude de status.
+ * POST: Inicia um novo registro de produção sem OP (Urdimento/Carrolão).
+ * Realiza uma atualização transacional para mudar o status da máquina simultaneamente [4, 8].
  */
 export async function POST(request: Request) {
   try {
@@ -93,7 +94,7 @@ export async function POST(request: Request) {
     const validated = iniciarAvulsoSchema.parse(body);
     const agora = new Date();
 
-    // 1. Verificar se a máquina existe e está disponível [9, 10]
+    // 1. Verificar se a máquina existe [9, 10]
     const maquina = await db.query.maquinas.findFirst({
       where: eq(maquinas.id, validated.maquinaId),
     });
@@ -102,14 +103,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Máquina não encontrada' }, { status: 404 });
     }
 
-    // 2. Executar transação de início [11-13]
+    // 2. Executar transação de inserção e atualização de status [4, 11]
     const result = await db.transaction(async (tx) => {
-      // Criar o registro na tabela isolada de produções avulsas
+      // Cria o registro na nova tabela de produções avulsas
       const [novaProducao] = await tx.insert(producoesAvulsas).values({
         maquinaId: validated.maquinaId,
         produtoId: validated.produtoId,
         estagioId: validated.estagioId,
-        operadorInicioId: session.user.id, // Crédito para quem iniciou
+        operadorInicioId: session.user.id, // Crédito para quem iniciou o processo
         status: 'EM_ANDAMENTO',
         observacoes: validated.observacoes || null,
         dataInicio: agora,
@@ -117,7 +118,7 @@ export async function POST(request: Request) {
         updatedAt: agora,
       }).returning();
 
-      // Atualizar status da máquina para EM_PROCESSO [10, 14, 15]
+      // Atualiza o status da máquina para EM_PROCESSO conforme o fluxo de trabalho [4, 12]
       await tx.update(maquinas)
         .set({ 
           status: 'EM_PROCESSO', 
@@ -131,6 +132,7 @@ export async function POST(request: Request) {
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     console.error('Erro ao iniciar produção avulsa:', error);
+    // Tratamento de erros de validação Zod conforme padrão das APIs existentes [13-15]
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Dados inválidos', detalhes: error.errors }, { status: 400 });
     }
