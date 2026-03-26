@@ -13,44 +13,35 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         matricula: { label: 'Matrícula', type: 'text' },
         senha: { label: 'Senha', type: 'password' },
+        loginMode: { type: 'text' } // Campo oculto enviado pelas páginas de login
       },
       async authorize(credentials) {
-        if (!credentials?.matricula) {
-          return null;
+        if (!credentials?.matricula) return null;
+
+        // Busca o usuário no banco de dados Neon
+        const user = await db.query.usuarios.findFirst({
+          where: eq(usuarios.matricula, credentials.matricula),
+        });
+
+        if (!user || !user.ativo) return null;
+
+        // Validação de senha obrigatória apenas para administradores
+        if (user.nivel === 'ADM') {
+          if (!credentials.senha) return null;
+          const senhaValida = await bcrypt.compare(credentials.senha, user.senha || '');
+          if (!senhaValida) return null;
         }
 
-        try {
-          const user = await db.query.usuarios.findFirst({
-            where: eq(usuarios.matricula, credentials.matricula),
-          });
-
-          if (!user || !user.ativo) {
-            return null;
-          }
-
-          if (user.nivel === 'ADM') {
-            if (!credentials.senha) {
-              return null;
-            }
-            
-            const isValid = await bcrypt.compare(credentials.senha, user.senha || '');
-            if (!isValid) {
-              return null;
-            }
-          }
-
-          return {
-            id: user.id,
-            nome: user.nome,
-            matricula: user.matricula,
-            nivel: user.nivel,
-          };
-        } catch (error) {
-          console.error('Erro na autenticação:', error);
-          return null;
-        }
-      },
-    }),
+        // Retorna o objeto User contendo o modo de login
+        return {
+          id: user.id,
+          nome: user.nome,
+          matricula: user.matricula,
+          nivel: user.nivel,
+          loginMode: (credentials?.loginMode as any) || 'normal'
+        };
+      }
+    })
   ],
   callbacks: {
     async jwt({ token, user }) {
@@ -59,26 +50,27 @@ export const authOptions: NextAuthOptions = {
         token.nome = user.nome;
         token.matricula = user.matricula;
         token.nivel = user.nivel;
+        token.loginMode = user.loginMode; // Salva o contexto no JWT
       }
       return token;
     },
     async session({ session, token }) {
       if (token && session.user) {
-        session.user.id = token.id;
-        session.user.nome = token.nome;
-        session.user.matricula = token.matricula;
-        session.user.nivel = token.nivel;
+        // CORREÇÃO PARA O VERCEL: Uso de casting para evitar erro de tipo 'unknown'
+        session.user.id = token.id as string;
+        session.user.nome = token.nome as string;
+        session.user.matricula = token.matricula as string;
+        session.user.nivel = token.nivel as string;
+        session.user.loginMode = token.loginMode as any;
       }
       return session;
     },
   },
   pages: {
     signIn: '/login',
-    error: '/login',
   },
   session: {
     strategy: 'jwt',
-    maxAge: 8 * 60 * 60,
   },
   secret: process.env.NEXTAUTH_SECRET,
 };
