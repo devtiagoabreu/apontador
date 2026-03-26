@@ -8,6 +8,7 @@ declare module 'next-auth' {
     nome: string;
     matricula: string;
     nivel: string;
+    loginMode?: 'normal' | 'avulso'; // Identifica o modo de acesso
   }
 
   interface Session {
@@ -16,6 +17,7 @@ declare module 'next-auth' {
       nome: string;
       matricula: string;
       nivel: string;
+      loginMode?: 'normal' | 'avulso';
     } & DefaultSession['user'];
   }
 }
@@ -23,8 +25,6 @@ declare module 'next-auth' {
 declare module 'next-auth/jwt' {
   interface JWT {
     id: string;
-    nome: string;
-    matricula: string;
-    nivel: string;
+    loginMode?: 'normal' | 'avulso';
   }
 }
