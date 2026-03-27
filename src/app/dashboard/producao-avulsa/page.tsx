@@ -4,19 +4,16 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
+import { FormModal } from '@/components/ui/form-modal';
 import { toast } from '@/components/ui/use-toast';
 import { 
   Search, Download, FileText, FileSpreadsheet, 
-  RefreshCw, BarChart3 
+  RefreshCw, BarChart3, CheckCircle, Pencil, Trash2, Clock, Eye 
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { 
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription 
 } from '@/components/ui/dialog';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer 
-} from 'recharts';
 import { formatDate, formatNumber } from '@/lib/utils';
 import { 
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger 
@@ -26,10 +23,12 @@ export default function ProducaoAvulsaAdminPage() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [relatorioOpen, setRelatorioOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [modalEditOpen, setModalEditOpen] = useState(false);
+  const [selectedProducao, setSelectedProducao] = useState<any>(null);
+  const [sortConfig, setSortConfig] = useState({ key: 'data_inicio', direction: 'desc' });
   const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 0 });
 
-  // 1. Busca os dados na API (mantendo o endpoint plural que é o padrão do backend)
   async function carregarDados(page = 1) {
     setLoading(true);
     try {
@@ -38,7 +37,7 @@ export default function ProducaoAvulsaAdminPage() {
       setData(result.data || []);
       setPagination(result.pagination);
     } catch (error) {
-      toast({ title: 'Erro', description: 'Falha ao carregar produções avulsas', variant: 'destructive' });
+      toast({ title: 'Erro', description: 'Falha ao carregar produções', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -46,7 +45,23 @@ export default function ProducaoAvulsaAdminPage() {
 
   useEffect(() => { carregarDados(1); }, []);
 
-  // 2. Colunas padronizadas conforme o DataTable do sistema [7, 8]
+  // Ordenação manual para simular o comportamento da tela de produções [4]
+  const handleSort = (key: string) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const dadosOrdenados = [...data].sort((a: any, b: any) => {
+    const aVal = a[sortConfig.key] || '';
+    const bVal = b[sortConfig.key] || '';
+    if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+    if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  // Definição das colunas conforme solicitado [5-7]
   const columns = [
     {
       key: 'status' as const,
@@ -59,115 +74,111 @@ export default function ProducaoAvulsaAdminPage() {
         </span>
       )
     },
-    { key: 'produto_codigo', title: 'Cód. Produto' },
-    { key: 'produto_nome', title: 'Produto' },
-    { key: 'maquina_nome', title: 'Máquina' },
-    { key: 'estagio_nome', title: 'Estágio' },
-    { key: 'operador_inicio_nome', title: 'Operador' },
-    { 
-      key: 'data_inicio', 
-      title: 'Início', 
-      format: (val: string) => formatDate(val) 
-    },
-    { 
-      key: 'metragem', 
-      title: 'Produzido', 
-      format: (val: number) => val ? `${formatNumber(val)} m` : '-' 
-    }
+    { key: 'produto_codigo', title: 'OP (Produto)', sortable: true },
+    { key: 'maquina_nome', title: 'Máquina', sortable: true },
+    { key: 'estagio_nome', title: 'Estágio', sortable: true },
+    { key: 'operador_inicio_nome', title: 'Operador', sortable: true },
+    { key: 'data_inicio', title: 'Início', format: (val: string) => formatDate(val), sortable: true },
+    { key: 'data_fim', title: 'Fim', format: (val: string) => val ? formatDate(val) : '-' },
   ];
 
-  const exportarCSV = () => {
-    const headers = ['Produto', 'Máquina', 'Estágio', 'Operador', 'Início', 'Fim', 'Metragem'];
-    const rows = data.map((p: any) => [
-      p.produto_codigo, p.maquina_nome, p.estagio_nome, p.operador_inicio_nome,
-      formatDate(p.data_inicio), p.data_fim ? formatDate(p.data_fim) : 'Ativo', p.metragem || 0
-    ]);
-    const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `producao_avulsa_${new Date().getTime()}.csv`;
-    link.click();
+  const handleExcluir = async (id: string) => {
+    if (!confirm('Deseja excluir este registro permanentemente?')) return;
+    try {
+      const res = await fetch(`/api/producoes-avulsas/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        toast({ title: 'Sucesso', description: 'Registro excluído' });
+        carregarDados();
+      }
+    } catch (error) {
+      toast({ title: 'Erro', description: 'Falha ao excluir', variant: 'destructive' });
+    }
   };
 
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold italic text-primary">Produção Avulsa</h1>
-        
         <div className="flex gap-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input 
-              placeholder="Pesquisar..." 
-              className="pl-10 w-64" 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline"><Download className="mr-2 h-4 w-4" /> Exportar</Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onClick={exportarCSV}><FileSpreadsheet className="mr-2 h-4 w-4" /> Excel (CSV)</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => window.print()}><FileText className="mr-2 h-4 w-4" /> PDF</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <Button variant="outline" onClick={() => setRelatorioOpen(true)}>
-            <BarChart3 className="mr-2 h-4 w-4" /> Relatório Lean
-          </Button>
-
-          <Button variant="outline" onClick={() => carregarDados(1)} disabled={loading}>
+          <Input 
+            placeholder="Pesquisar..." 
+            className="w-64" 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <Button onClick={() => carregarDados(1)} variant="outline">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
         </div>
       </div>
 
       <DataTable 
-        data={data.filter((i: any) => i.produto_codigo.toLowerCase().includes(searchTerm.toLowerCase()))} 
-        columns={columns} 
+        data={dadosOrdenados.filter((i: any) => i.produto_codigo.toLowerCase().includes(searchTerm.toLowerCase()))} 
+        columns={columns}
+        onRowClick={(item) => {
+          setSelectedProducao(item);
+          setDetailsOpen(true);
+        }}
+        extraActions={(item: any) => (
+          <div className="flex items-center gap-1">
+            {!item.data_fim && (
+              <Button size="icon" variant="ghost" className="text-green-600" title="Finalizar">
+                <CheckCircle className="h-4 w-4" />
+              </Button>
+            )}
+            <Button size="icon" variant="ghost" className="text-blue-600" title="Editar">
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button size="icon" variant="ghost" className="text-red-600" onClick={() => handleExcluir(item.id)} title="Excluir">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       />
 
-      <Dialog open={relatorioOpen} onOpenChange={setRelatorioOpen}>
-        <DialogContent className="max-w-4xl">
+      {/* Modal de Detalhes Estilo Tela de Produções [8, 9] */}
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Análise de Produtividade Avulsa</DialogTitle>
-            <DialogDescription>Volume de metros processados sem Ordem de Produção</DialogDescription>
+            <DialogTitle>Detalhes da Produção Avulsa</DialogTitle>
           </DialogHeader>
           
-          <div className="grid grid-cols-3 gap-4 py-4">
-             <div className="bg-blue-50 p-4 rounded-lg text-center border border-blue-100">
-                <p className="text-xs text-blue-600 font-bold uppercase">Total Registros</p>
-                <p className="text-2xl font-black">{data.length}</p>
-             </div>
-             <div className="bg-green-50 p-4 rounded-lg text-center border border-green-100">
-                <p className="text-xs text-green-600 font-bold uppercase">Total Geral (m)</p>
-                <p className="text-2xl font-black">
-                  {formatNumber(data.reduce((acc, curr: any) => acc + Number(curr.metragem || 0), 0))}
-                </p>
-             </div>
-             <div className="bg-purple-50 p-4 rounded-lg text-center border border-purple-100">
-                <p className="text-xs text-purple-600 font-bold uppercase">Ativos agora</p>
-                <p className="text-2xl font-black">
-                  {data.filter((i: any) => i.status === 'EM_ANDAMENTO').length}
-                </p>
-             </div>
-          </div>
-
-          <div className="h-72 mt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.slice(0, 10)}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="produto_codigo" fontSize={12} />
-                <YAxis fontSize={12} />
-                <Tooltip cursor={{fill: '#f3f4f6'}} />
-                <Bar dataKey="metragem" fill="#3b82f6" radius={9} name="Metros" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          {selectedProducao && (
+            <div className="grid grid-cols-2 gap-6 py-4">
+              <div className="space-y-1">
+                <p className="text-xs font-bold text-gray-400 uppercase">Produto / Portada</p>
+                <p className="text-sm font-semibold text-primary">{selectedProducao.produto_codigo}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-bold text-gray-400 uppercase">Status</p>
+                <p className="text-sm font-semibold">{selectedProducao.status}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-bold text-gray-400 uppercase">Máquina</p>
+                <p className="text-sm font-semibold">{selectedProducao.maquina_nome}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-bold text-gray-400 uppercase">Estágio</p>
+                <p className="text-sm font-semibold">{selectedProducao.estagio_nome}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-bold text-gray-400 uppercase">Operador Início</p>
+                <p className="text-sm font-semibold">{selectedProducao.operador_inicio_nome}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-bold text-gray-400 uppercase">Metragem Final</p>
+                <p className="text-sm font-semibold">{selectedProducao.metragem ? `${formatNumber(selectedProducao.metragem)} m` : 'Pendente'}</p>
+              </div>
+              <div className="space-y-1 border-t pt-2">
+                <p className="text-xs font-bold text-gray-400 uppercase">Data Início</p>
+                <p className="text-sm font-medium flex items-center gap-2"><Clock size={14}/> {formatDate(selectedProducao.data_inicio)}</p>
+              </div>
+              <div className="space-y-1 border-t pt-2">
+                <p className="text-xs font-bold text-gray-400 uppercase">Data Fim</p>
+                <p className="text-sm font-medium flex items-center gap-2"><CheckCircle size={14}/> {selectedProducao.data_fim ? formatDate(selectedProducao.data_fim) : 'Em aberto'}</p>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
