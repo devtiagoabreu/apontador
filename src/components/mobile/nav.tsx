@@ -1,39 +1,64 @@
+// src/components/mobile/nav.tsx
 'use client';
 
-import { Home, QrCode, Factory, Clock, History } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useSession } from 'next-auth/react';
+import { Home, QrCode, Factory, Clock, History } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function MobileNav() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  
+  // Identifica se o usuário está no modo avulso
+  const isAvulso = session?.user?.loginMode === 'avulso';
 
-  const items = [
-    { href: '/apontamento', icon: Home, label: 'Início' },
-    { href: '/apontamento/leitor', icon: QrCode, label: 'Ler QR' },
-    { href: '/apontamento/producoes', icon: Factory, label: 'Produções' },
-    { href: '/apontamento/paradas', icon: Clock, label: 'Paradas' },
-    { href: '/apontamento/historico', icon: History, label: 'Histórico' },
+  // Define as rotas dinamicamente
+  const navItems = [
+    {
+      label: 'Início',
+      href: isAvulso ? '/apontamento/avulso' : '/apontamento',
+      icon: Home,
+    },
+    {
+      label: 'Leitor',
+      href: '/apontamento/leitor',
+      icon: QrCode,
+    },
+    {
+      label: 'Produções',
+      href: isAvulso ? '/apontamento/avulso' : '/apontamento/producoes',
+      icon: Factory,
+    },
+    {
+      label: 'Paradas',
+      href: '/apontamento/paradas',
+      icon: Clock,
+    },
+    {
+      label: 'Histórico',
+      href: '/apontamento/historico',
+      icon: History,
+    },
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-2 py-1 z-50">
-      <div className="flex justify-around">
-        {items.map((item) => {
-          const Icon = item.icon;
-          const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
-          
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 pb-safe">
+      <div className="flex justify-around items-center h-16">
+        {navItems.map((item) => {
+          const isActive = pathname === item.href;
           return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
-                'flex flex-col items-center py-2 px-3 rounded-lg transition-colors',
-                isActive ? 'text-primary' : 'text-gray-500 hover:text-gray-900'
+                "flex flex-col items-center justify-center flex-1 h-full gap-1",
+                isActive ? "text-primary" : "text-gray-400"
               )}
             >
-              <Icon className="h-6 w-6" />
-              <span className="text-xs mt-1">{item.label}</span>
+              <item.icon className="h-6 w-6" />
+              <span className="text-[10px] font-medium">{item.label}</span>
             </Link>
           );
         })}
