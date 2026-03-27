@@ -249,7 +249,7 @@ Abra um Pull Request 🚀
 ---
 
 ## 📝 Licença
-Definir licença do projeto.
+MIT.
 
 ---
 
