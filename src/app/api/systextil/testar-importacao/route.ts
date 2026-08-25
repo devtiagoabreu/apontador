@@ -3,9 +3,12 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { systextilService } from '@/lib/systextil';
-import { eq } from 'drizzle-orm';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const sistemaId = searchParams.get('sistema_id') || undefined;
+  const apiId = searchParams.get('api_id') || undefined;
+
   const result: any = {
     timestamp: new Date().toISOString(),
     apiData: null,
@@ -14,17 +17,18 @@ export async function GET() {
   };
 
   try {
-    // Buscar dados da API
-    const opsImportadas = await systextilService.importarOps();
+    if (!sistemaId) {
+      throw new Error('sistema_id é obrigatório');
+    }
+
+    const opsImportadas = await systextilService.importarOps(sistemaId, apiId);
     result.apiData = {
       total: opsImportadas.length,
       amostra: opsImportadas.slice(0, 3),
     };
 
-    // Processar cada OP e verificar o que seria inserido
     for (const opData of opsImportadas) {
       try {
-        // Verificar se OP já existe - CORRIGIDO: usando opData.op (minúsculo)
         const opExistente = await db.query.ops.findFirst({
           where: (ops, { eq }) => eq(ops.op, opData.op),
         });
