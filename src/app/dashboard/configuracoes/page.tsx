@@ -24,11 +24,10 @@ interface ConfigGeral {
 }
 
 interface ConfigApi {
-  systextilUrl: string;
-  systextilToken: string;
-  systextilTimeout: number;
-  systextilRetryAttempts: number;
-  systextilRetryDelay: number;
+  systextilTokenUrl: string;
+  systextilApiUrl: string;
+  systextilClientId: string;
+  systextilClientSecret: string;
   webhookUrl: string;
   webhookSecret: string;
   webhookAtivo: boolean;
@@ -61,11 +60,10 @@ const defaultConfigGeral: ConfigGeral = {
 };
 
 const defaultConfigApi: ConfigApi = {
-  systextilUrl: '',
-  systextilToken: '',
-  systextilTimeout: 30000,
-  systextilRetryAttempts: 3,
-  systextilRetryDelay: 1000,
+  systextilTokenUrl: 'https://promoda.systextil.com.br/apexbd/erp/oauth/token',
+  systextilApiUrl: 'https://promoda.systextil.com.br/apexbd/erp/systextil-intg-plm/api_apontador_ops',
+  systextilClientId: '',
+  systextilClientSecret: '',
   webhookUrl: '',
   webhookSecret: '',
   webhookAtivo: false,
@@ -361,33 +359,55 @@ export default function ConfiguracoesPage() {
               <CardHeader>
                 <CardTitle>Systextil</CardTitle>
                 <CardDescription>
-                  Configuração de integração com o ERP Systextil
+                  Configuração de integração com o ERP Systextil (OAuth2 Client Credentials)
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="systextilUrl">URL da API</Label>
+                    <Label htmlFor="systextilTokenUrl">URL do Token OAuth</Label>
                     <Input
-                      id="systextilUrl"
-                      value={configApi.systextilUrl}
+                      id="systextilTokenUrl"
+                      value={configApi.systextilTokenUrl}
                       onChange={(e) =>
-                        setConfigApi({ ...configApi, systextilUrl: e.target.value })
+                        setConfigApi({ ...configApi, systextilTokenUrl: e.target.value })
                       }
-                      placeholder="https://api.systextil.com.br/v1"
+                      placeholder="https://promoda.systextil.com.br/apexbd/erp/oauth/token"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="systextilApiUrl">URL da API de Dados (OPs)</Label>
+                    <Input
+                      id="systextilApiUrl"
+                      value={configApi.systextilApiUrl}
+                      onChange={(e) =>
+                        setConfigApi({ ...configApi, systextilApiUrl: e.target.value })
+                      }
+                      placeholder="https://promoda.systextil.com.br/apexbd/erp/systextil-intg-plm/api_apontador_ops"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="systextilToken">Token de Acesso</Label>
+                    <Label htmlFor="systextilClientId">Client ID</Label>
+                    <Input
+                      id="systextilClientId"
+                      value={configApi.systextilClientId}
+                      onChange={(e) =>
+                        setConfigApi({ ...configApi, systextilClientId: e.target.value })
+                      }
+                      placeholder="vM_z3JIQSR7fMml912X4Wg.."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="systextilClientSecret">Client Secret</Label>
                     <div className="relative">
                       <Input
-                        id="systextilToken"
+                        id="systextilClientSecret"
                         type={showToken ? 'text' : 'password'}
-                        value={configApi.systextilToken}
+                        value={configApi.systextilClientSecret}
                         onChange={(e) =>
-                          setConfigApi({ ...configApi, systextilToken: e.target.value })
+                          setConfigApi({ ...configApi, systextilClientSecret: e.target.value })
                         }
-                        placeholder="Bearer token..."
+                        placeholder="v6CnE7I6vI6JkYn7DOIQ6A.."
                         className="pr-10"
                       />
                       <Button
@@ -405,48 +425,16 @@ export default function ConfiguracoesPage() {
                       </Button>
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="systextilTimeout">Timeout (ms)</Label>
-                    <Input
-                      id="systextilTimeout"
-                      type="number"
-                      value={configApi.systextilTimeout}
-                      onChange={(e) =>
-                        setConfigApi({
-                          ...configApi,
-                          systextilTimeout: parseInt(e.target.value) || 0,
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="systextilRetryAttempts">Tentativas de Retry</Label>
-                    <Input
-                      id="systextilRetryAttempts"
-                      type="number"
-                      value={configApi.systextilRetryAttempts}
-                      onChange={(e) =>
-                        setConfigApi({
-                          ...configApi,
-                          systextilRetryAttempts: parseInt(e.target.value) || 0,
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="systextilRetryDelay">Delay entre Retries (ms)</Label>
-                    <Input
-                      id="systextilRetryDelay"
-                      type="number"
-                      value={configApi.systextilRetryDelay}
-                      onChange={(e) =>
-                        setConfigApi({
-                          ...configApi,
-                          systextilRetryDelay: parseInt(e.target.value) || 0,
-                        })
-                      }
-                    />
-                  </div>
+                </div>
+
+                <div className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">
+                  <p className="font-medium mb-1">Como funciona:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>O <strong>Client ID</strong> e <strong>Client Secret</strong> são codificados em Base64 e enviados via header <code>Authorization: Basic</code></li>
+                    <li>O token OAuth é obtido automaticamente via <code>POST</code> na URL do token com <code>grant_type=client_credentials</code></li>
+                    <li>O token é cacheado em memória e renovado 60 segundos antes de expirar</li>
+                    <li>Os dados das OPs são buscados via <code>GET</code> na URL da API com <code>Authorization: Bearer</code></li>
+                  </ul>
                 </div>
               </CardContent>
             </Card>
