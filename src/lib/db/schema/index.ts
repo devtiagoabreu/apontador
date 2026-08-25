@@ -13,3 +13,5 @@ export * from './apontamentos';
 export * from './paradas-maquina';
 export * from './producoes';
 export * from './producoes-avulsas';
+export * from './configuracoes';
+export * from './apis-integracao';

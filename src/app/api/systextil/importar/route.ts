@@ -7,26 +7,37 @@ import { produtos } from '@/lib/db/schema/produtos';
 import { systextilService } from '@/lib/systextil';
 import { eq } from 'drizzle-orm';
 
-export async function POST() {
+export async function POST(request: Request) {
+  let apiId: string | undefined;
+
+  try {
+    const body = await request.text();
+    if (body) {
+      const parsed = JSON.parse(body);
+      apiId = parsed.api_id;
+    }
+  } catch {
+    // body vazio, segue sem api_id
+  }
+
   const resultado = {
     sucesso: false,
     importadas: 0,
     ignoradas: 0,
     erros: [] as any[],
-    detalhes: [] as any[]
+    detalhes: [] as any[],
   };
 
   try {
-    const opsImportadas = await systextilService.importarOps();
-    
+    const opsImportadas = await systextilService.importarOps(apiId);
+
     for (const opData of opsImportadas) {
       try {
-        // VALIDAÇÃO usando os campos minúsculos
         if (!opData.op) {
           resultado.erros.push({
             tipo: 'OP inválida',
             dados: opData,
-            motivo: 'Campo op é obrigatório'
+            motivo: 'Campo op é obrigatório',
           });
           continue;
         }
@@ -35,12 +46,11 @@ export async function POST() {
           resultado.erros.push({
             op: opData.op,
             tipo: 'Produto inválido',
-            motivo: 'Campo produto é obrigatório'
+            motivo: 'Campo produto é obrigatório',
           });
           continue;
         }
 
-        // Verificar se OP já existe
         const opExistente = await db.query.ops.findFirst({
           where: eq(ops.op, opData.op),
         });
@@ -50,17 +60,15 @@ export async function POST() {
           resultado.detalhes.push({
             op: opData.op,
             status: 'ignorada',
-            motivo: 'Já existe no banco'
+            motivo: 'Já existe no banco',
           });
           continue;
         }
 
-        // Buscar produto correspondente
         const produtoExistente = await db.query.produtos.findFirst({
           where: eq(produtos.codigo, opData.produto),
         });
 
-        // Inserir nova OP
         await db.insert(ops).values({
           op: opData.op,
           produto: opData.produto,
@@ -89,26 +97,27 @@ export async function POST() {
         resultado.detalhes.push({
           op: opData.op,
           status: 'importada',
-          produto: opData.produto
+          produto: opData.produto,
         });
-
       } catch (err) {
         resultado.erros.push({
           op: opData.op,
           erro: err instanceof Error ? err.message : String(err),
-          dados: opData
+          dados: opData,
         });
       }
     }
 
     resultado.sucesso = true;
-
   } catch (error) {
-    return NextResponse.json({
-      sucesso: false,
-      erro: error instanceof Error ? error.message : 'Erro desconhecido',
-      resultado
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        sucesso: false,
+        erro: error instanceof Error ? error.message : 'Erro desconhecido',
+        resultado,
+      },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json(resultado);

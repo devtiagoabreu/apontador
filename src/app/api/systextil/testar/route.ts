@@ -1,28 +1,69 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { env } from '@/lib/env';
+import { db } from '@/lib/db';
+import { configuracoes } from '@/lib/db/schema/configuracoes';
+import { apisIntegracao } from '@/lib/db/schema/apis-integracao';
+import { eq } from 'drizzle-orm';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const apiId = searchParams.get('api_id');
+
   const diagnostics: any = {
     timestamp: new Date().toISOString(),
     steps: [],
     error: null,
-    data: null
+    data: null,
   };
 
   try {
+    // Buscar configs do banco
+    const configRows = await db.select().from(configuracoes);
+    const config: Record<string, string> = {};
+    for (const row of configRows) {
+      config[row.chave] = row.valor || '';
+    }
+
+    const clientId = config.systextil_client_id;
+    const clientSecret = config.systextil_client_secret;
+    const tokenUrl = config.systextil_token_url;
+
+    if (!clientId || !clientSecret || !tokenUrl) {
+      throw new Error(
+        'Configurações incompletas. Preencha systextil_client_id, systextil_client_secret e systextil_token_url na tela de Configurações.'
+      );
+    }
+
+    // Buscar API selecionada ou ativa
+    let api;
+    if (apiId) {
+      const [found] = await db
+        .select()
+        .from(apisIntegracao)
+        .where(eq(apisIntegracao.id, apiId));
+      api = found;
+    } else {
+      const [found] = await db
+        .select()
+        .from(apisIntegracao)
+        .where(eq(apisIntegracao.ativa, true));
+      api = found;
+    }
+
+    if (!api) {
+      throw new Error('Nenhuma API de integração configurada ou ativa.');
+    }
+
     // Passo 1: Obter token
     diagnostics.steps.push({ step: 'Obtendo token...', status: 'iniciado' });
-    
-    const credentials = Buffer.from(
-      `${env.SYSTEXTIL_CLIENT_ID}:${env.SYSTEXTIL_CLIENT_SECRET}`
-    ).toString('base64');
 
-    const tokenResponse = await fetch(env.SYSTEXTIL_TOKEN_URL, {
+    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+
+    const tokenResponse = await fetch(tokenUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Basic ${credentials}`,
+        Authorization: `Basic ${credentials}`,
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: 'grant_type=client_credentials',
@@ -34,7 +75,7 @@ export async function GET() {
       diagnostics.steps[0].error = {
         status: tokenResponse.status,
         statusText: tokenResponse.statusText,
-        body: tokenError
+        body: tokenError,
       };
       throw new Error(`Erro no token: ${tokenResponse.statusText}`);
     }
@@ -47,11 +88,11 @@ export async function GET() {
     };
 
     // Passo 2: Chamar API de OPs
-    diagnostics.steps.push({ step: 'Buscando OPs...', status: 'iniciado' });
+    diagnostics.steps.push({ step: `Buscando OPs em ${api.nome}...`, status: 'iniciado' });
 
-    const apiResponse = await fetch(env.SYSTEXTIL_API_URL, {
+    const apiResponse = await fetch(api.apiUrl, {
       headers: {
-        'Authorization': `Bearer ${tokenData.access_token}`,
+        Authorization: `Bearer ${tokenData.access_token}`,
         'Content-Type': 'application/json',
       },
     });
@@ -62,15 +103,14 @@ export async function GET() {
       diagnostics.steps[1].error = {
         status: apiResponse.status,
         statusText: apiResponse.statusText,
-        body: apiError
+        body: apiError,
       };
       throw new Error(`Erro na API: ${apiResponse.statusText}`);
     }
 
     const apiData = await apiResponse.json();
     diagnostics.steps[1].status = 'sucesso';
-    
-    // Analisar os dados recebidos
+
     const items = apiData.items || [];
     diagnostics.data = {
       total: items.length,
@@ -79,9 +119,8 @@ export async function GET() {
       analise: {
         opsComOpNula: items.filter((item: any) => !item.op).length,
         opsComProdutoNulo: items.filter((item: any) => !item.produto).length,
-      }
+      },
     };
-
   } catch (error) {
     diagnostics.error = error instanceof Error ? error.message : String(error);
   }

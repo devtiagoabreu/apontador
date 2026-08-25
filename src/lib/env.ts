@@ -7,10 +7,12 @@ export const env = createEnv({
     DATABASE_URL: z.string().url(),
     NEXTAUTH_URL: z.string().url(),
     NEXTAUTH_SECRET: z.string().min(1),
-    SYSTEXTIL_CLIENT_ID: z.string().min(1),
-    SYSTEXTIL_CLIENT_SECRET: z.string().min(1),
-    SYSTEXTIL_TOKEN_URL: z.string().url(),
-    SYSTEXTIL_API_URL: z.string().url(),
+    // Configurações Systextil agora ficam no banco de dados (tabela configuracoes)
+    // Mantidas como opcionais para backward compatibility durante migração
+    SYSTEXTIL_CLIENT_ID: z.string().min(1).optional(),
+    SYSTEXTIL_CLIENT_SECRET: z.string().min(1).optional(),
+    SYSTEXTIL_TOKEN_URL: z.string().url().optional(),
+    SYSTEXTIL_API_URL: z.string().url().optional(),
   },
   client: {
     NEXT_PUBLIC_APP_URL: z.string().url().optional(),
