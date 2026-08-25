@@ -272,8 +272,8 @@ export default function OpsPage() {
   const [estagioSelecionado, setEstagioSelecionado] = useState<string>('');
   const [maquinaSelecionada, setMaquinaSelecionada] = useState<string>('');
 
-  // Estados para modal de importação
-  const [importModalOpen, setImportModalOpen] = useState(false);
+  // Estados para modal de configuração de API
+  const [configApiOpen, setConfigApiOpen] = useState(false);
   const [sistemas, setSistemas] = useState<any[]>([]);
   const [sistemaSelecionado, setSistemaSelecionado] = useState('');
   const [apiSelecionada, setApiSelecionada] = useState('');
@@ -394,9 +394,21 @@ export default function OpsPage() {
 
   async function carregarSistemas() {
     try {
-      const response = await fetch('/api/sistemas-integracao');
-      const data = await response.json();
-      setSistemas(data.filter((s: any) => s.ativa));
+      const [sistemasRes, configRes] = await Promise.all([
+        fetch('/api/sistemas-integracao'),
+        fetch('/api/configuracoes'),
+      ]);
+
+      if (sistemasRes.ok) {
+        const data = await sistemasRes.json();
+        setSistemas(data.filter((s: any) => s.ativa));
+      }
+
+      if (configRes.ok) {
+        const config = await configRes.json();
+        if (config.import_sistema_id) setSistemaSelecionado(config.import_sistema_id);
+        if (config.import_api_id) setApiSelecionada(config.import_api_id);
+      }
     } catch (error) {
       console.error('Erro ao carregar sistemas:', error);
     }
@@ -436,13 +448,16 @@ export default function OpsPage() {
     }
   }
 
-  async function importarOps(sistemaId?: string, apiId?: string) {
+  async function importarOps() {
+    if (!sistemaSelecionado) {
+      toast({ title: 'Aviso', description: 'Configure a API de importação primeiro (botão Config API)', variant: 'warning' });
+      return;
+    }
+
     setImporting(true);
-    setImportModalOpen(false);
     try {
-      const body: any = {};
-      if (sistemaId) body.sistema_id = sistemaId;
-      if (apiId) body.api_id = apiId;
+      const body: any = { sistema_id: sistemaSelecionado };
+      if (apiSelecionada) body.api_id = apiSelecionada;
 
       const response = await fetch('/api/systextil/importar', {
         method: 'POST',
@@ -470,6 +485,31 @@ export default function OpsPage() {
       });
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function salvarConfigApi() {
+    if (!sistemaSelecionado) {
+      toast({ title: 'Aviso', description: 'Selecione um sistema', variant: 'warning' });
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/configuracoes', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          import_sistema_id: sistemaSelecionado,
+          import_api_id: apiSelecionada || '',
+        }),
+      });
+
+      if (!res.ok) throw new Error();
+
+      toast({ title: 'Sucesso', description: 'Configuração de importação salva' });
+      setConfigApiOpen(false);
+    } catch {
+      toast({ title: 'Erro', description: 'Erro ao salvar configuração', variant: 'destructive' });
     }
   }
 
@@ -976,15 +1016,19 @@ export default function OpsPage() {
           </Button>
 
           <Button 
+            variant="outline"
             onClick={() => {
-              if (sistemas.length === 0) {
-                toast({ title: 'Aviso', description: 'Nenhum sistema de integração configurado. Cadastre em Configurações.', variant: 'warning' });
-                return;
-              }
-              setSistemaSelecionado('');
-              setApiSelecionada('');
-              setImportModalOpen(true);
+              setSistemaSelecionado(sistemaSelecionado);
+              setApiSelecionada(apiSelecionada);
+              setConfigApiOpen(true);
             }}
+          >
+            <Settings2 className="mr-2 h-4 w-4" />
+            Config API
+          </Button>
+
+          <Button 
+            onClick={importarOps} 
             disabled={importing}
           >
             {importing ? (
@@ -1424,12 +1468,12 @@ export default function OpsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Importação */}
-      <Dialog open={importModalOpen} onOpenChange={setImportModalOpen}>
+      {/* Modal de Configuração de API */}
+      <Dialog open={configApiOpen} onOpenChange={setConfigApiOpen}>
         <DialogContent className="sm:max-w-[450px]">
           <DialogHeader>
-            <DialogTitle>Importar Dados</DialogTitle>
-            <DialogDescription>Selecione o sistema e o endpoint para importar</DialogDescription>
+            <DialogTitle>Configurar API de Importação</DialogTitle>
+            <DialogDescription>Selecione o sistema e endpoint que o botão "Importar" vai usar</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -1467,16 +1511,14 @@ export default function OpsPage() {
                 </select>
               </div>
             )}
+
+            <div className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
+              Esta configuração é salva. O botão "Importar" sempre usará esta API até você alterar.
+            </div>
           </div>
           <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => setImportModalOpen(false)}>Cancelar</Button>
-            <Button
-              disabled={!sistemaSelecionado || importing}
-              onClick={() => importarOps(sistemaSelecionado, apiSelecionada || undefined)}
-            >
-              {importing ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-              {importing ? 'Importando...' : 'Importar'}
-            </Button>
+            <Button variant="outline" onClick={() => setConfigApiOpen(false)}>Cancelar</Button>
+            <Button onClick={salvarConfigApi}>Salvar</Button>
           </div>
         </DialogContent>
       </Dialog>
