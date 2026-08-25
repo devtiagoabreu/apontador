@@ -6,6 +6,6 @@ export const sistemasIntegracao = pgTable('sistemas_integracao', {
   tokenUrl: text('token_url'),
   clientId: text('client_id'),
   clientSecret: text('client_secret'),
-  ativo: boolean('ativo').default(true).notNull(),
+  ativa: boolean('ativa').default(true).notNull(),
   criadoEm: timestamp('criado_em').defaultNow().notNull(),
 });

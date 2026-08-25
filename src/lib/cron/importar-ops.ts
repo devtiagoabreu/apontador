@@ -15,7 +15,7 @@ export async function importarOpsAutomatico(sistemaId?: string) {
       const [sistemaAtivo] = await db
         .select()
         .from(sistemasIntegracao)
-        .where(eq(sistemasIntegracao.ativo, true));
+        .where(eq(sistemasIntegracao.ativa, true));
       if (!sistemaAtivo) {
         console.log('⚠️ Nenhum sistema de integração ativo encontrado');
         return;

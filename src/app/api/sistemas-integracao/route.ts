@@ -40,7 +40,7 @@ export async function POST(request: Request) {
         tokenUrl: tokenUrl || null,
         clientId: clientId || null,
         clientSecret: clientSecret || null,
-        ativo: ativa ?? true,
+        ativa: ativa ?? true,
       })
       .returning();
 
@@ -63,7 +63,7 @@ export async function PUT(request: Request) {
 
     const [atualizado] = await db
       .update(sistemasIntegracao)
-      .set({ nome, tokenUrl, clientId, clientSecret, ativo: ativa })
+      .set({ nome, tokenUrl, clientId, clientSecret, ativa })
       .where(eq(sistemasIntegracao.id, id))
       .returning();
 

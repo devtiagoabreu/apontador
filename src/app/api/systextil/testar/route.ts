@@ -25,7 +25,7 @@ export async function GET(request: Request) {
       const [found] = await db.select().from(sistemasIntegracao).where(eq(sistemasIntegracao.id, sistemaId));
       sistema = found;
     } else {
-      const [found] = await db.select().from(sistemasIntegracao).where(eq(sistemasIntegracao.ativo, true));
+      const [found] = await db.select().from(sistemasIntegracao).where(eq(sistemasIntegracao.ativa, true));
       sistema = found;
     }
 
