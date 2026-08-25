@@ -2,12 +2,13 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { configuracoes } from '@/lib/db/schema/configuracoes';
+import { sistemasIntegracao } from '@/lib/db/schema/sistemas-integracao';
 import { apisIntegracao } from '@/lib/db/schema/apis-integracao';
 import { eq } from 'drizzle-orm';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+  const sistemaId = searchParams.get('sistema_id');
   const apiId = searchParams.get('api_id');
 
   const diagnostics: any = {
@@ -18,49 +19,44 @@ export async function GET(request: Request) {
   };
 
   try {
-    // Buscar configs do banco
-    const configRows = await db.select().from(configuracoes);
-    const config: Record<string, string> = {};
-    for (const row of configRows) {
-      config[row.chave] = row.valor || '';
+    // Buscar sistema
+    let sistema;
+    if (sistemaId) {
+      const [found] = await db.select().from(sistemasIntegracao).where(eq(sistemasIntegracao.id, sistemaId));
+      sistema = found;
+    } else {
+      const [found] = await db.select().from(sistemasIntegracao).where(eq(sistemasIntegracao.ativo, true));
+      sistema = found;
     }
 
-    const clientId = config.systextil_client_id;
-    const clientSecret = config.systextil_client_secret;
-    const tokenUrl = config.systextil_token_url;
-
-    if (!clientId || !clientSecret || !tokenUrl) {
-      throw new Error(
-        'Configurações incompletas. Preencha systextil_client_id, systextil_client_secret e systextil_token_url na tela de Configurações.'
-      );
+    if (!sistema) {
+      throw new Error('Nenhum sistema de integração encontrado.');
     }
 
-    // Buscar API selecionada ou ativa
+    if (!sistema.clientId || !sistema.clientSecret || !sistema.tokenUrl) {
+      throw new Error(`Sistema "${sistema.nome}" com credenciais incompletas.`);
+    }
+
+    // Buscar API
     let api;
     if (apiId) {
-      const [found] = await db
-        .select()
-        .from(apisIntegracao)
-        .where(eq(apisIntegracao.id, apiId));
+      const [found] = await db.select().from(apisIntegracao).where(eq(apisIntegracao.id, apiId));
       api = found;
     } else {
-      const [found] = await db
-        .select()
-        .from(apisIntegracao)
-        .where(eq(apisIntegracao.ativa, true));
+      const [found] = await db.select().from(apisIntegracao).where(eq(apisIntegracao.sistemaId, sistema.id));
       api = found;
     }
 
     if (!api) {
-      throw new Error('Nenhuma API de integração configurada ou ativa.');
+      throw new Error('Nenhuma API configurada para este sistema.');
     }
 
-    // Passo 1: Obter token
-    diagnostics.steps.push({ step: 'Obtendo token...', status: 'iniciado' });
+    // Passo 1: Token
+    diagnostics.steps.push({ step: `Obtendo token para ${sistema.nome}...`, status: 'iniciado' });
 
-    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const credentials = Buffer.from(`${sistema.clientId}:${sistema.clientSecret}`).toString('base64');
 
-    const tokenResponse = await fetch(tokenUrl, {
+    const tokenResponse = await fetch(sistema.tokenUrl, {
       method: 'POST',
       headers: {
         Authorization: `Basic ${credentials}`,
@@ -72,25 +68,19 @@ export async function GET(request: Request) {
     if (!tokenResponse.ok) {
       const tokenError = await tokenResponse.text();
       diagnostics.steps[0].status = 'erro';
-      diagnostics.steps[0].error = {
-        status: tokenResponse.status,
-        statusText: tokenResponse.statusText,
-        body: tokenError,
-      };
+      diagnostics.steps[0].error = { status: tokenResponse.status, statusText: tokenResponse.statusText, body: tokenError };
       throw new Error(`Erro no token: ${tokenResponse.statusText}`);
     }
 
     const tokenData = await tokenResponse.json();
     diagnostics.steps[0].status = 'sucesso';
-    diagnostics.steps[0].tokenInfo = {
-      type: tokenData.token_type,
-      expiresIn: tokenData.expires_in,
-    };
+    diagnostics.steps[0].tokenInfo = { type: tokenData.token_type, expiresIn: tokenData.expires_in };
 
-    // Passo 2: Chamar API de OPs
-    diagnostics.steps.push({ step: `Buscando OPs em ${api.nome}...`, status: 'iniciado' });
+    // Passo 2: API
+    diagnostics.steps.push({ step: `Buscando dados em ${api.nome}...`, status: 'iniciado' });
 
     const apiResponse = await fetch(api.apiUrl, {
+      method: api.metodo as 'GET' | 'POST' | 'PUT',
       headers: {
         Authorization: `Bearer ${tokenData.access_token}`,
         'Content-Type': 'application/json',
@@ -100,11 +90,7 @@ export async function GET(request: Request) {
     if (!apiResponse.ok) {
       const apiError = await apiResponse.text();
       diagnostics.steps[1].status = 'erro';
-      diagnostics.steps[1].error = {
-        status: apiResponse.status,
-        statusText: apiResponse.statusText,
-        body: apiError,
-      };
+      diagnostics.steps[1].error = { status: apiResponse.status, statusText: apiResponse.statusText, body: apiError };
       throw new Error(`Erro na API: ${apiResponse.statusText}`);
     }
 
@@ -113,6 +99,8 @@ export async function GET(request: Request) {
 
     const items = apiData.items || [];
     diagnostics.data = {
+      sistema: sistema.nome,
+      api: api.nome,
       total: items.length,
       amostra: items.slice(0, 3),
       campos: items.length > 0 ? Object.keys(items[0]) : [],

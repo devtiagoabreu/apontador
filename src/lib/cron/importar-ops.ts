@@ -3,19 +3,32 @@ import { systextilService } from '@/lib/systextil';
 import { db } from '@/lib/db';
 import { ops } from '@/lib/db/schema/ops';
 import { produtos } from '@/lib/db/schema/produtos';
+import { sistemasIntegracao } from '@/lib/db/schema/sistemas-integracao';
 import { eq } from 'drizzle-orm';
 
-export async function importarOpsAutomatico() {
+export async function importarOpsAutomatico(sistemaId?: string) {
   console.log('🔄 Iniciando importação automática de OPs...', new Date().toISOString());
-  
+
   try {
-    const opsImportadas = await systextilService.importarOps();
-    
+    // Se não foi informado sistema, usar o primeiro ativo
+    if (!sistemaId) {
+      const [sistemaAtivo] = await db
+        .select()
+        .from(sistemasIntegracao)
+        .where(eq(sistemasIntegracao.ativo, true));
+      if (!sistemaAtivo) {
+        console.log('⚠️ Nenhum sistema de integração ativo encontrado');
+        return;
+      }
+      sistemaId = sistemaAtivo.id;
+    }
+
+    const opsImportadas = await systextilService.importarOps(sistemaId);
+
     let importadas = 0;
     let ignoradas = 0;
 
     for (const opData of opsImportadas) {
-      // CORRIGIDO: usar opData.op (minúsculo) em vez de opData.OP
       const opExistente = await db.query.ops.findFirst({
         where: eq(ops.op, opData.op),
       });
@@ -57,7 +70,7 @@ export async function importarOpsAutomatico() {
     }
 
     console.log(`✅ Importação automática concluída: ${importadas} importadas, ${ignoradas} ignoradas`);
-    
+
   } catch (error) {
     console.error('❌ Erro na importação automática:', error);
   }

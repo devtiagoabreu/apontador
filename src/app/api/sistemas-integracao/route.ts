@@ -2,25 +2,24 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { sistemasIntegracao } from '@/lib/db/schema/sistemas-integracao';
 import { apisIntegracao } from '@/lib/db/schema/apis-integracao';
 import { eq } from 'drizzle-orm';
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const { searchParams } = new URL(request.url);
-    const sistemaId = searchParams.get('sistema_id');
+    const sistemas = await db.select().from(sistemasIntegracao);
+    const apis = await db.select().from(apisIntegracao);
 
-    let apis;
-    if (sistemaId) {
-      apis = await db.select().from(apisIntegracao).where(eq(apisIntegracao.sistemaId, sistemaId));
-    } else {
-      apis = await db.select().from(apisIntegracao);
-    }
+    const result = sistemas.map((s) => ({
+      ...s,
+      apis: apis.filter((a) => a.sistemaId === s.id),
+    }));
 
-    return NextResponse.json(apis);
+    return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(
-      { erro: error instanceof Error ? error.message : 'Erro ao buscar APIs' },
+      { erro: error instanceof Error ? error.message : 'Erro ao buscar sistemas' },
       { status: 500 }
     );
   }
@@ -28,19 +27,19 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { sistemaId, nome, apiUrl, metodo, ativa } = await request.json();
+    const { nome, tokenUrl, clientId, clientSecret, ativa } = await request.json();
 
-    if (!sistemaId || !nome || !apiUrl) {
-      return NextResponse.json({ erro: 'sistemaId, nome e apiUrl são obrigatórios' }, { status: 400 });
+    if (!nome) {
+      return NextResponse.json({ erro: 'Nome é obrigatório' }, { status: 400 });
     }
 
     const [novo] = await db
-      .insert(apisIntegracao)
+      .insert(sistemasIntegracao)
       .values({
-        sistemaId,
         nome,
-        apiUrl,
-        metodo: metodo || 'GET',
+        tokenUrl: tokenUrl || null,
+        clientId: clientId || null,
+        clientSecret: clientSecret || null,
         ativa: ativa ?? true,
       })
       .returning();
@@ -48,7 +47,7 @@ export async function POST(request: Request) {
     return NextResponse.json(novo, { status: 201 });
   } catch (error) {
     return NextResponse.json(
-      { erro: error instanceof Error ? error.message : 'Erro ao criar API' },
+      { erro: error instanceof Error ? error.message : 'Erro ao criar sistema' },
       { status: 500 }
     );
   }
@@ -56,16 +55,16 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const { id, nome, apiUrl, metodo, ativa } = await request.json();
+    const { id, nome, tokenUrl, clientId, clientSecret, ativa } = await request.json();
 
     if (!id) {
       return NextResponse.json({ erro: 'ID é obrigatório' }, { status: 400 });
     }
 
     const [atualizado] = await db
-      .update(apisIntegracao)
-      .set({ nome, apiUrl, metodo, ativa })
-      .where(eq(apisIntegracao.id, id))
+      .update(sistemasIntegracao)
+      .set({ nome, tokenUrl, clientId, clientSecret, ativa })
+      .where(eq(sistemasIntegracao.id, id))
       .returning();
 
     return NextResponse.json(atualizado);
@@ -85,7 +84,9 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ erro: 'ID é obrigatório' }, { status: 400 });
     }
 
-    await db.delete(apisIntegracao).where(eq(apisIntegracao.id, id));
+    // Excluir APIs vinculadas primeiro
+    await db.delete(apisIntegracao).where(eq(apisIntegracao.sistemaId, id));
+    await db.delete(sistemasIntegracao).where(eq(sistemasIntegracao.id, id));
 
     return NextResponse.json({ sucesso: true });
   } catch (error) {

@@ -1,6 +1,6 @@
 // src/lib/systextil/index.ts
 import { db } from '@/lib/db';
-import { configuracoes } from '@/lib/db/schema/configuracoes';
+import { sistemasIntegracao } from '@/lib/db/schema/sistemas-integracao';
 import { apisIntegracao } from '@/lib/db/schema/apis-integracao';
 import { eq } from 'drizzle-orm';
 
@@ -33,13 +33,12 @@ interface SystextilResponse {
   items: SystextilOP[];
 }
 
-async function getConfiguracoes(): Promise<Record<string, string>> {
-  const rows = await db.select().from(configuracoes);
-  const config: Record<string, string> = {};
-  for (const row of rows) {
-    config[row.chave] = row.valor || '';
-  }
-  return config;
+async function getSistemaById(sistemaId: string) {
+  const [sistema] = await db
+    .select()
+    .from(sistemasIntegracao)
+    .where(eq(sistemasIntegracao.id, sistemaId));
+  return sistema;
 }
 
 async function getApiById(apiId: string) {
@@ -50,36 +49,25 @@ async function getApiById(apiId: string) {
   return api;
 }
 
-async function getApiAtiva() {
-  const [api] = await db
-    .select()
-    .from(apisIntegracao)
-    .where(eq(apisIntegracao.ativa, true));
-  return api;
-}
-
 class SystextilService {
-  private accessToken: string | null = null;
-  private tokenExpiresAt: number | null = null;
+  private tokens: Record<string, { accessToken: string; expiresAt: number }> = {};
 
-  private async getAccessToken(config: Record<string, string>): Promise<string> {
-    if (this.accessToken && this.tokenExpiresAt && Date.now() < this.tokenExpiresAt) {
-      return this.accessToken;
+  private async getAccessToken(sistema: { clientId: string | null; clientSecret: string | null; tokenUrl: string | null }): Promise<string> {
+    const cacheKey = sistema.clientId || '';
+    const cached = this.tokens[cacheKey];
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.accessToken;
     }
 
-    const clientId = config.systextil_client_id;
-    const clientSecret = config.systextil_client_secret;
-    const tokenUrl = config.systextil_token_url;
-
-    if (!clientId || !clientSecret || !tokenUrl) {
+    if (!sistema.clientId || !sistema.clientSecret || !sistema.tokenUrl) {
       throw new Error(
-        'Configurações do Systextil incompletas. Preencha: systextil_token_url, systextil_client_id, systextil_client_secret'
+        'Credenciais incompletas. Preencha Token URL, Client ID e Client Secret no cadastro do sistema.'
       );
     }
 
-    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const credentials = Buffer.from(`${sistema.clientId}:${sistema.clientSecret}`).toString('base64');
 
-    const response = await fetch(tokenUrl, {
+    const response = await fetch(sistema.tokenUrl, {
       method: 'POST',
       headers: {
         Authorization: `Basic ${credentials}`,
@@ -94,23 +82,32 @@ class SystextilService {
 
     const data: SystextilToken = await response.json();
 
-    this.accessToken = data.access_token;
-    this.tokenExpiresAt = Date.now() + data.expires_in * 1000 - 60000;
+    this.tokens[cacheKey] = {
+      accessToken: data.access_token,
+      expiresAt: Date.now() + data.expires_in * 1000 - 60000,
+    };
 
-    return this.accessToken;
+    return this.tokens[cacheKey].accessToken;
   }
 
-  async importarOps(apiId?: string): Promise<SystextilOP[]> {
-    const config = await getConfiguracoes();
-
-    const api = apiId ? await getApiById(apiId) : await getApiAtiva();
-    if (!api) {
-      throw new Error('Nenhuma API de integração configurada ou ativa');
+  async importarOps(sistemaId: string, apiId?: string): Promise<SystextilOP[]> {
+    const sistema = await getSistemaById(sistemaId);
+    if (!sistema) {
+      throw new Error('Sistema de integração não encontrado');
     }
 
-    const token = await this.getAccessToken(config);
+    const api = apiId
+      ? await getApiById(apiId)
+      : (await db.select().from(apisIntegracao).where(eq(apisIntegracao.sistemaId, sistemaId))).find((a) => a.ativa);
+
+    if (!api) {
+      throw new Error('Nenhuma API configurada para este sistema');
+    }
+
+    const token = await this.getAccessToken(sistema);
 
     const response = await fetch(api.apiUrl, {
+      method: api.metodo as 'GET' | 'POST' | 'PUT',
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',

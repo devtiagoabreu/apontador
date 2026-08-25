@@ -22,7 +22,8 @@ import {
   FileText,
   FileSpreadsheet,
   Pencil,
-  Trash2
+  Trash2,
+  Settings2,
 } from 'lucide-react';
 import { formatDate, formatNumber } from '@/lib/utils';
 import {
@@ -271,11 +272,18 @@ export default function OpsPage() {
   const [estagioSelecionado, setEstagioSelecionado] = useState<string>('');
   const [maquinaSelecionada, setMaquinaSelecionada] = useState<string>('');
 
+  // Estados para modal de importação
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [sistemas, setSistemas] = useState<any[]>([]);
+  const [sistemaSelecionado, setSistemaSelecionado] = useState('');
+  const [apiSelecionada, setApiSelecionada] = useState('');
+
   useEffect(() => {
     carregarOps(1);
     carregarEstagios();
     carregarMaquinas();
     carregarMotivosCancelamento();
+    carregarSistemas();
   }, []);
 
   useEffect(() => {
@@ -384,6 +392,16 @@ export default function OpsPage() {
     }
   }
 
+  async function carregarSistemas() {
+    try {
+      const response = await fetch('/api/sistemas-integracao');
+      const data = await response.json();
+      setSistemas(data.filter((s: any) => s.ativa));
+    } catch (error) {
+      console.error('Erro ao carregar sistemas:', error);
+    }
+  }
+
   async function carregarOps(page: number = pagination.page) {
     setLoading(true);
     try {
@@ -418,11 +436,18 @@ export default function OpsPage() {
     }
   }
 
-  async function importarOps() {
+  async function importarOps(sistemaId?: string, apiId?: string) {
     setImporting(true);
+    setImportModalOpen(false);
     try {
+      const body: any = {};
+      if (sistemaId) body.sistema_id = sistemaId;
+      if (apiId) body.api_id = apiId;
+
       const response = await fetch('/api/systextil/importar', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
       });
 
       const data = await response.json();
@@ -951,7 +976,15 @@ export default function OpsPage() {
           </Button>
 
           <Button 
-            onClick={importarOps} 
+            onClick={() => {
+              if (sistemas.length === 0) {
+                toast({ title: 'Aviso', description: 'Nenhum sistema de integração configurado. Cadastre em Configurações.', variant: 'warning' });
+                return;
+              }
+              setSistemaSelecionado('');
+              setApiSelecionada('');
+              setImportModalOpen(true);
+            }}
             disabled={importing}
           >
             {importing ? (
@@ -959,7 +992,7 @@ export default function OpsPage() {
             ) : (
               <Download className="mr-2 h-4 w-4" />
             )}
-            {importing ? 'Importando...' : 'Importar do Systêxtil'}
+            {importing ? 'Importando...' : 'Importar'}
           </Button>
 
           <Button 
@@ -1388,6 +1421,63 @@ export default function OpsPage() {
               </Tabs>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Importação */}
+      <Dialog open={importModalOpen} onOpenChange={setImportModalOpen}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle>Importar Dados</DialogTitle>
+            <DialogDescription>Selecione o sistema e o endpoint para importar</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Sistema de Integração</Label>
+              <select
+                value={sistemaSelecionado}
+                onChange={(e) => {
+                  setSistemaSelecionado(e.target.value);
+                  setApiSelecionada('');
+                }}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">Selecione...</option>
+                {sistemas.map((s) => (
+                  <option key={s.id} value={s.id}>{s.nome}</option>
+                ))}
+              </select>
+            </div>
+
+            {sistemaSelecionado && (
+              <div className="space-y-2">
+                <Label>Endpoint</Label>
+                <select
+                  value={apiSelecionada}
+                  onChange={(e) => setApiSelecionada(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">Usar endpoint ativo padrão</option>
+                  {sistemas
+                    .find((s) => s.id === sistemaSelecionado)
+                    ?.apis?.filter((a: any) => a.ativa)
+                    .map((a: any) => (
+                      <option key={a.id} value={a.id}>{a.nome} ({a.metodo})</option>
+                    ))}
+                </select>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setImportModalOpen(false)}>Cancelar</Button>
+            <Button
+              disabled={!sistemaSelecionado || importing}
+              onClick={() => importarOps(sistemaSelecionado, apiSelecionada || undefined)}
+            >
+              {importing ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+              {importing ? 'Importando...' : 'Importar'}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
