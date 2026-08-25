@@ -109,6 +109,11 @@ const navItems: NavItem[] = [
     icon: LayoutDashboard,
   },
   {
+    title: 'Configurações',
+    href: '/dashboard/configuracoes',
+    icon: Settings,
+  },
+  {
     title: 'Teste API',
     href: '/teste-api',
     icon: FileText,
