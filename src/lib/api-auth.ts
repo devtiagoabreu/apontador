@@ -1,18 +1,23 @@
 // src/lib/api-auth.ts
 import { getServerSession } from 'next-auth';
+import type { Session } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 
+type AuthResult =
+  | { session: Session; error: null }
+  | { session: null; error: NextResponse };
+
 /**
  * Verifica autenticação e nível de acesso do usuário.
- * Retorna null se autenticado, ou NextResponse com erro 401/403.
+ * Retorna a sessão se autenticado, ou NextResponse com erro 401/403.
  *
  * @param options.requiredLevel - Nível mínimo exigido ('OPERADOR' ou 'ADM')
  */
 export async function requireAuth(options?: {
   requiredLevel?: 'OPERADOR' | 'ADM';
-}): Promise<{ session: NonNullable<Awaited<ReturnType<typeof getServerSession>>>; error: null } | { session: null; error: NextResponse }> {
-  const session = await getServerSession(authOptions);
+}): Promise<AuthResult> {
+  const session = (await getServerSession(authOptions)) as Session | null;
 
   if (!session) {
     return {
