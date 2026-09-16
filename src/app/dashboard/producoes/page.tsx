@@ -1076,10 +1076,23 @@ export default function ProducoesPage() {
               {columns.map((col) => (
                 <th
                   key={col.key}
+                  scope="col"
+                  aria-sort={
+                    sortConfig.key === col.key
+                      ? sortConfig.direction === 'asc' ? 'ascending' : 'descending'
+                      : 'none'
+                  }
                   className={`px-4 py-3 text-left text-sm font-medium text-gray-600 ${
                     col.sortable ? 'cursor-pointer hover:bg-gray-100' : ''
                   }`}
                   onClick={() => col.sortable && handleSort(col.key)}
+                  onKeyDown={(e) => {
+                    if (col.sortable && (e.key === 'Enter' || e.key === ' ')) {
+                      e.preventDefault();
+                      handleSort(col.key);
+                    }
+                  }}
+                  tabIndex={col.sortable ? 0 : undefined}
                 >
                   <div className="flex items-center gap-1">
                     {col.title}
@@ -1101,9 +1114,18 @@ export default function ProducoesPage() {
               <tr
                 key={producao.id}
                 className="border-b hover:bg-gray-50 cursor-pointer"
+                tabIndex={0}
+                aria-label="Ver detalhes da produção"
                 onClick={() => {
                   setSelectedProducao(producao);
                   setDetailsOpen(true);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelectedProducao(producao);
+                    setDetailsOpen(true);
+                  }
                 }}
               >
                 {columns.map((col) => (

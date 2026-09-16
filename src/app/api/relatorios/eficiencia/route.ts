@@ -127,18 +127,20 @@ const filtrosSchema = z.object({
   referencia: z.enum(['produto', 'maquina']).default('produto'),
 });
 
+const formatadorDataBR = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: 'America/Sao_Paulo',
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit'
+});
+
 // Função para formatar data
 function formatarDataBR(data: Date | null): string {
   if (!data) return '';
-  return data.toLocaleString('pt-BR', {
-    timeZone: 'America/Sao_Paulo',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  });
+  return formatadorDataBR.format(data);
 }
 
 export async function POST(request: Request) {
@@ -147,7 +149,7 @@ export async function POST(request: Request) {
   console.log('='.repeat(50));
   
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth({ requiredLevel: 'ADM' });
     if (auth.error) return auth.error;
 
     const body = await request.json();

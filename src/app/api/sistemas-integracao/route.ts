@@ -15,15 +15,20 @@ export async function GET() {
     const sistemas = await db.select().from(sistemasIntegracao);
     const apis = await db.select().from(apisIntegracao);
 
-    const result = sistemas.map((s) => ({
-      ...s,
-      apis: apis.filter((a) => a.sistemaId === s.id),
-    }));
+    const result = sistemas.map((s) => {
+      const { clientSecret, ...rest } = s;
+      return {
+        ...rest,
+        hasSecret: !!clientSecret,
+        clientSecret: clientSecret ? `••••${clientSecret.slice(-4)}` : null,
+        apis: apis.filter((a) => a.sistemaId === s.id),
+      };
+    });
 
     return NextResponse.json(result);
-  } catch (error) {
+  } catch {
     return NextResponse.json(
-      { erro: error instanceof Error ? error.message : 'Erro ao buscar sistemas' },
+      { erro: 'Erro ao buscar sistemas' },
       { status: 500 }
     );
   }
@@ -52,9 +57,9 @@ export async function POST(request: Request) {
       .returning();
 
     return NextResponse.json(novo, { status: 201 });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
-      { erro: error instanceof Error ? error.message : 'Erro ao criar sistema' },
+      { erro: 'Erro ao criar sistema' },
       { status: 500 }
     );
   }
@@ -71,16 +76,21 @@ export async function PUT(request: Request) {
       return NextResponse.json({ erro: 'ID é obrigatório' }, { status: 400 });
     }
 
+    const updateData: Partial<typeof sistemasIntegracao.$inferSelect> = { nome, tokenUrl, clientId, ativa };
+    if (typeof clientSecret === 'string' && clientSecret.trim() !== '' && !clientSecret.startsWith('••••')) {
+      updateData.clientSecret = clientSecret.trim();
+    }
+
     const [atualizado] = await db
       .update(sistemasIntegracao)
-      .set({ nome, tokenUrl, clientId, clientSecret, ativa })
+      .set(updateData)
       .where(eq(sistemasIntegracao.id, id))
       .returning();
 
     return NextResponse.json(atualizado);
-  } catch (error) {
+  } catch {
     return NextResponse.json(
-      { erro: error instanceof Error ? error.message : 'Erro ao atualizar' },
+      { erro: 'Erro ao atualizar' },
       { status: 500 }
     );
   }
@@ -102,9 +112,9 @@ export async function DELETE(request: Request) {
     await db.delete(sistemasIntegracao).where(eq(sistemasIntegracao.id, id));
 
     return NextResponse.json({ sucesso: true });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
-      { erro: error instanceof Error ? error.message : 'Erro ao excluir' },
+      { erro: 'Erro ao excluir' },
       { status: 500 }
     );
   }

@@ -58,6 +58,13 @@ export function DataTable<T extends Record<string, any>>({
                 key={index}
                 className={onRowClick ? 'cursor-pointer hover:bg-gray-50' : ''}
                 onClick={() => onRowClick?.(item)}
+                onKeyDown={(e) => {
+                  if (onRowClick && (e.key === 'Enter' || e.key === ' ')) {
+                    e.preventDefault();
+                    onRowClick(item);
+                  }
+                }}
+                {...(onRowClick ? { tabIndex: 0, 'aria-label': 'Abrir registro' } : {})}
               >
                 {columns.map((column) => (
                   <TableCell key={String(column.key)}>
@@ -74,6 +81,8 @@ export function DataTable<T extends Record<string, any>>({
                         <Button
                           variant="ghost"
                           size="icon"
+                          aria-label="Editar"
+                          title="Editar"
                           onClick={() => onEdit(item)}
                           className="h-8 w-8"
                         >
@@ -84,6 +93,8 @@ export function DataTable<T extends Record<string, any>>({
                         <Button
                           variant="ghost"
                           size="icon"
+                          aria-label="Excluir"
+                          title="Excluir"
                           onClick={() => onDelete(item)}
                           className="h-8 w-8 text-red-600 hover:text-red-700"
                         >

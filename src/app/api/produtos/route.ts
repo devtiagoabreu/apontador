@@ -42,8 +42,8 @@ export async function GET(request: Request) {
     console.log('👤 Sessão:', session?.user?.email);
 
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const page = Math.max(parseInt(searchParams.get('page') || '1'), 1);
+    const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '50'), 1), 100);
     const offset = (page - 1) * limit;
     const search = searchParams.get('search');
 

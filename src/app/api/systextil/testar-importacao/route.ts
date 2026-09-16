@@ -3,8 +3,12 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { systextilService } from '@/lib/systextil';
+import { requireAuth } from '@/lib/api-auth';
 
 export async function GET(request: Request) {
+  const auth = await requireAuth({ requiredLevel: 'ADM' });
+  if (auth.error) return auth.error;
+
   const { searchParams } = new URL(request.url);
   const sistemaId = searchParams.get('sistema_id') || undefined;
   const apiId = searchParams.get('api_id') || undefined;

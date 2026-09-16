@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import { maquinas } from '@/lib/db/schema/maquinas';
 import { maquinaSetor } from '@/lib/db/schema/maquina-setor';
 import { setores } from '@/lib/db/schema/setores';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
 const maquinaSchema = z.object({
@@ -44,25 +44,37 @@ export async function GET() {
       .from(maquinas)
       .orderBy(maquinas.codigo);
 
-    // Buscar setores para cada máquina
-    const maquinasComSetores = await Promise.all(
-      allMaquinas.map(async (maquina) => {
-        const setoresDaMaquina = await db
-          .select({
-            setorId: maquinaSetor.setorId,
-            setorNome: setores.nome,
-          })
-          .from(maquinaSetor)
-          .leftJoin(setores, eq(maquinaSetor.setorId, setores.id))
-          .where(eq(maquinaSetor.maquinaId, maquina.id));
+    // Buscar setores de todas as máquinas em uma única query
+    const maquinaIds = allMaquinas.map(m => m.id);
+    if (maquinaIds.length === 0) {
+      return NextResponse.json([]);
+    }
 
-        return {
-          ...maquina,
-          setoresNomes: setoresDaMaquina.map(s => s.setorNome).join(', '),
-          setores: setoresDaMaquina.map(s => s.setorId),
-        };
+    const setoresRelacionados = await db
+      .select({
+        maquinaId: maquinaSetor.maquinaId,
+        setorId: maquinaSetor.setorId,
+        setorNome: setores.nome,
       })
-    );
+      .from(maquinaSetor)
+      .leftJoin(setores, eq(maquinaSetor.setorId, setores.id))
+      .where(inArray(maquinaSetor.maquinaId, maquinaIds));
+
+    const setoresPorMaquina = new Map<string, { setorId: string; setorNome: string }[]>();
+    for (const rel of setoresRelacionados) {
+      const lista = setoresPorMaquina.get(rel.maquinaId) ?? [];
+      lista.push({ setorId: rel.setorId, setorNome: rel.setorNome || '' });
+      setoresPorMaquina.set(rel.maquinaId, lista);
+    }
+
+    const maquinasComSetores = allMaquinas.map((maquina) => {
+      const lista = setoresPorMaquina.get(maquina.id) ?? [];
+      return {
+        ...maquina,
+        setoresNomes: lista.map(s => s.setorNome).join(', '),
+        setores: lista.map(s => s.setorId),
+      };
+    });
 
     return NextResponse.json(maquinasComSetores);
   } catch (error) {

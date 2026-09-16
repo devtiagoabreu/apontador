@@ -382,7 +382,7 @@ export default function ConfiguracoesPage() {
                         <Button variant="ghost" size="icon" className="h-8 w-8" title="Testar" onClick={() => testarConexao(sistema.id)}>
                           <CheckCircle2 className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar" onClick={() => { setEditingSistema(sistema); setSistemaForm({ nome: sistema.nome, tokenUrl: sistema.tokenUrl || '', clientId: sistema.clientId || '', clientSecret: sistema.clientSecret || '', ativa: sistema.ativa }); setSistemaModalOpen(true); }}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar" onClick={() => { setEditingSistema(sistema); setSistemaForm({ nome: sistema.nome, tokenUrl: sistema.tokenUrl || '', clientId: sistema.clientId || '', clientSecret: '', ativa: sistema.ativa }); setSistemaModalOpen(true); }}>
                           <Pencil className="h-4 w-4" />
                         </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600" title="Excluir" onClick={() => excluirSistema(sistema.id)}>
@@ -512,7 +512,7 @@ export default function ConfiguracoesPage() {
               </div>
               <div className="space-y-2">
                 <Label>Client Secret</Label>
-                <Input type="password" value={sistemaForm.clientSecret} onChange={(e) => setSistemaForm({ ...sistemaForm, clientSecret: e.target.value })} />
+                <Input type="password" value={sistemaForm.clientSecret} onChange={(e) => setSistemaForm({ ...sistemaForm, clientSecret: e.target.value })} placeholder={editingSistema ? 'Deixe em branco para manter o atual' : ''} />
               </div>
             </div>
             <div className="flex items-center space-x-2">

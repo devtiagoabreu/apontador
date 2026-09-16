@@ -178,7 +178,7 @@ export default function QRCodesPage() {
             <div class="qr-grid">
               ${urls.map(url => `
                 <div class="qr-item">
-                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(url)}" />
+                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(url)}" alt="QR code ${url.split('/').pop()}" />
                   <p>${url.split('/').pop()}</p>
                 </div>
               `).join('')}

@@ -1,12 +1,12 @@
 // src/app/dashboard/relatorios/utils/exportar.ts
 import { toast } from '@/components/ui/use-toast';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import ExcelJS from 'exceljs';
-import { saveAs } from 'file-saver';
 
 export async function exportarPDF(dados: any[], tipo: string, periodo: { inicio: Date; fim: Date }) {
   try {
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable'),
+    ]);
     const doc = new jsPDF();
     
     // Título
@@ -53,6 +53,10 @@ export async function exportarPDF(dados: any[], tipo: string, periodo: { inicio:
 
 export async function exportarExcel(dados: any[], tipo: string, periodo: { inicio: Date; fim: Date }) {
   try {
+    const [{ default: ExcelJS }, { default: saveAs }] = await Promise.all([
+      import('exceljs'),
+      import('file-saver'),
+    ]);
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Relatório');
 

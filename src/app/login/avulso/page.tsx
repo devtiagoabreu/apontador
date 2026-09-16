@@ -116,12 +116,14 @@ function LoginAvulsoContent() {
         
         <CardContent>
           {!showQRReader ? (
-            <div className="space-y-4">
+            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleLogin(matricula); }}>
               <div className="space-y-2">
-                <Label>Matrícula do Operador</Label>
+                <Label htmlFor="matricula-avulso">Matrícula do Operador</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
                   <Input
+                    id="matricula-avulso"
+                    autoComplete="username"
                     placeholder="Ex: OPERA001"
                     className="pl-10 h-12 text-lg uppercase"
                     value={matricula}
@@ -132,6 +134,7 @@ function LoginAvulsoContent() {
               </div>
 
               <Button 
+                type="submit"
                 className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-lg font-bold" 
                 onClick={() => handleLogin(matricula)}
                 disabled={isLoading || !matricula}
@@ -145,6 +148,7 @@ function LoginAvulsoContent() {
               </div>
 
               <Button 
+                type="button"
                 variant="outline" 
                 className="w-full h-12 border-blue-200 text-blue-700" 
                 onClick={() => setShowQRReader(true)}
@@ -152,7 +156,7 @@ function LoginAvulsoContent() {
               >
                 <QrCode className="mr-2 h-5 w-5" /> Ler Crachá (QR Code)
               </Button>
-            </div>
+            </form>
           ) : (
             <div className="space-y-4">
               <div id="qr-reader-avulso" className="w-full rounded-lg overflow-hidden border-2 border-blue-100" />

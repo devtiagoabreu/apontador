@@ -19,7 +19,7 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth({ requiredLevel: 'ADM' });
     if (auth.error) return auth.error;
 
     const body = await request.json();

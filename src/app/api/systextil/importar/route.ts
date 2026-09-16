@@ -6,8 +6,12 @@ import { ops } from '@/lib/db/schema/ops';
 import { produtos } from '@/lib/db/schema/produtos';
 import { systextilService } from '@/lib/systextil';
 import { eq } from 'drizzle-orm';
+import { requireAuth } from '@/lib/api-auth';
 
 export async function POST(request: Request) {
+  const auth = await requireAuth({ requiredLevel: 'ADM' });
+  if (auth.error) return auth.error;
+
   let sistemaId: string | undefined;
   let apiId: string | undefined;
 

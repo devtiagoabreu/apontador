@@ -75,12 +75,14 @@ function LoginContent() {
         </CardHeader>
         <CardContent>
           {!showQRReader ? (
-            <div className="space-y-4">
+            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleLogin(matricula, senha); }}>
               <div className="space-y-2">
-                <Label>Matrícula</Label>
+                <Label htmlFor="matricula">Matrícula</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
                   <Input 
+                    id="matricula"
+                    autoComplete="username"
                     className="pl-10 h-12 text-lg uppercase" 
                     value={matricula} 
                     onChange={(e) => setMatricula(e.target.value.toUpperCase())} 
@@ -88,16 +90,16 @@ function LoginContent() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Senha (ADM)</Label>
-                <Input className="h-12" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} />
+                <Label htmlFor="senha">Senha (ADM)</Label>
+                <Input id="senha" autoComplete="current-password" className="h-12" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} />
               </div>
-              <Button className="w-full h-12 text-lg" onClick={() => handleLogin(matricula, senha)} disabled={isLoading}>
+              <Button type="submit" className="w-full h-12 text-lg" onClick={() => handleLogin(matricula, senha)} disabled={isLoading}>
                 {isLoading ? <Loader2 className="animate-spin" /> : 'Entrar'}
               </Button>
-              <Button variant="outline" className="w-full h-12" onClick={() => setShowQRReader(true)}>
+              <Button type="button" variant="outline" className="w-full h-12" onClick={() => setShowQRReader(true)}>
                 <QrCode className="mr-2 h-5 w-5" /> Ler QR Code
               </Button>
-            </div>
+            </form>
           ) : (
             <div className="space-y-4">
               <div id="qr-reader" className="w-full rounded-lg overflow-hidden border" />

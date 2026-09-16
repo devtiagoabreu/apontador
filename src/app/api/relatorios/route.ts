@@ -83,18 +83,20 @@ const filtrosSchema = z.object({
   referencia: z.enum(['produto', 'maquina']).optional().default('produto'),
 });
 
+const formatadorDataBR = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: 'America/Sao_Paulo',
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit'
+});
+
 // Função para formatar data
 function formatarDataBR(data: Date | null): string {
   if (!data) return '';
-  return data.toLocaleString('pt-BR', {
-    timeZone: 'America/Sao_Paulo',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  });
+  return formatadorDataBR.format(data);
 }
 
 export async function GET(request: Request) {
@@ -243,7 +245,7 @@ export async function GET(request: Request) {
 
     // Processar dados
     console.log('🔄 Processando dados...');
-    const dadosProcessados: DadoProcessado[] = await Promise.all(result.rows.map(async (row: any) => {
+    const dadosProcessados: DadoProcessado[] = result.rows.map((row: any) => {
       const rowData = row as RowData;
       
       // Extrair grupo do produto da OP
@@ -303,7 +305,7 @@ export async function GET(request: Request) {
         eficienciaProduto: Math.round(eficienciaProduto * 100) / 100,
         eficienciaMaquina: Math.round(eficienciaMaquina * 100) / 100,
       };
-    }));
+    });
 
     console.log(`✅ Processados ${dadosProcessados.length} registros`);
 

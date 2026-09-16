@@ -5,8 +5,12 @@ import { db } from '@/lib/db';
 import { sistemasIntegracao } from '@/lib/db/schema/sistemas-integracao';
 import { apisIntegracao } from '@/lib/db/schema/apis-integracao';
 import { eq } from 'drizzle-orm';
+import { requireAuth } from '@/lib/api-auth';
 
 export async function GET(request: Request) {
+  const auth = await requireAuth({ requiredLevel: 'ADM' });
+  if (auth.error) return auth.error;
+
   const { searchParams } = new URL(request.url);
   const sistemaId = searchParams.get('sistema_id');
   const apiId = searchParams.get('api_id');
