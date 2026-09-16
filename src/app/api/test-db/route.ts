@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { db, testConnection } from '@/lib/db';  // Importar de @/lib/db, não de caminho relativo
 import { sql } from 'drizzle-orm';
+import { requireAuth } from '@/lib/api-auth';
 
 export async function GET() {
+  const auth = await requireAuth({ requiredLevel: 'ADM' });
+  if (auth.error) return auth.error;
+
   try {
     console.log('🔄 Testando conexão...');
     

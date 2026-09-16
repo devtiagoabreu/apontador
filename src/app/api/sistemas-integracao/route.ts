@@ -5,9 +5,13 @@ import { db } from '@/lib/db';
 import { sistemasIntegracao } from '@/lib/db/schema/sistemas-integracao';
 import { apisIntegracao } from '@/lib/db/schema/apis-integracao';
 import { eq } from 'drizzle-orm';
+import { requireAuth } from '@/lib/api-auth';
 
 export async function GET() {
   try {
+    const auth = await requireAuth({ requiredLevel: 'ADM' });
+    if (auth.error) return auth.error;
+
     const sistemas = await db.select().from(sistemasIntegracao);
     const apis = await db.select().from(apisIntegracao);
 
@@ -27,6 +31,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const auth = await requireAuth({ requiredLevel: 'ADM' });
+    if (auth.error) return auth.error;
+
     const { nome, tokenUrl, clientId, clientSecret, ativa } = await request.json();
 
     if (!nome) {
@@ -55,6 +62,9 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
+    const auth = await requireAuth({ requiredLevel: 'ADM' });
+    if (auth.error) return auth.error;
+
     const { id, nome, tokenUrl, clientId, clientSecret, ativa } = await request.json();
 
     if (!id) {
@@ -78,6 +88,9 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const auth = await requireAuth({ requiredLevel: 'ADM' });
+    if (auth.error) return auth.error;
+
     const { id } = await request.json();
 
     if (!id) {

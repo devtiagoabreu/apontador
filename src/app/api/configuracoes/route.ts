@@ -3,9 +3,13 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { configuracoes } from '@/lib/db/schema/configuracoes';
+import { requireAuth } from '@/lib/api-auth';
 
 export async function GET() {
   try {
+    const auth = await requireAuth({ requiredLevel: 'ADM' });
+    if (auth.error) return auth.error;
+
     const rows = await db.select().from(configuracoes);
     const config: Record<string, string> = {};
     for (const row of rows) {
@@ -22,6 +26,9 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
+    const auth = await requireAuth({ requiredLevel: 'ADM' });
+    if (auth.error) return auth.error;
+
     const dados = await request.json();
 
     for (const [chave, valor] of Object.entries(dados)) {

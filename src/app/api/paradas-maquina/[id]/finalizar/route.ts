@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { paradasMaquina } from '@/lib/db/schema/paradas-maquina';
 import { maquinas } from '@/lib/db/schema/maquinas';
@@ -19,12 +18,12 @@ export async function POST(
   console.log('🔍 ID da parada:', params.id);
   
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
+    const auth = await requireAuth();
+    if (auth.error) {
       console.log('❌ Não autorizado');
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+      return auth.error;
     }
+    const session = auth.session;
 
     console.log('👤 Usuário:', session.user.id);
 

@@ -1,8 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { sql } from 'drizzle-orm';
 
@@ -17,7 +16,8 @@ export async function GET() {
 
   try {
     // Passo 1: Verificar autenticação
-    const session = await getServerSession(authOptions);
+    const auth = await requireAuth();
+    const session = auth.session;
     diagnostico.autenticacao = !!session;
     diagnostico.steps.push({ 
       step: 'Autenticação', 

@@ -106,7 +106,7 @@ export default function ParadasPage() {
                   <p className="text-sm text-gray-600 mt-1">{parada.motivo?.descricao}</p>
                   
                   {parada.observacoes && (
-                    <p className="text-xs text-gray-500 mt-1 italic">"{parada.observacoes}"</p>
+                    <p className="text-xs text-gray-500 mt-1 italic">{'\u201C'}{parada.observacoes}{'\u201D'}</p>
                   )}
                   
                   <div className="flex items-center gap-1 text-xs text-gray-400 mt-2">

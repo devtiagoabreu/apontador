@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { ops } from '@/lib/db/schema/ops';
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, desc, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { requireAuth } from '@/lib/api-auth';
 
 const opSchema = z.object({
   op: z.number().int().positive(),
@@ -20,52 +21,55 @@ const opSchema = z.object({
   maquinaAtual: z.string().optional().default('NENHUMA'),
 });
 
+const validStatuses = ['ABERTA', 'EM_ANDAMENTO', 'FINALIZADA', 'CANCELADA'] as const;
+
 export async function GET(request: Request) {
-  console.log('📦 GET /api/ops - Iniciando');
-  
   try {
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
+
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = (page - 1) * limit;
-    const status = searchParams.get('status');
-
-    console.log(`📊 Buscando OPs - página ${page}, limite ${limit}, status: ${status}`);
+    const statusParam = searchParams.get('status');
 
     let allOps;
     let totalCount;
 
-    if (status) {
-      // Se tiver filtro de status, usar SQL raw
-      const statusList = status.split(',').map(s => `'${s}'`).join(',');
-      
-      const result = await db.execute(sql`
-        SELECT * FROM ops 
-        WHERE status IN (${sql.raw(statusList)})
-        ORDER BY data_importacao DESC
-        LIMIT ${limit} OFFSET ${offset}
-      `);
-      allOps = result.rows;
+    if (statusParam) {
+      const statusList = statusParam.split(',').filter(s => 
+        validStatuses.includes(s as typeof validStatuses[number])
+      );
 
-      const countResult = await db.execute(sql`
-        SELECT COUNT(*) as count 
-        FROM ops 
-        WHERE status IN (${sql.raw(statusList)})
-      `);
-      totalCount = parseInt(String(countResult.rows[0]?.count || '0'));
+      if (statusList.length === 0) {
+        return NextResponse.json({
+          data: [],
+          pagination: { page, limit, total: 0, totalPages: 0 }
+        });
+      }
+
+      allOps = await db.select()
+        .from(ops)
+        .where(inArray(ops.status, statusList))
+        .orderBy(desc(ops.dataImportacao))
+        .limit(limit)
+        .offset(offset);
+
+      const [countResult] = await db.select({ count: sql<number>`count(*)::int` })
+        .from(ops)
+        .where(inArray(ops.status, statusList));
+      totalCount = countResult.count;
     } else {
-      // Sem filtro, usar o ORM normal
       allOps = await db.select()
         .from(ops)
         .orderBy(desc(ops.dataImportacao))
         .limit(limit)
         .offset(offset);
 
-      const totalResult = await db.execute(sql`SELECT COUNT(*) as count FROM ops`);
-      totalCount = parseInt(String(totalResult.rows[0]?.count || '0'));
+      const [countResult] = await db.select({ count: sql<number>`count(*)::int` }).from(ops);
+      totalCount = countResult.count;
     }
-
-    console.log(`✅ Retornando ${allOps.length} OPs de ${totalCount} total`);
 
     return NextResponse.json({
       data: allOps,
@@ -76,41 +80,33 @@ export async function GET(request: Request) {
         totalPages: Math.ceil(totalCount / limit)
       }
     });
-  } catch (error) {
-    console.error('❌ Erro ao buscar OPs:', error);
+  } catch {
     return NextResponse.json(
-      { error: String(error) },
+      { error: 'Erro interno ao buscar OPs' },
       { status: 500 }
     );
   }
 }
 
 export async function POST(request: Request) {
-  console.log('='.repeat(50));
-  console.log('📦 POST /api/ops - CRIAR OP');
-  console.log('='.repeat(50));
-  
   try {
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
+
     const body = await request.json();
-    console.log('📦 Body recebido:', JSON.stringify(body, null, 2));
-
     const validated = opSchema.parse(body);
-    console.log('✅ Dados validados:', validated);
 
-    // Verificar se OP já existe
     const existing = await db.query.ops.findFirst({
       where: eq(ops.op, validated.op),
     });
 
     if (existing) {
-      console.log('❌ OP já existe:', validated.op);
       return NextResponse.json(
         { error: 'OP já existe' },
         { status: 400 }
       );
     }
 
-    // CONVERTER NÚMEROS PARA STRING ANTES DE INSERIR
     const dadosParaInserir = {
       op: validated.op,
       produto: validated.produto,
@@ -128,20 +124,14 @@ export async function POST(request: Request) {
       dataImportacao: new Date(),
     };
 
-    console.log('💾 Dados para inserir:', JSON.stringify(dadosParaInserir, null, 2));
-
     const [newOp] = await db
       .insert(ops)
       .values(dadosParaInserir)
       .returning();
 
-    console.log('✅ OP criada com sucesso:', newOp.op);
-
     return NextResponse.json(newOp, { status: 201 });
 
   } catch (error) {
-    console.error('❌ Erro:', error);
-    
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Dados inválidos', detalhes: error.errors },

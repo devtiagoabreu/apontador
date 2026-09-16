@@ -1,7 +1,6 @@
 // src/app/api/produtos/[id]/route.ts (manter essa linha de comentário)
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { produtos } from '@/lib/db/schema/produtos';
 import { ops } from '@/lib/db/schema/ops';
@@ -38,11 +37,8 @@ export async function GET(
   console.log(`📦 GET /api/produtos/${params.id} - Buscando produto`);
   
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
 
     const produto = await db.query.produtos.findFirst({
       where: eq(produtos.id, params.id),
@@ -76,11 +72,8 @@ export async function PUT(
   console.log('='.repeat(50));
   
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
 
     const body = await request.json();
     console.log('📦 Body recebido:', JSON.stringify(body, null, 2));
@@ -174,11 +167,8 @@ export async function DELETE(
   console.log(`📦 DELETE /api/produtos/${params.id} - EXCLUIR PRODUTO`);
   
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
 
     // Verificar se produto existe
     const existing = await db.query.produtos.findFirst({

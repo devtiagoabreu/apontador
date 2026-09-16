@@ -1,19 +1,18 @@
 // src/app/dashboard/layout.tsx
 'use client';
 
-import { redirect } from 'next/navigation';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { DashboardNav } from '@/components/dashboard/nav';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
+import { useRouter } from 'next/navigation';
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const router = useRouter();
   const [isNavCollapsed, setIsNavCollapsed] = useState(false);
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -28,6 +27,16 @@ export default function DashboardLayout({
     fetchSession();
   }, []);
 
+  useEffect(() => {
+    if (!loading) {
+      if (!session) {
+        router.push('/login');
+      } else if (session.user.nivel !== 'ADM') {
+        router.push('/apontamento');
+      }
+    }
+  }, [loading, session, router]);
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -36,12 +45,8 @@ export default function DashboardLayout({
     );
   }
 
-  if (!session) {
-    redirect('/login');
-  }
-
-  if (session.user.nivel !== 'ADM') {
-    redirect('/apontamento');
+  if (!session || session.user.nivel !== 'ADM') {
+    return null;
   }
 
   return (

@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { Pool } from '@neondatabase/serverless';
+import { requireAuth } from '@/lib/api-auth';
 
 export async function GET() {
+  const auth = await requireAuth({ requiredLevel: 'ADM' });
+  if (auth.error) return auth.error;
+
   const diagnostics = {
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,

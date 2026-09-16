@@ -3,9 +3,13 @@ import { db } from '@/lib/db';
 import { usuarios } from '@/lib/db/schema/usuarios';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
+import { requireAuth } from '@/lib/api-auth';
 
 export async function GET(request: Request) {
   try {
+    const auth = await requireAuth({ requiredLevel: 'ADM' });
+    if (auth.error) return auth.error;
+
     const { searchParams } = new URL(request.url);
     const nivel = searchParams.get('nivel');
     
@@ -32,6 +36,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const auth = await requireAuth({ requiredLevel: 'ADM' });
+    if (auth.error) return auth.error;
+
     const body = await request.json();
     
     // Validar dados obrigatórios

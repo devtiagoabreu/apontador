@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { producoesTable } from '@/lib/db/schema/producoes';
 import { ops } from '@/lib/db/schema/ops';
@@ -73,11 +72,8 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
 
     console.log('🔍 Buscando produção por ID:', params.id);
 
@@ -178,12 +174,8 @@ export async function PUT(
   console.log('='.repeat(50));
   
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      console.log('❌ Não autorizado');
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
 
     console.log('🔍 ID da produção:', params.id);
 
@@ -308,12 +300,8 @@ export async function DELETE(
   console.log('='.repeat(50));
   
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      console.log('❌ Não autorizado');
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
 
     console.log('🔍 ID da produção:', params.id);
 

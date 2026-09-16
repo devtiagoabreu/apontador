@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { ops } from '@/lib/db/schema/ops';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { requireAuth } from '@/lib/api-auth';
 
 // Schema completo para atualização
 const opSchema = z.object({
@@ -91,15 +90,8 @@ export async function PUT(
   try {
     // PASSO 1: Verificar autenticação
     console.log('🔐 PASSO 1: Verificando autenticação...');
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      console.log('   ❌ Não autorizado - sessão ausente');
-      return NextResponse.json(
-        { error: 'Não autorizado' },
-        { status: 401 }
-      );
-    }
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
 
     // PASSO 2: Validar parâmetros
     console.log('🔢 PASSO 2: Validando parâmetros...');
@@ -292,10 +284,8 @@ export async function DELETE(
   console.log(`📦 DELETE /api/ops/${params.id} - EXCLUIR OP`);
   
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
 
     const opId = parseInt(params.id);
 

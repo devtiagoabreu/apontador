@@ -1,21 +1,16 @@
-// src/app/api/maquinas/[id]/disponiveis/route.ts
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { maquinas } from '@/lib/db/schema/maquinas';
 import { maquinaSetor } from '@/lib/db/schema/maquina-setor';
 import { setores } from '@/lib/db/schema/setores';
 import { estagios } from '@/lib/db/schema/estagios';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, inArray, sql } from 'drizzle-orm';
+import { requireAuth } from '@/lib/api-auth';
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
 
     const { searchParams } = new URL(request.url);
     const estagioId = searchParams.get('estagioId');
@@ -27,7 +22,6 @@ export async function GET(request: Request) {
       );
     }
 
-    // Buscar o estágio para saber qual setor
     const estagio = await db.query.estagios.findFirst({
       where: eq(estagios.id, estagioId),
     });
@@ -39,18 +33,17 @@ export async function GET(request: Request) {
       );
     }
 
-    // Buscar setores que correspondem a este estágio
-    // (considerando que o nome do estágio pode estar relacionado ao setor)
     const setoresDoEstagio = await db
       .select({ id: setores.id })
       .from(setores)
-      .where(sql`LOWER(${setores.nome}) LIKE LOWER(${`%${estagio.nome}%`})`);
+      .where(sql`LOWER(${setores.nome}) LIKE LOWER(${'%' + estagio.nome + '%'})`);
 
     if (setoresDoEstagio.length === 0) {
       return NextResponse.json([]);
     }
 
-    // Buscar máquinas disponíveis nestes setores
+    const setorIds = setoresDoEstagio.map(s => s.id);
+
     const maquinasDisponiveis = await db
       .selectDistinct({
         id: maquinas.id,
@@ -63,13 +56,12 @@ export async function GET(request: Request) {
       .where(
         and(
           eq(maquinas.status, 'DISPONIVEL'),
-          sql`${maquinaSetor.setorId} IN (${setoresDoEstagio.map(s => s.id).join(',')})`
+          inArray(maquinaSetor.setorId, setorIds)
         )
       );
 
     return NextResponse.json(maquinasDisponiveis);
-  } catch (error) {
-    console.error('Erro ao buscar máquinas disponíveis:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Erro interno ao buscar máquinas' },
       { status: 500 }

@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { apontamentos } from '@/lib/db/schema/apontamentos';
 import { ops } from '@/lib/db/schema/ops';
@@ -10,6 +8,7 @@ import { motivosParada } from '@/lib/db/schema/motivos-parada';
 import { estagios } from '@/lib/db/schema/estagios';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { requireAuth } from '@/lib/api-auth';
 
 // Schema mais flexível para debug
 const apontamentoSchema = z.object({
@@ -30,11 +29,8 @@ const apontamentoSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
@@ -143,12 +139,9 @@ export async function POST(request: Request) {
   console.log('📦 POST /api/apontamentos - Recebendo requisição');
   
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      console.log('❌ Não autorizado - sessão inválida');
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
+    const session = auth.session;
 
     console.log('👤 Usuário autenticado:', session.user.id);
 

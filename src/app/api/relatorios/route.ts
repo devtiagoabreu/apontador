@@ -1,7 +1,6 @@
 // src/app/api/relatorios/route.ts
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { producoesTable } from '@/lib/db/schema/producoes';
 import { paradasMaquina } from '@/lib/db/schema/paradas-maquina';
@@ -104,11 +103,8 @@ export async function GET(request: Request) {
   console.log('='.repeat(50));
   
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session || session.user.nivel !== 'ADM') {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const auth = await requireAuth({ requiredLevel: 'ADM' });
+    if (auth.error) return auth.error;
 
     const { searchParams } = new URL(request.url);
     
@@ -172,11 +168,39 @@ export async function GET(request: Request) {
       todosProdutos.map(p => [p.codigo, p])
     );
 
-    // 🔴 CONSTRUIR QUERY PRINCIPAL
-    console.log('🔨 Construindo query principal...');
+    // 🔴 CONSTRUIR QUERY PRINCIPAL (parâmetros via Drizzle sql — seguro contra SQL injection)
 
-    // Query base - usando operador_inicio_id
-    let query = sql`
+    // Query base
+    let conditions: ReturnType<typeof sql>[] = [];
+
+    // Filtro de datas (parâmetros Drizzle)
+    if (datasFilter.length > 0) {
+      conditions.push(sql`DATE(p.data_fim) IN (${sql.join(datasFilter.map(d => sql`${d}`), sql`, `)})`);
+    } else {
+      conditions.push(sql`p.data_fim >= ${dataInicio.toISOString()}`);
+      conditions.push(sql`p.data_fim <= ${dataFim.toISOString()}`);
+    }
+
+    // Filtro de máquinas
+    if (maquinasFilter.length > 0) {
+      conditions.push(sql`p.maquina_id IN (${sql.join(maquinasFilter.map(id => sql`${id}`), sql`, `)})`);
+    }
+
+    // Filtro de operadores
+    if (operadoresFilter.length > 0) {
+      conditions.push(sql`p.operador_inicio_id IN (${sql.join(operadoresFilter.map(id => sql`${id}`), sql`, `)})`);
+    }
+
+    // Filtro de estágios
+    if (estagiosFilter.length > 0) {
+      conditions.push(sql`p.estagio_id IN (${sql.join(estagiosFilter.map(id => sql`${id}`), sql`, `)})`);
+    }
+
+    const whereClause = conditions.length > 0
+      ? sql`WHERE p.data_fim IS NOT NULL AND ${sql.join(conditions, sql` AND `)}`
+      : sql`WHERE p.data_fim IS NOT NULL`;
+
+    const query = sql`
       SELECT 
         p.id,
         p.op_id as "opId",
@@ -205,52 +229,9 @@ export async function GET(request: Request) {
       LEFT JOIN maquinas m ON p.maquina_id = m.id
       LEFT JOIN usuarios ui ON p.operador_inicio_id = ui.id
       LEFT JOIN estagios e ON p.estagio_id = e.id
-      WHERE p.data_fim IS NOT NULL
+      ${whereClause}
+      ORDER BY p.data_fim DESC
     `;
-
-    // Construir condições
-    const conditions: string[] = [];
-
-    // Filtro de datas
-    if (datasFilter.length > 0) {
-      const datasStr = datasFilter.map(d => `'${d}'`).join(', ');
-      conditions.push(`DATE(p.data_fim) IN (${datasStr})`);
-      console.log(`📅 Adicionando filtro de datas específicas: ${datasStr}`);
-    } else {
-      conditions.push(`p.data_fim >= '${dataInicio.toISOString()}'`);
-      conditions.push(`p.data_fim <= '${dataFim.toISOString()}'`);
-      console.log(`📅 Adicionando filtro de período: ${dataInicio.toISOString()} a ${dataFim.toISOString()}`);
-    }
-
-    // Filtro de máquinas
-    if (maquinasFilter.length > 0) {
-      const maquinasStr = maquinasFilter.map(id => `'${id}'`).join(', ');
-      conditions.push(`p.maquina_id IN (${maquinasStr})`);
-      console.log(`🔧 Adicionando filtro de ${maquinasFilter.length} máquinas`);
-    }
-
-    // Filtro de operadores (agora usando operador_inicio_id)
-    if (operadoresFilter.length > 0) {
-      const operadoresStr = operadoresFilter.map(id => `'${id}'`).join(', ');
-      conditions.push(`p.operador_inicio_id IN (${operadoresStr})`);
-      console.log(`👤 Adicionando filtro de ${operadoresFilter.length} operadores (início)`);
-    }
-
-    // Filtro de estágios
-    if (estagiosFilter.length > 0) {
-      const estagiosStr = estagiosFilter.map(id => `'${id}'`).join(', ');
-      conditions.push(`p.estagio_id IN (${estagiosStr})`);
-      console.log(`🏭 Adicionando filtro de ${estagiosFilter.length} estágios`);
-    }
-
-    // Aplicar condições
-    if (conditions.length > 0) {
-      const whereClause = conditions.join(' AND ');
-      query = sql`${query} AND ${sql.raw(whereClause)}`;
-      console.log('📝 Where clause:', whereClause);
-    }
-
-    query = sql`${query} ORDER BY p.data_fim DESC`;
 
     console.log('🔍 Executando query...');
     const result = await db.execute(query);
@@ -376,45 +357,38 @@ export async function GET(request: Request) {
 
     console.log(`📊 Encontradas ${maquinasMap.size} máquinas`);
 
-    // Buscar paradas
+    // Buscar paradas (parâmetros Drizzle — seguro contra SQL injection)
     let paradasQuery: any[] = [];
     if (validated.tipo === 'maquinas' || validated.tipo === 'eficiencia') {
-      console.log('🔍 Buscando dados de paradas...');
       
-      let paradasSql = `
+      const paradasConditions: ReturnType<typeof sql>[] = [];
+
+      if (maquinasFilter.length > 0) {
+        paradasConditions.push(sql`maquina_id IN (${sql.join(maquinasFilter.map(id => sql`${id}`), sql`, `)})`);
+      }
+
+      if (datasFilter.length > 0) {
+        paradasConditions.push(sql`DATE(data_inicio) IN (${sql.join(datasFilter.map(d => sql`${d}`), sql`, `)})`);
+      } else {
+        paradasConditions.push(sql`data_inicio >= ${dataInicio.toISOString()}`);
+        paradasConditions.push(sql`data_fim <= ${dataFim.toISOString()}`);
+      }
+
+      const paradasWhere = paradasConditions.length > 0
+        ? sql`WHERE data_fim IS NOT NULL AND ${sql.join(paradasConditions, sql` AND `)}`
+        : sql`WHERE data_fim IS NOT NULL`;
+
+      const paradasSql = sql`
         SELECT 
           maquina_id as "maquinaId",
           COALESCE(SUM(EXTRACT(EPOCH FROM (data_fim - data_inicio))/60), 0) as "tempoParada"
         FROM paradas_maquina
-        WHERE data_fim IS NOT NULL
+        ${paradasWhere}
+        GROUP BY maquina_id
       `;
-
-      const paradasConditions: string[] = [];
-
-      if (maquinasFilter.length > 0) {
-        const maquinasStr = maquinasFilter.map(id => `'${id}'`).join(', ');
-        paradasConditions.push(`maquina_id IN (${maquinasStr})`);
-      }
-
-      if (datasFilter.length > 0) {
-        const datasStr = datasFilter.map(d => `'${d}'`).join(', ');
-        paradasConditions.push(`DATE(data_inicio) IN (${datasStr})`);
-      } else {
-        paradasConditions.push(`data_inicio >= '${dataInicio.toISOString()}'`);
-        paradasConditions.push(`data_fim <= '${dataFim.toISOString()}'`);
-      }
-
-      if (paradasConditions.length > 0) {
-        paradasSql += ' AND ' + paradasConditions.join(' AND ');
-      }
-
-      paradasSql += ' GROUP BY maquina_id';
       
-      console.log('📝 Query de paradas:', paradasSql);
-      
-      const paradasResult = await db.execute(sql.raw(paradasSql));
+      const paradasResult = await db.execute(paradasSql);
       paradasQuery = paradasResult.rows;
-      console.log(`✅ Encontradas paradas para ${paradasQuery.length} máquinas`);
     }
 
     // Adicionar tempo de parada
@@ -521,12 +495,28 @@ export async function GET(request: Request) {
         : 0;
     });
 
-    // Para relatório de paradas
+    // Para relatório de paradas (parâmetros Drizzle — seguro contra SQL injection)
     let dadosParadas: any[] = [];
     if (validated.tipo === 'paradas') {
-      console.log('🔍 Buscando dados de paradas por motivo...');
       
-      let paradasMotivoSql = `
+      const paradasMotivoConditions: ReturnType<typeof sql>[] = [];
+
+      if (datasFilter.length > 0) {
+        paradasMotivoConditions.push(sql`DATE(pm.data_inicio) IN (${sql.join(datasFilter.map(d => sql`${d}`), sql`, `)})`);
+      } else {
+        paradasMotivoConditions.push(sql`pm.data_inicio >= ${dataInicio.toISOString()}`);
+        paradasMotivoConditions.push(sql`pm.data_fim <= ${dataFim.toISOString()}`);
+      }
+
+      if (maquinasFilter.length > 0) {
+        paradasMotivoConditions.push(sql`pm.maquina_id IN (${sql.join(maquinasFilter.map(id => sql`${id}`), sql`, `)})`);
+      }
+
+      const paradasMotivoWhere = paradasMotivoConditions.length > 0
+        ? sql`WHERE pm.data_fim IS NOT NULL AND ${sql.join(paradasMotivoConditions, sql` AND `)}`
+        : sql`WHERE pm.data_fim IS NOT NULL`;
+
+      const paradasMotivoSql = sql`
         SELECT 
           mp.descricao as motivo,
           mp.codigo,
@@ -535,35 +525,12 @@ export async function GET(request: Request) {
         FROM paradas_maquina pm
         INNER JOIN maquinas m ON pm.maquina_id = m.id
         INNER JOIN motivos_parada mp ON pm.motivo_parada_id = mp.id
-        WHERE pm.data_fim IS NOT NULL
+        ${paradasMotivoWhere}
+        GROUP BY mp.descricao, mp.codigo
       `;
-
-      const paradasMotivoConditions: string[] = [];
-
-      if (datasFilter.length > 0) {
-        const datasStr = datasFilter.map(d => `'${d}'`).join(', ');
-        paradasMotivoConditions.push(`DATE(pm.data_inicio) IN (${datasStr})`);
-      } else {
-        paradasMotivoConditions.push(`pm.data_inicio >= '${dataInicio.toISOString()}'`);
-        paradasMotivoConditions.push(`pm.data_fim <= '${dataFim.toISOString()}'`);
-      }
-
-      if (maquinasFilter.length > 0) {
-        const maquinasStr = maquinasFilter.map(id => `'${id}'`).join(', ');
-        paradasMotivoConditions.push(`pm.maquina_id IN (${maquinasStr})`);
-      }
-
-      if (paradasMotivoConditions.length > 0) {
-        paradasMotivoSql += ' AND ' + paradasMotivoConditions.join(' AND ');
-      }
-
-      paradasMotivoSql += ' GROUP BY mp.descricao, mp.codigo';
       
-      console.log('📝 Query de paradas por motivo:', paradasMotivoSql);
-      
-      const paradasMotivoResult = await db.execute(sql.raw(paradasMotivoSql));
+      const paradasMotivoResult = await db.execute(paradasMotivoSql);
       dadosParadas = paradasMotivoResult.rows;
-      console.log(`✅ Encontrados ${dadosParadas.length} motivos de parada`);
     }
 
     // Preparar resposta

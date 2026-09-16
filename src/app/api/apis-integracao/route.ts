@@ -4,9 +4,13 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { apisIntegracao } from '@/lib/db/schema/apis-integracao';
 import { eq } from 'drizzle-orm';
+import { requireAuth } from '@/lib/api-auth';
 
 export async function GET(request: Request) {
   try {
+    const auth = await requireAuth({ requiredLevel: 'ADM' });
+    if (auth.error) return auth.error;
+
     const { searchParams } = new URL(request.url);
     const sistemaId = searchParams.get('sistema_id');
 
@@ -28,6 +32,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const auth = await requireAuth({ requiredLevel: 'ADM' });
+    if (auth.error) return auth.error;
+
     const { sistemaId, nome, apiUrl, metodo, ativa } = await request.json();
 
     if (!sistemaId || !nome || !apiUrl) {
@@ -56,6 +63,9 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
+    const auth = await requireAuth({ requiredLevel: 'ADM' });
+    if (auth.error) return auth.error;
+
     const { id, nome, apiUrl, metodo, ativa } = await request.json();
 
     if (!id) {
@@ -79,6 +89,9 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const auth = await requireAuth({ requiredLevel: 'ADM' });
+    if (auth.error) return auth.error;
+
     const { id } = await request.json();
 
     if (!id) {

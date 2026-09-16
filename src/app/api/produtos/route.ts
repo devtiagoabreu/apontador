@@ -2,8 +2,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { produtos } from '@/lib/db/schema/produtos';
 import { eq, desc, sql } from 'drizzle-orm';
@@ -37,13 +36,10 @@ export async function GET(request: Request) {
   console.log('📦 GET /api/produtos - Iniciando');
   
   try {
-    const session = await getServerSession(authOptions);
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
+    const session = auth.session;
     console.log('👤 Sessão:', session?.user?.email);
-    
-    if (!session) {
-      console.log('❌ Não autorizado');
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
@@ -105,11 +101,8 @@ export async function POST(request: Request) {
   console.log('='.repeat(50));
   
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
 
     const body = await request.json();
     console.log('📦 Body recebido:', JSON.stringify(body, null, 2));

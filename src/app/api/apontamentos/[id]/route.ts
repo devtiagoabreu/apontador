@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { apontamentos } from '@/lib/db/schema/apontamentos';
 import { ops } from '@/lib/db/schema/ops';
@@ -11,6 +9,7 @@ import { estagios } from '@/lib/db/schema/estagios';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { sql } from 'drizzle-orm';
+import { requireAuth } from '@/lib/api-auth';
 
 const apontamentoSchema = z.object({
   opId: z.number().int().positive().optional(),
@@ -33,11 +32,8 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
 
     // Buscar apontamento com joins usando SQL raw
     const result = await db.execute(sql`
@@ -167,11 +163,8 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
 
     const body = await request.json();
     const validated = apontamentoSchema.parse(body);
@@ -243,11 +236,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
 
     await db.delete(apontamentos).where(eq(apontamentos.id, params.id));
     return NextResponse.json({ success: true });

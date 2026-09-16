@@ -472,7 +472,7 @@ export default function ProdutosPage() {
       {searchTerm && (
         <div className="bg-blue-50 p-2 rounded-lg flex items-center justify-between">
           <p className="text-sm text-blue-700">
-            Pesquisando por: <span className="font-medium">"{searchTerm}"</span> - {produtosFiltrados.length} resultado(s)
+            Pesquisando por: <span className="font-medium">{'\u201C'}{searchTerm}{'\u201D'}</span> - {produtosFiltrados.length} resultado(s)
           </p>
           <Button variant="ghost" size="sm" onClick={() => setSearchTerm('')}>
             <X className="h-4 w-4" />

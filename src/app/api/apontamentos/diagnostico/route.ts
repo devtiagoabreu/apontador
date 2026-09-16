@@ -1,10 +1,9 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { sql } from 'drizzle-orm';
+import { requireAuth } from '@/lib/api-auth';
 
 export async function GET() {
   const diagnostico: any = {
@@ -17,11 +16,11 @@ export async function GET() {
 
   try {
     // Passo 1: Verificar autenticação
-    const session = await getServerSession(authOptions);
-    diagnostico.autenticacao = !!session;
-    diagnostico.steps.push({ step: 'Autenticação', status: !!session ? 'ok' : 'erro' });
+    const auth = await requireAuth();
+    diagnostico.autenticacao = !!auth.session;
+    diagnostico.steps.push({ step: 'Autenticação', status: auth.session ? 'ok' : 'erro' });
 
-    if (!session) {
+    if (auth.error) {
       diagnostico.error = 'Não autenticado';
       return NextResponse.json(diagnostico);
     }

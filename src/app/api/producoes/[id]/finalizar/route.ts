@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { producoesTable } from '@/lib/db/schema/producoes';
 import { maquinas } from '@/lib/db/schema/maquinas';
@@ -91,12 +90,9 @@ export async function POST(
   console.log('='.repeat(50));
   
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      console.log('❌ Não autorizado');
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
+    const session = auth.session;
 
     console.log('🔍 ID da produção:', params.id);
 

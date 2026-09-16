@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { producoesTable, insertProducaoRecordSchema } from '@/lib/db/schema/producoes';
 import { ops } from '@/lib/db/schema/ops';
@@ -57,12 +56,8 @@ export async function GET(request: Request) {
   console.log('📦 GET /api/producoes - Iniciando');
   
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      console.log('❌ Não autorizado');
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
@@ -235,13 +230,9 @@ export async function POST(request: Request) {
   try {
     // 1. Verificar autenticação
     console.log('🔐 Verificando autenticação...');
-    const session = await getServerSession(authOptions);
-    console.log('👤 Sessão:', session?.user?.id);
-    
-    if (!session) {
-      console.log('❌ Não autorizado');
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
+    console.log('👤 Sessão:', auth.session?.user?.id);
 
     // 2. Receber body
     console.log('📨 Recebendo body...');

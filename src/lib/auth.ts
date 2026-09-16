@@ -25,10 +25,17 @@ export const authOptions: NextAuthOptions = {
 
         if (!user || !user.ativo) return null;
 
-        // Validação de senha obrigatória apenas para administradores
+        // Validação de senha para todos os usuários
+        if (!credentials.senha) return null;
+
         if (user.nivel === 'ADM') {
-          if (!credentials.senha) return null;
+          // Admin: comparar com hash bcrypt
           const senhaValida = await bcrypt.compare(credentials.senha, user.senha || '');
+          if (!senhaValida) return null;
+        } else {
+          // Operador: senha padrão é a própria matrícula (ou senha definida no cadastro)
+          const senhaEsperada = user.senha || user.matricula;
+          const senhaValida = await bcrypt.compare(credentials.senha, senhaEsperada);
           if (!senhaValida) return null;
         }
 

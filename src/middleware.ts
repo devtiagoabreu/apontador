@@ -66,9 +66,9 @@ export default withAuth(
           return true;
         }
         
-        // APIs - verificamos no próprio middleware
+        // APIs: retornar false se não tiver token (força o redirecionamento 401)
         if (path.startsWith('/api/')) {
-          return true; // Deixa passar e verificamos depois
+          return !!token;
         }
         
         // Para o resto, precisa de token

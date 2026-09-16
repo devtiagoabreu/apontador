@@ -1,7 +1,6 @@
 // src/app/api/producoes-avulsas/route.ts
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { producoesAvulsas } from '@/lib/db/schema/producoes-avulsas';
 import { maquinas } from '@/lib/db/schema/maquinas';
@@ -16,8 +15,8 @@ const iniciarAvulsoSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
@@ -50,8 +49,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
+    const session = auth.session;
 
     const body = await request.json();
     const validated = iniciarAvulsoSchema.parse(body);

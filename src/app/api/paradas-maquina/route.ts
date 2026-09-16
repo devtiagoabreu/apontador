@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { paradasMaquina } from '@/lib/db/schema/paradas-maquina';
 import { maquinas } from '@/lib/db/schema/maquinas';
@@ -24,11 +23,10 @@ export async function GET(request: Request) {
   console.log('📦 GET /api/paradas-maquina - Iniciando');
   
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
+    const auth = await requireAuth();
+    if (auth.error) {
       console.log('❌ Não autorizado');
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+      return auth.error;
     }
 
     const { searchParams } = new URL(request.url);
@@ -125,17 +123,17 @@ export async function POST(request: Request) {
   try {
     // 1. Verificar autenticação
     console.log('🔐 Verificando autenticação...');
-    const session = await getServerSession(authOptions);
+    const auth = await requireAuth();
+    if (auth.error) {
+      console.log('❌ Não autorizado - sessão ausente');
+      return auth.error;
+    }
+    const session = auth.session;
     console.log('👤 Sessão:', session ? {
       id: session.user?.id,
       nome: session.user?.nome,
       nivel: session.user?.nivel
     } : '❌ Nenhuma sessão encontrada');
-    
-    if (!session) {
-      console.log('❌ Não autorizado - sessão ausente');
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
 
     // 2. Receber body
     console.log('📨 Recebendo body da requisição...');

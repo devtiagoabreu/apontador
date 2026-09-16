@@ -1,8 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { estagios } from '@/lib/db/schema/estagios';
 import { ops } from '@/lib/db/schema/ops';
@@ -52,10 +51,10 @@ export async function GET() {
 
   try {
     // Verificar autenticação
-    const session = await getServerSession(authOptions);
-    diagnostico.autenticacao = !!session;
+    const auth = await requireAuth();
+    diagnostico.autenticacao = !!auth.session;
 
-    if (!session) {
+    if (auth.error) {
       diagnostico.error = 'Não autenticado';
       return NextResponse.json(diagnostico);
     }

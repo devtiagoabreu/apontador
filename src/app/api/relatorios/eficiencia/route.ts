@@ -1,7 +1,6 @@
 // src/app/api/relatorios/eficiencia/route.ts
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { producoesTable } from '@/lib/db/schema/producoes';
 import { ops } from '@/lib/db/schema/ops';
@@ -148,11 +147,8 @@ export async function POST(request: Request) {
   console.log('='.repeat(50));
   
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if (auth.error) return auth.error;
 
     const body = await request.json();
     console.log('📦 Filtros recebidos:', JSON.stringify(body, null, 2));
@@ -218,11 +214,37 @@ export async function POST(request: Request) {
       todosProdutos.map(p => [p.codigo, p])
     );
 
-    // Construir query principal
-    console.log('🔨 Construindo query principal...');
+    // Construir query principal (parâmetros Drizzle — seguro contra SQL injection)
+    const conditions: ReturnType<typeof sql>[] = [];
 
-    // Query base - usando operador_inicio_id
-    let query = sql`
+    // Filtro de datas
+    if (datasFilter.length > 0) {
+      conditions.push(sql`DATE(p.data_fim) IN (${sql.join(datasFilter.map(d => sql`${d}`), sql`, `)})`);
+    } else {
+      conditions.push(sql`p.data_fim >= ${dataInicio.toISOString()}`);
+      conditions.push(sql`p.data_fim <= ${dataFim.toISOString()}`);
+    }
+
+    // Filtro de máquinas
+    if (maquinasFilter.length > 0) {
+      conditions.push(sql`p.maquina_id IN (${sql.join(maquinasFilter.map(id => sql`${id}`), sql`, `)})`);
+    }
+
+    // Filtro de operadores
+    if (operadoresFilter.length > 0) {
+      conditions.push(sql`p.operador_inicio_id IN (${sql.join(operadoresFilter.map(id => sql`${id}`), sql`, `)})`);
+    }
+
+    // Filtro de estágios
+    if (estagiosFilter.length > 0) {
+      conditions.push(sql`p.estagio_id IN (${sql.join(estagiosFilter.map(id => sql`${id}`), sql`, `)})`);
+    }
+
+    const whereClause = conditions.length > 0
+      ? sql`WHERE p.data_fim IS NOT NULL AND ${sql.join(conditions, sql` AND `)}`
+      : sql`WHERE p.data_fim IS NOT NULL`;
+
+    const query = sql`
       SELECT 
         p.id,
         p.op_id as "opId",
@@ -250,52 +272,9 @@ export async function POST(request: Request) {
       LEFT JOIN maquinas m ON p.maquina_id = m.id
       LEFT JOIN usuarios ui ON p.operador_inicio_id = ui.id
       LEFT JOIN estagios e ON p.estagio_id = e.id
-      WHERE p.data_fim IS NOT NULL
+      ${whereClause}
+      ORDER BY p.data_fim DESC
     `;
-
-    // Construir condições
-    const conditions: string[] = [];
-
-    // Filtro de datas
-    if (datasFilter.length > 0) {
-      const datasStr = datasFilter.map(d => `'${d}'`).join(', ');
-      conditions.push(`DATE(p.data_fim) IN (${datasStr})`);
-      console.log(`📅 Adicionando filtro de datas específicas: ${datasStr}`);
-    } else {
-      conditions.push(`p.data_fim >= '${dataInicio.toISOString()}'`);
-      conditions.push(`p.data_fim <= '${dataFim.toISOString()}'`);
-      console.log(`📅 Adicionando filtro de período: ${dataInicio.toISOString()} a ${dataFim.toISOString()}`);
-    }
-
-    // Filtro de máquinas
-    if (maquinasFilter.length > 0) {
-      const maquinasStr = maquinasFilter.map(id => `'${id}'`).join(', ');
-      conditions.push(`p.maquina_id IN (${maquinasStr})`);
-      console.log(`🔧 Adicionando filtro de ${maquinasFilter.length} máquinas`);
-    }
-
-    // Filtro de operadores
-    if (operadoresFilter.length > 0) {
-      const operadoresStr = operadoresFilter.map(id => `'${id}'`).join(', ');
-      conditions.push(`p.operador_inicio_id IN (${operadoresStr})`);
-      console.log(`👤 Adicionando filtro de ${operadoresFilter.length} operadores (início)`);
-    }
-
-    // Filtro de estágios
-    if (estagiosFilter.length > 0) {
-      const estagiosStr = estagiosFilter.map(id => `'${id}'`).join(', ');
-      conditions.push(`p.estagio_id IN (${estagiosStr})`);
-      console.log(`🏭 Adicionando filtro de ${estagiosFilter.length} estágios`);
-    }
-
-    // Aplicar condições
-    if (conditions.length > 0) {
-      const whereClause = conditions.join(' AND ');
-      query = sql`${query} AND ${sql.raw(whereClause)}`;
-      console.log('📝 Where clause:', whereClause);
-    }
-
-    query = sql`${query} ORDER BY p.data_fim DESC`;
 
     console.log('🔍 Executando query...');
     const result = await db.execute(query);
@@ -513,45 +492,38 @@ export async function POST(request: Request) {
       maquinasInfo.map(m => [m.id, m])
     );
 
-    // Buscar paradas
+    // Buscar paradas (parâmetros Drizzle — seguro contra SQL injection)
     let paradasQuery: any[] = [];
     if (maquinasMap.size > 0) {
-      console.log('🔍 Buscando dados de paradas...');
       
-      let paradasSql = `
+      const paradasConditions: ReturnType<typeof sql>[] = [];
+
+      if (maquinasFilter.length > 0) {
+        paradasConditions.push(sql`maquina_id IN (${sql.join(maquinasFilter.map(id => sql`${id}`), sql`, `)})`);
+      }
+
+      if (datasFilter.length > 0) {
+        paradasConditions.push(sql`DATE(data_inicio) IN (${sql.join(datasFilter.map(d => sql`${d}`), sql`, `)})`);
+      } else {
+        paradasConditions.push(sql`data_inicio >= ${dataInicio.toISOString()}`);
+        paradasConditions.push(sql`data_fim <= ${dataFim.toISOString()}`);
+      }
+
+      const paradasWhere = paradasConditions.length > 0
+        ? sql`WHERE data_fim IS NOT NULL AND ${sql.join(paradasConditions, sql` AND `)}`
+        : sql`WHERE data_fim IS NOT NULL`;
+
+      const paradasSql = sql`
         SELECT 
           maquina_id as "maquinaId",
           COALESCE(SUM(EXTRACT(EPOCH FROM (data_fim - data_inicio))/60), 0) as "tempoParada"
         FROM paradas_maquina
-        WHERE data_fim IS NOT NULL
+        ${paradasWhere}
+        GROUP BY maquina_id
       `;
-
-      const paradasConditions: string[] = [];
-
-      if (maquinasFilter.length > 0) {
-        const maquinasStr = maquinasFilter.map(id => `'${id}'`).join(', ');
-        paradasConditions.push(`maquina_id IN (${maquinasStr})`);
-      }
-
-      if (datasFilter.length > 0) {
-        const datasStr = datasFilter.map(d => `'${d}'`).join(', ');
-        paradasConditions.push(`DATE(data_inicio) IN (${datasStr})`);
-      } else {
-        paradasConditions.push(`data_inicio >= '${dataInicio.toISOString()}'`);
-        paradasConditions.push(`data_fim <= '${dataFim.toISOString()}'`);
-      }
-
-      if (paradasConditions.length > 0) {
-        paradasSql += ' AND ' + paradasConditions.join(' AND ');
-      }
-
-      paradasSql += ' GROUP BY maquina_id';
       
-      console.log('📝 Query de paradas:', paradasSql);
-      
-      const paradasResult = await db.execute(sql.raw(paradasSql));
+      const paradasResult = await db.execute(paradasSql);
       paradasQuery = paradasResult.rows;
-      console.log(`✅ Encontradas paradas para ${paradasQuery.length} máquinas`);
     }
 
     const paradasMap = new Map(

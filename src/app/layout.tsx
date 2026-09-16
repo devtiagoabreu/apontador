@@ -6,6 +6,9 @@ import { Toaster } from '@/components/ui/toaster'
 import { AuthProvider } from '@/components/providers/auth-provider'
 import { QueryProvider } from '@/components/providers/query-provider'
 
+// Validar variáveis de ambiente na inicialização
+import '@/lib/env'
+
 const inter = Inter({ subsets: ['latin'] })
 
 // Viewport separado (novo no Next.js 14+)

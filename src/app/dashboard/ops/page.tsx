@@ -1058,7 +1058,7 @@ export default function OpsPage() {
       {searchTerm && (
         <div className="bg-blue-50 p-2 rounded-lg flex items-center justify-between">
           <p className="text-sm text-blue-700">
-            Pesquisando por: <span className="font-medium">"{searchTerm}"</span> - {opsFiltradas.length} resultado(s)
+            Pesquisando por: <span className="font-medium">{'\u201C'}{searchTerm}{'\u201D'}</span> - {opsFiltradas.length} resultado(s)
           </p>
           <Button variant="ghost" size="sm" onClick={() => setSearchTerm('')}>
             <X className="h-4 w-4" />
@@ -1473,7 +1473,7 @@ export default function OpsPage() {
         <DialogContent className="sm:max-w-[450px]">
           <DialogHeader>
             <DialogTitle>Configurar API de Importação</DialogTitle>
-            <DialogDescription>Selecione o sistema e endpoint que o botão "Importar" vai usar</DialogDescription>
+            <DialogDescription>Selecione o sistema e endpoint que o botão {'\u201C'}Importar{'\u201D'} vai usar</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -1513,7 +1513,7 @@ export default function OpsPage() {
             )}
 
             <div className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
-              Esta configuração é salva. O botão "Importar" sempre usará esta API até você alterar.
+              Esta configuração é salva. O botão {'\u201C'}Importar{'\u201D'} sempre usará esta API até você alterar.
             </div>
           </div>
           <div className="flex justify-end gap-3">
