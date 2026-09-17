@@ -1,5 +1,5 @@
 // src/lib/db/schema/agendamentos-manutencao.ts
-import { pgTable, uuid, varchar, text, timestamp, AnyPgColumn } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, timestamp, smallint, AnyPgColumn } from 'drizzle-orm/pg-core';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { maquinas } from './maquinas';
@@ -19,6 +19,9 @@ export const agendamentosManutencao = pgTable('agendamentos_manutencao', {
     .references(() => atividadesManutencao.id)
     .notNull(),
   periodicidade: varchar('periodicidade', { length: 10 }).notNull(),
+
+  // Prioridade (0 = Baixa, 1 = Normal, 2 = Alta, 3 = Urgente)
+  prioridade: smallint('prioridade').notNull().default(1),
 
   // Quando?
   dataPrevista: timestamp('data_prevista').notNull(),
@@ -41,6 +44,7 @@ export const insertAgendamentoManutencaoSchema = createInsertSchema(agendamentos
   periodicidade: z.enum(['EVENTUAL', 'PERIODICA'], {
     errorMap: () => ({ message: 'Periodicidade inválida' }),
   }),
+  prioridade: z.number().int().min(0, 'Prioridade mínima 0').max(3, 'Prioridade máxima 3').default(1),
   dataPrevista: z.date({ errorMap: () => ({ message: 'Data prevista inválida' }) }),
   status: z.enum(['AGENDADO', 'EM_ANDAMENTO', 'CONCLUIDO', 'CANCELADO']).default('AGENDADO'),
   origemManutencaoId: z.string().uuid('Apontamento inválido').optional(),

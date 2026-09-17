@@ -12,6 +12,7 @@ const tipoSchema = z.object({
   codigo: z.string().min(1, 'Código é obrigatório').max(20),
   nome: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres').max(100),
   ativo: z.boolean(),
+  intervaloEmDias: z.number().int().positive('Intervalo deve ser maior que zero').nullable().optional(),
 });
 
 export async function GET(
@@ -89,6 +90,7 @@ export async function PUT(
         codigo: validated.codigo,
         nome: validated.nome,
         ativo: validated.ativo,
+        intervaloEmDias: validated.intervaloEmDias ?? null,
         updatedAt: new Date(),
       })
       .where(eq(tiposManutencao.id, params.id))

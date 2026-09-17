@@ -16,6 +16,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
 import { Suspense } from 'react';
 import { formatDate } from '@/lib/utils';
+import { sugerirDataProximaManutencao } from '@/lib/manutencao';
 
 interface Manutencao {
   id: string;
@@ -27,6 +28,7 @@ interface Manutencao {
   dataInicio: string;
   observacoes?: string;
   status: string;
+  tipoIntervaloEmDias?: number | null;
 }
 
 function FinalizarContent() {
@@ -59,10 +61,16 @@ function FinalizarContent() {
       }
       setManutencao(data);
 
-      // Sugerir data prevista como 7 dias a partir de hoje (para periódicas)
-      const sugestao = new Date();
-      sugestao.setDate(sugestao.getDate() + 7);
-      setDataPrevista(sugestao.toISOString().split('T')[0]);
+      // Sugerir data prevista: intervalo do tipo (se definido), senão +7 dias
+      const sugestao = sugerirDataProximaManutencao(new Date(), data.tipoIntervaloEmDias);
+      setDataPrevista(
+        sugestao ??
+          (() => {
+            const padrao = new Date();
+            padrao.setDate(padrao.getDate() + 7);
+            return padrao.toISOString().split('T')[0];
+          })()
+      );
     } catch (error) {
       toast({
         title: 'Erro',

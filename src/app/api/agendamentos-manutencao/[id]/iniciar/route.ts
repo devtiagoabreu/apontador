@@ -56,6 +56,7 @@ export async function POST(
           tipoManutencaoId: agendamento.tipoManutencaoId,
           atividadeManutencaoId: agendamento.atividadeManutencaoId,
           periodicidade: agendamento.periodicidade,
+          prioridade: agendamento.prioridade,
           status: 'EM_ANDAMENTO',
           agendamentoId: params.id,
           dataInicio: new Date(),

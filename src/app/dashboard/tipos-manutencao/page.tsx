@@ -12,6 +12,10 @@ const tipoManutencaoSchema = z.object({
   codigo: z.string().min(1, 'Código é obrigatório').max(20),
   nome: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres').max(100),
   ativo: z.boolean().default(true),
+  intervaloEmDias: z.preprocess(
+    (v) => (v === '' || v === undefined || v === null ? null : Number(v)),
+    z.number().int().positive('Intervalo deve ser maior que zero').nullable().optional()
+  ),
 });
 
 type TipoManutencao = z.infer<typeof tipoManutencaoSchema> & { id: string };
@@ -19,6 +23,11 @@ type TipoManutencao = z.infer<typeof tipoManutencaoSchema> & { id: string };
 const columns = [
   { key: 'codigo' as const, title: 'Código' },
   { key: 'nome' as const, title: 'Nome' },
+  {
+    key: 'intervaloEmDias' as const,
+    title: 'Intervalo (dias)',
+    format: (value: number | null) => value ? `${value} dias` : '—',
+  },
   {
     key: 'ativo' as const,
     title: 'Status',
@@ -35,6 +44,7 @@ const columns = [
 const formFields = [
   { name: 'codigo', label: 'Código', type: 'text' as const, required: true },
   { name: 'nome', label: 'Nome', type: 'text' as const, required: true },
+  { name: 'intervaloEmDias', label: 'Intervalo (dias) — opcional, usado para sugerir a próxima data', type: 'number' as const },
   { name: 'ativo', label: 'Ativo', type: 'switch' as const },
 ];
 

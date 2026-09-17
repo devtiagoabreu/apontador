@@ -28,6 +28,7 @@ export async function GET(
         atividadeManutencaoId: agendamentosManutencao.atividadeManutencaoId,
         atividadeNome: atividadesManutencao.nome,
         periodicidade: agendamentosManutencao.periodicidade,
+        prioridade: agendamentosManutencao.prioridade,
         dataPrevista: agendamentosManutencao.dataPrevista,
         status: agendamentosManutencao.status,
         origemManutencaoId: agendamentosManutencao.origemManutencaoId,

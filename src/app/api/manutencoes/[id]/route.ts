@@ -29,6 +29,7 @@ export async function GET(
         atividadeManutencaoId: manutencoes.atividadeManutencaoId,
         atividadeNome: atividadesManutencao.nome,
         periodicidade: manutencoes.periodicidade,
+        prioridade: manutencoes.prioridade,
         dataInicio: manutencoes.dataInicio,
         dataFim: manutencoes.dataFim,
         observacoes: manutencoes.observacoes,
@@ -37,6 +38,8 @@ export async function GET(
         operadorInicioNome: usuarios.nome,
         operadorFimId: manutencoes.operadorFimId,
         agendamentoId: manutencoes.agendamentoId,
+        // Backlog 2: intervalo do tipo para sugerir próxima data no reagendamento
+        tipoIntervaloEmDias: tiposManutencao.intervaloEmDias,
         createdAt: manutencoes.createdAt,
       })
       .from(manutencoes)

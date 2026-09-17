@@ -25,6 +25,7 @@
     "db:migrate-paradas": "tsx src/lib/db/migrations/01_create_paradas_maquina.ts",
     "db:migrate-producoes": "tsx src/lib/db/migrations/02_create_producoes.ts",
     "db:migrate-manutencao": "tsx src/lib/db/migrations/03_create_manutencoes.ts",
+    "db:migrate-manutencao-backlog": "tsx src/lib/db/migrations/04_add_prioridade_intervalo.ts",
     "db:seed-manutencao": "tsx src/lib/db/seed-manutencao.ts"
   },
   "dependencies": {

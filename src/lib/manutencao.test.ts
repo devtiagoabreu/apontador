@@ -5,8 +5,14 @@ import {
   conflitoParaFinalizarManutencao,
   conflitoParaCancelarAgendamento,
   validarDataPrevistaReagendamento,
+  validarPrioridade,
+  validarDataPrevistaAgendamento,
+  conflitoParaCriarAgendamento,
+  sugerirDataProximaManutencao,
   finalizarManutencaoSchema,
   PERIODICIDADE_LABEL,
+  PRIORIDADE_LABEL,
+  PRIORIDADE_OPCOES,
   STATUS_MANUTENCAO_LABEL,
   STATUS_AGENDAMENTO_LABEL,
 } from '@/lib/manutencao';
@@ -133,6 +139,111 @@ describe('validarDataPrevistaReagendamento', () => {
 
   it('rejeita data inválida', () => {
     expect(validarDataPrevistaReagendamento('data-invalida')).toBe('Data prevista inválida');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Backlog — Prioridade (0-3)
+// ---------------------------------------------------------------------------
+describe('validarPrioridade', () => {
+  it('aceita prioridades válidas (0-3)', () => {
+    expect(validarPrioridade(0)).toBeNull();
+    expect(validarPrioridade(1)).toBeNull();
+    expect(validarPrioridade(2)).toBeNull();
+    expect(validarPrioridade(3)).toBeNull();
+  });
+
+  it('rejeita prioridade fora da faixa', () => {
+    expect(validarPrioridade(-1)).toBe('Prioridade deve estar entre 0 e 3');
+    expect(validarPrioridade(4)).toBe('Prioridade deve estar entre 0 e 3');
+  });
+
+  it('rejeita não-inteiro', () => {
+    expect(validarPrioridade(1.5)).toBe('Prioridade inválida');
+  });
+
+  it('rejeita valor não numérico', () => {
+    expect(validarPrioridade('1')).toBe('Prioridade inválida');
+    expect(validarPrioridade(null)).toBe('Prioridade inválida');
+  });
+});
+
+describe('rótulos de prioridade', () => {
+  it('mapeia prioridade 0-3', () => {
+    expect(PRIORIDADE_LABEL[0]).toBe('Baixa');
+    expect(PRIORIDADE_LABEL[1]).toBe('Normal');
+    expect(PRIORIDADE_LABEL[2]).toBe('Alta');
+    expect(PRIORIDADE_LABEL[3]).toBe('Urgente');
+  });
+
+  it('expõe as 4 opções', () => {
+    expect(PRIORIDADE_OPCOES.map((o) => o.value)).toEqual([0, 1, 2, 3]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Backlog — Criação manual de agendamento
+// ---------------------------------------------------------------------------
+describe('conflitoParaCriarAgendamento', () => {
+  it('permite criar agendamento para máquina ativa', () => {
+    expect(conflitoParaCriarAgendamento({ ativo: true, status: 'DISPONIVEL' })).toBeNull();
+  });
+
+  it('bloqueia máquina inativa', () => {
+    expect(conflitoParaCriarAgendamento({ ativo: false, status: 'DISPONIVEL' })).toBe(
+      'Máquina inativa'
+    );
+  });
+});
+
+describe('validarDataPrevistaAgendamento', () => {
+  it('aceita data futura', () => {
+    const futura = new Date();
+    futura.setDate(futura.getDate() + 10);
+    expect(validarDataPrevistaAgendamento(futura.toISOString())).toBeNull();
+  });
+
+  it('aceita data de hoje', () => {
+    expect(validarDataPrevistaAgendamento(new Date().toISOString())).toBeNull();
+  });
+
+  it('rejeita data no passado', () => {
+    const passada = new Date();
+    passada.setDate(passada.getDate() - 1);
+    expect(validarDataPrevistaAgendamento(passada.toISOString())).toBe(
+      'Data prevista não pode ser no passado'
+    );
+  });
+
+  it('rejeita data inválida', () => {
+    expect(validarDataPrevistaAgendamento('nao-eh-data')).toBe('Data prevista inválida');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Backlog — Plano por período (sugestão de próxima data)
+// ---------------------------------------------------------------------------
+describe('sugerirDataProximaManutencao', () => {
+  const fim = new Date('2026-09-01T10:00:00.000Z');
+
+  it('retorna null sem intervalo', () => {
+    expect(sugerirDataProximaManutencao(fim, null)).toBeNull();
+    expect(sugerirDataProximaManutencao(fim, undefined)).toBeNull();
+  });
+
+  it('retorna null para intervalo inválido', () => {
+    expect(sugerirDataProximaManutencao(fim, 0)).toBeNull();
+    expect(sugerirDataProximaManutencao(fim, -10)).toBeNull();
+  });
+
+  it('soma o intervalo ao fim', () => {
+    expect(sugerirDataProximaManutencao(fim, 30)).toBe('2026-10-01');
+  });
+
+  it('nunca sugere data no passado (clampa para hoje)', () => {
+    const antigo = new Date('2000-01-01T00:00:00.000Z');
+    const hoje = new Date().toISOString().split('T')[0];
+    expect(sugerirDataProximaManutencao(antigo, 1)).toBe(hoje);
   });
 });
 

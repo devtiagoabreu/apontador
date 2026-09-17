@@ -18,6 +18,7 @@ const iniciarManutencaoSchema = z.object({
   atividadeManutencaoId: z.string().uuid('Atividade inválida'),
   periodicidade: z.enum(['EVENTUAL', 'PERIODICA']),
   agendamentoId: z.string().uuid('Agendamento inválido').optional(),
+  prioridade: z.number().int().min(0, 'Prioridade mínima 0').max(3, 'Prioridade máxima 3').optional(),
 });
 
 // GET: lista manutenções (filtros: maquinaId, status, operador) com joins para nomes
@@ -48,6 +49,7 @@ export async function GET(request: Request) {
         atividadeManutencaoId: manutencoes.atividadeManutencaoId,
         atividadeNome: atividadesManutencao.nome,
         periodicidade: manutencoes.periodicidade,
+        prioridade: manutencoes.prioridade,
         dataInicio: manutencoes.dataInicio,
         dataFim: manutencoes.dataFim,
         observacoes: manutencoes.observacoes,
@@ -111,6 +113,7 @@ export async function POST(request: Request) {
           tipoManutencaoId: validated.tipoManutencaoId,
           atividadeManutencaoId: validated.atividadeManutencaoId,
           periodicidade: validated.periodicidade,
+          prioridade: validated.prioridade ?? 1,
           status: 'EM_ANDAMENTO',
           agendamentoId: validated.agendamentoId || null,
           dataInicio: new Date(),

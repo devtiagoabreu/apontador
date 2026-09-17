@@ -1,5 +1,5 @@
 // src/lib/db/schema/tipos-manutencao.ts
-import { pgTable, uuid, varchar, boolean, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, boolean, integer, timestamp } from 'drizzle-orm/pg-core';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 
@@ -8,6 +8,8 @@ export const tiposManutencao = pgTable('tipos_manutencao', {
   codigo: varchar('codigo', { length: 20 }).notNull().unique(),
   nome: varchar('nome', { length: 100 }).notNull(),
   ativo: boolean('ativo').default(true),
+  // Plano por período: sugere a próxima data no reagendamento (dias a partir do fim)
+  intervaloEmDias: integer('intervalo_em_dias'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -16,6 +18,7 @@ export const insertTipoManutencaoSchema = createInsertSchema(tiposManutencao, {
   codigo: z.string().min(1, 'Código é obrigatório').max(20),
   nome: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres').max(100),
   ativo: z.boolean().default(true),
+  intervaloEmDias: z.number().int().positive('Intervalo deve ser maior que zero').nullable().optional(),
 });
 
 export const selectTipoManutencaoSchema = createSelectSchema(tiposManutencao);

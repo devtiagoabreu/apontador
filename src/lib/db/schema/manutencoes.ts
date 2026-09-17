@@ -1,5 +1,5 @@
 // src/lib/db/schema/manutencoes.ts
-import { pgTable, uuid, varchar, text, timestamp, AnyPgColumn } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, timestamp, smallint, AnyPgColumn } from 'drizzle-orm/pg-core';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { maquinas } from './maquinas';
@@ -25,6 +25,9 @@ export const manutencoes = pgTable('manutencoes', {
     .notNull(),
   periodicidade: varchar('periodicidade', { length: 10 }).notNull(),
 
+  // Prioridade (0 = Baixa, 1 = Normal, 2 = Alta, 3 = Urgente)
+  prioridade: smallint('prioridade').notNull().default(1),
+
   // Quando?
   dataInicio: timestamp('data_inicio').notNull().defaultNow(),
   dataFim: timestamp('data_fim'),
@@ -49,6 +52,7 @@ export const insertManutencaoSchema = createInsertSchema(manutencoes, {
   periodicidade: z.enum(['EVENTUAL', 'PERIODICA'], {
     errorMap: () => ({ message: 'Periodicidade inválida' }),
   }),
+  prioridade: z.number().int().min(0, 'Prioridade mínima 0').max(3, 'Prioridade máxima 3').default(1),
   dataInicio: z.date().optional(),
   dataFim: z.date().optional(),
   observacoes: z.string().optional(),
