@@ -6,6 +6,10 @@ import { manutencoes } from '@/lib/db/schema/manutencoes';
 import { maquinas } from '@/lib/db/schema/maquinas';
 import { agendamentosManutencao } from '@/lib/db/schema/agendamentos-manutencao';
 import { eq } from 'drizzle-orm';
+import {
+  conflitoParaIniciarAgendamento,
+  conflitoParaIniciarManutencao,
+} from '@/lib/manutencao';
 
 // POST: iniciar manutenção a partir de agendamento (pré-preenchido)
 export async function POST(
@@ -27,11 +31,10 @@ export async function POST(
       if (!agendamento) {
         throw new Error('Agendamento não encontrado');
       }
-      if (agendamento.status !== 'AGENDADO') {
-        throw new Error('Agendamento não está agendado');
-      }
+      const conflitoAgendamento = conflitoParaIniciarAgendamento(agendamento.status);
+      if (conflitoAgendamento) throw new Error(conflitoAgendamento);
 
-      // 2. Verificar máquina existe e está ativa
+      // 2. Verificar máquina existe e está ativa (RF9)
       const [maquina] = await tx
         .select()
         .from(maquinas)
@@ -41,15 +44,8 @@ export async function POST(
       if (!maquina) {
         throw new Error('Máquina não encontrada');
       }
-      if (!maquina.ativo) {
-        throw new Error('Máquina inativa');
-      }
-      if (maquina.status === 'EM_PROCESSO') {
-        throw new Error('Máquina está em processo de produção');
-      }
-      if (maquina.status === 'EM_MANUTENCAO') {
-        throw new Error('Máquina já está em manutenção');
-      }
+      const conflito = conflitoParaIniciarManutencao(maquina);
+      if (conflito) throw new Error(conflito);
 
       // 3. Criar manutenção vinculada ao agendamento
       const [novaManutencao] = await tx

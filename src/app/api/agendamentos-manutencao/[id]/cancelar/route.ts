@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { agendamentosManutencao } from '@/lib/db/schema/agendamentos-manutencao';
 import { eq } from 'drizzle-orm';
+import { conflitoParaCancelarAgendamento } from '@/lib/manutencao';
 
 // POST: cancelar agendamento (somente AGENDADO)
 export async function POST(
@@ -28,9 +29,10 @@ export async function POST(
         { status: 404 }
       );
     }
-    if (agendamento.status !== 'AGENDADO') {
+    const conflito = conflitoParaCancelarAgendamento(agendamento.status);
+    if (conflito) {
       return NextResponse.json(
-        { error: 'Apenas agendamentos com status AGENDADO podem ser cancelados' },
+        { error: conflito },
         { status: 400 }
       );
     }

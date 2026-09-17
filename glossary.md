@@ -22,6 +22,10 @@ Termos usados no projeto Apontador.
 - **Atividade de manutenção**: Mecânica, Elétrica, Programação, Limpeza, Lubrificação. Catálogo em `atividades_manutencao`.
 - **Periodicidade**: `EVENTUAL` (pontual, encerra no fim) ou `PERIODICA` (gera/pede agendamento da próxima).
 - **Agendamento de manutenção**: registro futuro (`agendamentos_manutencao`) com máquina, tipo, atividade e `dataPrevista`; status `AGENDADO → EM_ANDAMENTO → CONCLUIDO` (ou `CANCELADO`).
+- **Reagendamento (RF5)**: ao finalizar uma manutenção, o sistema pergunta "Deseja agendar a próxima manutenção?"; se "Sim", cria um novo agendamento para a mesma máquina/tipo/atividade/periodicidade com `dataPrevista` ≥ hoje.
+- **origemManutencaoId**: FK em `agendamentos_manutencao` que aponta para a manutenção que gerou o agendamento (trazibilidade do reagendamento).
+- **agendamentoId**: FK em `manutencoes` para o agendamento que originou a manutenção (início pré-preenchido).
+- **Conflito de máquina (RF9)**: regra que impede iniciar manutenção em máquina inativa, com produção ativa (`EM_PROCESSO`) ou já em manutenção (`EM_MANUTENCAO`).
 - **EM_MANUTENCAO**: status da máquina durante manutenção ativa (novo valor do enum de `maquinas.status`).
 - **loginMode**: modo de login persistido no JWT. `normal` (login com matrícula/senha) ou `avulso` (produção avulsa, sem OP).
 - **JWT/Token**: sessão gerada pelo NextAuth (estratégia JWT).

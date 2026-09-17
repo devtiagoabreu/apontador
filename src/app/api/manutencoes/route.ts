@@ -10,6 +10,7 @@ import { atividadesManutencao } from '@/lib/db/schema/atividades-manutencao';
 import { agendamentosManutencao } from '@/lib/db/schema/agendamentos-manutencao';
 import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
+import { conflitoParaIniciarManutencao } from '@/lib/manutencao';
 
 const iniciarManutencaoSchema = z.object({
   maquinaId: z.string().uuid('Máquina inválida'),
@@ -97,17 +98,9 @@ export async function POST(request: Request) {
         throw new Error('Máquina não encontrada');
       }
 
-      if (!maquina.ativo) {
-        throw new Error('Máquina inativa');
-      }
-
-      // 2. Verificar conflito: não pode iniciar se máquina EM_PROCESSO ou EM_MANUTENCAO
-      if (maquina.status === 'EM_PROCESSO') {
-        throw new Error('Não é possível iniciar manutenção em máquina com produção ativa');
-      }
-      if (maquina.status === 'EM_MANUTENCAO') {
-        throw new Error('Não é possível iniciar manutenção em máquina que já está em manutenção');
-      }
+      // 2. Verificar conflito RF9 (produção ativa / manutenção ativa / inativa)
+      const conflito = conflitoParaIniciarManutencao(maquina);
+      if (conflito) throw new Error(conflito);
 
       // 3. Inserir manutenção EM_ANDAMENTO
       const [novaManutencao] = await tx

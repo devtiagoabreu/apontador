@@ -5,16 +5,13 @@ import { db } from '@/lib/db';
 import { manutencoes } from '@/lib/db/schema/manutencoes';
 import { maquinas } from '@/lib/db/schema/maquinas';
 import { agendamentosManutencao } from '@/lib/db/schema/agendamentos-manutencao';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-
-const finalizarSchema = z.object({
-  observacoes: z.string().optional(),
-  agendar: z.discriminatedUnion('sim', [
-    z.object({ sim: z.literal(true), dataPrevista: z.string().min(1, 'Data é obrigatória') }),
-    z.object({ sim: z.literal(false) }),
-  ]),
-});
+import {
+  conflitoParaFinalizarManutencao,
+  finalizarManutencaoSchema,
+  validarDataPrevistaReagendamento,
+} from '@/lib/manutencao';
 
 // POST: finalizar manutenção + reagendamento opcional
 export async function POST(
@@ -26,7 +23,7 @@ export async function POST(
     if (auth.error) return auth.error;
 
     const body = await request.json();
-    const validated = finalizarSchema.parse(body);
+    const validated = finalizarManutencaoSchema.parse(body);
 
     const result = await db.transaction(async (tx) => {
       // 1. Verificar manutenção existe e está EM_ANDAMENTO
@@ -39,9 +36,8 @@ export async function POST(
       if (!manutencao) {
         throw new Error('Manutenção não encontrada');
       }
-      if (manutencao.status !== 'EM_ANDAMENTO') {
-        throw new Error('Manutenção não está em andamento');
-      }
+      const conflito = conflitoParaFinalizarManutencao(manutencao.status);
+      if (conflito) throw new Error(conflito);
 
       // 2. Finalizar manutenção
       const [finalizada] = await tx
@@ -72,10 +68,10 @@ export async function POST(
 
       // 5. Se agendar, criar novo agendamento
       if (validated.agendar.sim) {
+        const erroData = validarDataPrevistaReagendamento(validated.agendar.dataPrevista);
+        if (erroData) throw new Error(erroData);
+
         const dataPrevista = new Date(validated.agendar.dataPrevista);
-        if (dataPrevista < new Date()) {
-          throw new Error('Data prevista não pode ser no passado');
-        }
 
         await tx.insert(agendamentosManutencao).values({
           maquinaId: manutencao.maquinaId,
