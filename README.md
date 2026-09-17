@@ -11,6 +11,19 @@ O sistema é composto por duas interfaces principais:
 
 ---
 
+## 📚 Documentação
+
+| Documento | Conteúdo |
+|---|---|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Arquitetura, camadas, autenticação e padrões |
+| [docs/DATABASE.md](docs/DATABASE.md) | Tabelas, colunas e relacionamentos |
+| [docs/API.md](docs/API.md) | Endpoints, payloads e convenções |
+| [docs/BUSINESS_RULES.md](docs/BUSINESS_RULES.md) | Regras de negócio e fórmulas de eficiência |
+| [docs/TESTING.md](docs/TESTING.md) | Como rodar e estruturar os testes |
+| [glossary.md](glossary.md) | Glossário de termos do domínio |
+
+---
+
 ## 🚀 Funcionalidades
 
 ### 📊 Painel Administrativo
@@ -203,10 +216,16 @@ Com base no campo `tipo`, permitindo:
 
 | Script | Função |
 |------|--------|
+| `db:generate` | Gera migrations (drizzle-kit) |
 | `db:migrate` | Executa migrations |
-| `seed` | Popula dados iniciais |
-| `reset` | Limpa e recria banco |
-| `cron/importar-ops` | Importação automática ERP |
+| `db:push` | Envia schema direto ao banco |
+| `db:seed` | Popula dados iniciais |
+| `db:reset` | Limpa e recria banco (todas as tabelas) |
+| `test` | Testes (watch) |
+| `test:run` | Testes (execução única) |
+| `test:coverage` | Testes com cobertura |
+
+Detalhes sobre a suite de testes: [docs/TESTING.md](docs/TESTING.md).
 
 ---
 
