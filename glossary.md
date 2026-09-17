@@ -13,6 +13,16 @@ Termos usados no projeto Apontador.
 
 - **ADM**: administrador. Acessa o painel (`/dashboard`), relatórios e integração. Senha comparada com hash bcrypt.
 - **OPERADOR**: operador de chão de fábrica. Acessa o fluxo mobile (`/apontamento`); autentica apenas com a matrícula, sem senha.
+- **MANUTENCAO**: perfil de manutenção. Autentica com a matrícula (sem senha) e acessa **apenas** o fluxo mobile de manutenção e agendamentos (não vê produção nem dashboard).
+
+## Manutenção
+
+- **Manutenção**: apontamento de manutenção de máquina (tabela `manutencoes`), sem OP, feito por usuários de nível `MANUTENCAO`.
+- **Tipo de manutenção**: corretiva (após falha) ou preventiva (programada). Catálogo em `tipos_manutencao`.
+- **Atividade de manutenção**: Mecânica, Elétrica, Programação, Limpeza, Lubrificação. Catálogo em `atividades_manutencao`.
+- **Periodicidade**: `EVENTUAL` (pontual, encerra no fim) ou `PERIODICA` (gera/pede agendamento da próxima).
+- **Agendamento de manutenção**: registro futuro (`agendamentos_manutencao`) com máquina, tipo, atividade e `dataPrevista`; status `AGENDADO → EM_ANDAMENTO → CONCLUIDO` (ou `CANCELADO`).
+- **EM_MANUTENCAO**: status da máquina durante manutenção ativa (novo valor do enum de `maquinas.status`).
 - **loginMode**: modo de login persistido no JWT. `normal` (login com matrícula/senha) ou `avulso` (produção avulsa, sem OP).
 - **JWT/Token**: sessão gerada pelo NextAuth (estratégia JWT).
 

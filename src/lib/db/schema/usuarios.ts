@@ -3,7 +3,7 @@ import { pgTable, uuid, varchar, text, boolean, timestamp } from 'drizzle-orm/pg
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 
-export type NivelUsuario = 'ADM' | 'OPERADOR';
+export type NivelUsuario = 'ADM' | 'OPERADOR' | 'MANUTENCAO';
 
 export const usuarios = pgTable('usuarios', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -20,7 +20,7 @@ export const usuarios = pgTable('usuarios', {
 export const insertUsuarioSchema = createInsertSchema(usuarios, {
   nome: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres').max(100),
   matricula: z.string().min(1, 'Matrícula é obrigatória').max(20),
-  nivel: z.enum(['ADM', 'OPERADOR']).default('OPERADOR'),
+  nivel: z.enum(['ADM', 'OPERADOR', 'MANUTENCAO']).default('OPERADOR'),
   senha: z.string().optional(),
   ativo: z.boolean().default(true),
 });

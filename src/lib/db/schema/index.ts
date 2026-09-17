@@ -16,3 +16,7 @@ export * from './producoes-avulsas';
 export * from './configuracoes';
 export * from './sistemas-integracao';
 export * from './apis-integracao';
+export * from './tipos-manutencao';
+export * from './atividades-manutencao';
+export * from './manutencoes';
+export * from './agendamentos-manutencao';

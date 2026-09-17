@@ -3,7 +3,7 @@ import { pgTable, uuid, varchar, text, boolean, timestamp, decimal, integer } fr
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 
-export type StatusMaquina = 'DISPONIVEL' | 'EM_PROCESSO' | 'PARADA';
+export type StatusMaquina = 'DISPONIVEL' | 'EM_PROCESSO' | 'PARADA' | 'EM_MANUTENCAO';
 
 export const maquinas = pgTable('maquinas', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -26,7 +26,7 @@ export const maquinas = pgTable('maquinas', {
 export const insertMaquinaSchema = createInsertSchema(maquinas, {
   nome: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres').max(100),
   codigo: z.string().min(1, 'Código é obrigatório').max(20),
-  status: z.enum(['DISPONIVEL', 'EM_PROCESSO', 'PARADA']).default('DISPONIVEL'),
+  status: z.enum(['DISPONIVEL', 'EM_PROCESSO', 'PARADA', 'EM_MANUTENCAO']).default('DISPONIVEL'),
   ativo: z.boolean().default(true),
   velocidadePadrao: z.number().optional().default(0),
   capacidadeKg: z.number().optional().default(0),

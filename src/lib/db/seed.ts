@@ -9,6 +9,8 @@ import { estagios } from './schema/estagios';
 import { motivosParada } from './schema/motivos-parada';
 import { motivosCancelamento } from './schema/motivos-cancelamento';
 import { produtos } from './schema/produtos';
+import { tiposManutencao } from './schema/tipos-manutencao';
+import { atividadesManutencao } from './schema/atividades-manutencao';
 import bcrypt from 'bcryptjs';
 import { sql } from 'drizzle-orm';
 
@@ -30,6 +32,10 @@ async function seed() {
     await db.execute(sql`TRUNCATE TABLE motivos_parada CASCADE`);
     await db.execute(sql`TRUNCATE TABLE motivos_cancelamento CASCADE`);
     await db.execute(sql`TRUNCATE TABLE produtos CASCADE`);
+    await db.execute(sql`TRUNCATE TABLE manutencoes CASCADE`);
+    await db.execute(sql`TRUNCATE TABLE agendamentos_manutencao CASCADE`);
+    await db.execute(sql`TRUNCATE TABLE tipos_manutencao CASCADE`);
+    await db.execute(sql`TRUNCATE TABLE atividades_manutencao CASCADE`);
 
     // 1. Criar Áreas
     console.log('Criando áreas...');
@@ -213,6 +219,12 @@ async function seed() {
         nivel: 'OPERADOR',
         ativo: true,
       },
+      {
+        nome: 'Carlos Mecânico',
+        matricula: 'MNT001',
+        nivel: 'MANUTENCAO',
+        ativo: true,
+      },
     ]);
 
     // 6. Criar Estágios de Produção
@@ -288,6 +300,23 @@ async function seed() {
       },
     ]);
 
+    // 10. Criar Tipos de Manutenção
+    console.log('Criando tipos de manutenção...');
+    await db.insert(tiposManutencao).values([
+      { codigo: 'COR', nome: 'Corretiva', ativo: true },
+      { codigo: 'PRE', nome: 'Preventiva', ativo: true },
+    ]);
+
+    // 11. Criar Atividades de Manutenção
+    console.log('Criando atividades de manutenção...');
+    await db.insert(atividadesManutencao).values([
+      { codigo: 'MEC', nome: 'Mecânica', ativo: true },
+      { codigo: 'ELE', nome: 'Elétrica', ativo: true },
+      { codigo: 'PRO', nome: 'Programação', ativo: true },
+      { codigo: 'LIM', nome: 'Limpeza', ativo: true },
+      { codigo: 'LUB', nome: 'Lubrificação', ativo: true },
+    ]);
+
     console.log('✅ Seed concluído com sucesso!');
     
     // Mostrar resumo
@@ -296,15 +325,18 @@ async function seed() {
     console.log(`Setores: ${setoresList.length}`);
     console.log(`Máquinas: ${maquinasList.length}`);
     console.log(`Vínculos Máquina-Setor: ${vinculos.length}`);
-    console.log(`Usuários: 5 (1 admin, 4 operadores)`);
+    console.log(`Usuários: 6 (1 admin, 4 operadores, 1 manutenção)`);
     console.log(`Estágios: 8`);
     console.log(`Motivos de Parada: 10`);
     console.log(`Motivos de Cancelamento: 5`);
     console.log(`Produtos: 2`);
+    console.log(`Tipos de Manutenção: 2`);
+    console.log(`Atividades de Manutenção: 5`);
     
     console.log('\n🔑 Credenciais:');
     console.log('Admin: ADMIN001 / admin123');
     console.log('Operadores: OP001 a OP004 (sem senha - login via QR Code)');
+    console.log('Manutenção: MNT001 (sem senha - login via QR Code)');
 
   } catch (error) {
     console.error('❌ Erro durante o seed:', error);

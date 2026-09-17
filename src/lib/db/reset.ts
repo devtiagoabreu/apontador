@@ -26,6 +26,10 @@ async function reset() {
     await db.execute(sql`TRUNCATE TABLE motivos_parada CASCADE`);
     await db.execute(sql`TRUNCATE TABLE motivos_cancelamento CASCADE`);
     await db.execute(sql`TRUNCATE TABLE produtos CASCADE`);
+    await db.execute(sql`TRUNCATE TABLE manutencoes CASCADE`);
+    await db.execute(sql`TRUNCATE TABLE agendamentos_manutencao CASCADE`);
+    await db.execute(sql`TRUNCATE TABLE tipos_manutencao CASCADE`);
+    await db.execute(sql`TRUNCATE TABLE atividades_manutencao CASCADE`);
     
     // Reabilitar triggers
     await db.execute(sql`SET session_replication_role = 'origin';`);

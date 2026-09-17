@@ -15,6 +15,10 @@ import {
   insertProducaoSchema,
   insertParadaSchema,
 } from '@/lib/db/schema/apontamentos';
+import { insertTipoManutencaoSchema } from '@/lib/db/schema/tipos-manutencao';
+import { insertAtividadeManutencaoSchema } from '@/lib/db/schema/atividades-manutencao';
+import { insertManutencaoSchema } from '@/lib/db/schema/manutencoes';
+import { insertAgendamentoManutencaoSchema } from '@/lib/db/schema/agendamentos-manutencao';
 
 const UUID = '550e8400-e29b-41d4-a716-446655440000';
 const UUID2 = '550e8400-e29b-41d4-a716-446655440001';
@@ -70,6 +74,16 @@ describe('insertUsuarioSchema', () => {
     expect(data.nivel).toBe('ADM');
   });
 
+  it('aceita perfil MANUTENCAO', () => {
+    const data = validar(insertUsuarioSchema, {
+      nome: 'Carlos',
+      matricula: 'MNT1',
+      nivel: 'MANUTENCAO',
+      ativo: true,
+    });
+    expect(data.nivel).toBe('MANUTENCAO');
+  });
+
   it('rejeita nome curto e matrícula vazia', () => {
     expect(
       insertUsuarioSchema.safeParse({ nome: 'ab', matricula: 'OP1' }).success
@@ -104,6 +118,15 @@ describe('insertMaquinaSchema', () => {
       status: 'EM_PROCESSO',
     });
     expect(data.status).toBe('EM_PROCESSO');
+  });
+
+  it('aceita status EM_MANUTENCAO', () => {
+    const data = validar(insertMaquinaSchema, {
+      nome: 'Máquina 1',
+      codigo: 'M1',
+      status: 'EM_MANUTENCAO',
+    });
+    expect(data.status).toBe('EM_MANUTENCAO');
   });
 
   it('rejeita status inválido', () => {
@@ -264,5 +287,148 @@ describe('insertParadaSchema (apontamento unificado)', () => {
 
   it('rejeita tipo divergente (PRODUCAO) no schema de parada', () => {
     expect(insertParadaSchema.safeParse({ ...base, tipo: 'PRODUCAO' }).success).toBe(false);
+  });
+});
+
+describe('insertTipoManutencaoSchema', () => {
+  it('aceita tipo de manutenção válido e mantém os campos fornecidos', () => {
+    const data = validar(insertTipoManutencaoSchema, {
+      codigo: 'COR',
+      nome: 'Corretiva',
+      ativo: false,
+    });
+    expect(data.codigo).toBe('COR');
+    expect(data.nome).toBe('Corretiva');
+    expect(data.ativo).toBe(false);
+  });
+
+  it('rejeita nome curto', () => {
+    expect(
+      insertTipoManutencaoSchema.safeParse({ codigo: 'COR', nome: 'ab' }).success
+    ).toBe(false);
+  });
+
+  it('rejeita código vazio', () => {
+    expect(
+      insertTipoManutencaoSchema.safeParse({ codigo: '', nome: 'Corretiva' }).success
+    ).toBe(false);
+  });
+});
+
+describe('insertAtividadeManutencaoSchema', () => {
+  it('aceita atividade de manutenção válida', () => {
+    const data = validar(insertAtividadeManutencaoSchema, {
+      codigo: 'MEC',
+      nome: 'Mecânica',
+    });
+    expect(data.nome).toBe('Mecânica');
+  });
+
+  it('rejeita nome curto', () => {
+    expect(
+      insertAtividadeManutencaoSchema.safeParse({ codigo: 'MEC', nome: 'ab' }).success
+    ).toBe(false);
+  });
+});
+
+describe('insertManutencaoSchema', () => {
+  const base = {
+    maquinaId: UUID,
+    operadorInicioId: UUID2,
+    tipoManutencaoId: UUID,
+    atividadeManutencaoId: UUID2,
+    periodicidade: 'EVENTUAL' as const,
+  };
+
+  it('aceita início de manutenção válido (dataInicio/status são default do banco)', () => {
+    const data = validar(insertManutencaoSchema, base);
+    expect(data.periodicidade).toBe('EVENTUAL');
+  });
+
+  it('aceita status explícito', () => {
+    const data = validar(insertManutencaoSchema, { ...base, status: 'CONCLUIDA' });
+    expect(data.status).toBe('CONCLUIDA');
+  });
+
+  it('aceita periodicidade PERIODICA', () => {
+    const data = validar(insertManutencaoSchema, { ...base, periodicidade: 'PERIODICA' });
+    expect(data.periodicidade).toBe('PERIODICA');
+  });
+
+  it('rejeita periodicidade inválida', () => {
+    expect(
+      insertManutencaoSchema.safeParse({ ...base, periodicidade: 'MENSAL' }).success
+    ).toBe(false);
+  });
+
+  it('rejeita status inválido', () => {
+    expect(
+      insertManutencaoSchema.safeParse({ ...base, status: 'ATIVA' }).success
+    ).toBe(false);
+  });
+
+  it('rejeita máquina que não é UUID', () => {
+    expect(
+      insertManutencaoSchema.safeParse({ ...base, maquinaId: 'nao-uuid' }).success
+    ).toBe(false);
+  });
+
+  it('aceita dataFim e observações opcionais', () => {
+    const data = validar(insertManutencaoSchema, {
+      ...base,
+      dataFim: new Date(),
+      observacoes: 'Troca de rolamento',
+    });
+    expect(data.observacoes).toBe('Troca de rolamento');
+  });
+});
+
+describe('insertAgendamentoManutencaoSchema', () => {
+  const base = {
+    maquinaId: UUID,
+    tipoManutencaoId: UUID,
+    atividadeManutencaoId: UUID2,
+    periodicidade: 'PERIODICA' as const,
+    dataPrevista: new Date(),
+  };
+
+  it('aceita agendamento válido (status é default do banco)', () => {
+    const data = validar(insertAgendamentoManutencaoSchema, base);
+    expect(data.dataPrevista).toBeInstanceOf(Date);
+  });
+
+  it('aceita status AGENDADO explícito', () => {
+    const data = validar(insertAgendamentoManutencaoSchema, {
+      ...base,
+      status: 'AGENDADO',
+    });
+    expect(data.status).toBe('AGENDADO');
+  });
+
+  it('aceita status CANCELADO com observações', () => {
+    const data = validar(insertAgendamentoManutencaoSchema, {
+      ...base,
+      status: 'CANCELADO',
+      observacoes: 'Sem peça de reposição',
+    });
+    expect(data.status).toBe('CANCELADO');
+    expect(data.observacoes).toBe('Sem peça de reposição');
+  });
+
+  it('rejeita período sem dataPrevista', () => {
+    const { dataPrevista: _removed, ...semData } = base;
+    expect(insertAgendamentoManutencaoSchema.safeParse(semData).success).toBe(false);
+  });
+
+  it('rejeita periodicidade inválida', () => {
+    expect(
+      insertAgendamentoManutencaoSchema.safeParse({ ...base, periodicidade: 'ANUAL' }).success
+    ).toBe(false);
+  });
+
+  it('rejeita status inválido', () => {
+    expect(
+      insertAgendamentoManutencaoSchema.safeParse({ ...base, status: 'PAUSADO' }).success
+    ).toBe(false);
   });
 });

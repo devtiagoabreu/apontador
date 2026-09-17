@@ -19,6 +19,7 @@ O sistema é composto por duas interfaces principais:
 | [docs/DATABASE.md](docs/DATABASE.md) | Tabelas, colunas e relacionamentos |
 | [docs/API.md](docs/API.md) | Endpoints, payloads e convenções |
 | [docs/BUSINESS_RULES.md](docs/BUSINESS_RULES.md) | Regras de negócio e fórmulas de eficiência |
+| [docs/MAINTENANCE.md](docs/MAINTENANCE.md) | Especificação do módulo de manutenção |
 | [docs/TESTING.md](docs/TESTING.md) | Como rodar e estruturar os testes |
 | [glossary.md](glossary.md) | Glossário de termos do domínio |
 
