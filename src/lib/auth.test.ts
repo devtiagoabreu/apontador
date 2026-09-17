@@ -45,9 +45,26 @@ describe('NextAuth authorize (CredentialsProvider)', () => {
     await expect(authorize({ matricula: 'OP1', senha: 'OP1' })).resolves.toBeNull();
   });
 
-  it('retorna null quando não há senha informada', async () => {
-    findFirst.mockResolvedValue({ id: '1', ativo: true, nivel: 'OPERADOR', matricula: 'OP1' });
-    await expect(authorize({ matricula: 'OP1' })).resolves.toBeNull();
+  it('autentica operador com a matrícula, sem exigir senha (login QR)', async () => {
+    findFirst.mockResolvedValue({
+      id: 'op-1',
+      nome: 'Operador',
+      matricula: 'OP1',
+      nivel: 'OPERADOR',
+      ativo: true,
+      senha: null,
+    });
+
+    const resultado = await authorize({ matricula: 'OP1' });
+
+    expect(compare).not.toHaveBeenCalled();
+    expect(resultado).toMatchObject({
+      id: 'op-1',
+      nome: 'Operador',
+      matricula: 'OP1',
+      nivel: 'OPERADOR',
+      loginMode: 'normal',
+    });
   });
 
   it('autentica ADM com senha válida (hash bcrypt)', async () => {
@@ -73,6 +90,17 @@ describe('NextAuth authorize (CredentialsProvider)', () => {
     });
   });
 
+  it('retorna null para ADM sem senha informada', async () => {
+    findFirst.mockResolvedValue({
+      id: 'adm-1',
+      nivel: 'ADM',
+      ativo: true,
+      senha: 'hash-admin',
+    });
+    await expect(authorize({ matricula: 'ADM' })).resolves.toBeNull();
+    expect(compare).not.toHaveBeenCalled();
+  });
+
   it('retorna null para ADM com senha inválida', async () => {
     findFirst.mockResolvedValue({
       id: 'adm-1',
@@ -84,38 +112,6 @@ describe('NextAuth authorize (CredentialsProvider)', () => {
     await expect(authorize({ matricula: 'ADM', senha: 'errada' })).resolves.toBeNull();
   });
 
-  it('usa a própria matrícula como senha padrão do operador', async () => {
-    findFirst.mockResolvedValue({
-      id: 'op-1',
-      nome: 'Operador',
-      matricula: 'OP1',
-      nivel: 'OPERADOR',
-      ativo: true,
-      senha: null,
-    });
-    compare.mockResolvedValue(true as never);
-
-    const resultado = await authorize({ matricula: 'OP1', senha: 'OP1' });
-
-    expect(compare).toHaveBeenCalledWith('OP1', 'OP1');
-    expect(resultado.nivel).toBe('OPERADOR');
-  });
-
-  it('usa a senha do cadastro quando o operador possui senha', async () => {
-    findFirst.mockResolvedValue({
-      id: 'op-2',
-      matricula: 'OP2',
-      nivel: 'OPERADOR',
-      ativo: true,
-      senha: 'hash-op',
-    });
-    compare.mockResolvedValue(true as never);
-
-    await authorize({ matricula: 'OP2', senha: 'minha-senha' });
-
-    expect(compare).toHaveBeenCalledWith('minha-senha', 'hash-op');
-  });
-
   it('propaga o loginMode avulso', async () => {
     findFirst.mockResolvedValue({
       id: 'op-3',
@@ -124,11 +120,9 @@ describe('NextAuth authorize (CredentialsProvider)', () => {
       ativo: true,
       senha: null,
     });
-    compare.mockResolvedValue(true as never);
 
     const resultado = await authorize({
       matricula: 'OP3',
-      senha: 'OP3',
       loginMode: 'avulso',
     });
 

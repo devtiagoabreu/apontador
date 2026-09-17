@@ -22,7 +22,7 @@ src/
     utils.test.ts             # utilidades puras (formatadores, ordenação, etc.)
     estagio-utils.test.ts     # estilo/nome de estágio
     api-auth.test.ts          # requireAuth (401/403/sucesso)
-    auth.test.ts              # authorize do CredentialsProvider (ADM bcrypt, operador matrícula, loginMode)
+    auth.test.ts              # authorize do CredentialsProvider (ADM bcrypt, operador sem senha, loginMode)
     systextil/index.test.ts   # importarOps (token, cache, erros, API por id)
     cron/importar-ops.test.ts # importação automática + isolamento por sistema
     db/schema/schemas.test.ts # schemas Zod (validação de campos, enums, literais, UUID)

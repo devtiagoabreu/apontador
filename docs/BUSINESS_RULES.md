@@ -8,9 +8,7 @@ Regras operacionais e fórmulas implementadas no Apontador. Para localização n
 
 1. Todo acesso exige sessão; o painel administrativo exige `nivel === 'ADM'`.
 2. **Administrador (ADM)**: a senha informada é comparada com o hash **bcrypt** salvo na coluna `usuarios.senha` (`src/lib/auth.ts`).
-3. **Operador (OPERADOR)**:
-   - Sem senha cadastrada → a senha válida é a **própria matrícula**.
-   - Com senha cadastrada → usa a senha do cadastro (também armazenada como hash bcrypt).
+3. **Operador (OPERADOR)**: **não** exige senha — autentica apenas com a matrícula (fluxo QR / login mobile). Senha é exigida somente para `ADM`.
 4. O campo `loginMode` do login é preservado na sessão/JWT (`normal` ou `avulso`); o modo **avulso** habilita o fluxo de produção sem OP (produções avulsas).
 5. Sem sessão: `401`. Sessão de não-ADM em rota administrativa: `403`.
 

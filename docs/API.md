@@ -36,7 +36,7 @@ Aplica-se a: `areas`, `setores`, `maquinas`, `estagios`, `motivos-parada`, `moti
 |---|---|---|
 | `/api/auth/[...nextauth]` | any | NextAuth (login/logout/session). Ver `src/lib/auth.ts`. |
 
-- Login por `matricula` + `senha` (Credentials). Operador pode entrar com a própria matrícula como senha.
+- Login por `matricula` (Credentials). Operador autentica só com a matrícula; ADM exige `senha`.
 - Campo `loginMode` (`normal`/`avulso`) é persistido no JWT.
 
 ---

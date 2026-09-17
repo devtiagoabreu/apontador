@@ -38,7 +38,7 @@ Toda a persistência passa por rotas da API (`/api/*`) que validam sessão via `
 
 - **Login** (`src/lib/auth.ts`): `CredentialsProvider` com matrícula/senha.
   - `ADM`: senha comparada com hash bcrypt salvo no cadastro.
-  - `OPERADOR`: senha padrão é a própria matrícula; se o cadastro tiver `senha`, ela prevalece.
+  - `OPERADOR`: sem exigência de senha — loga apenas com a matrícula (fluxo QR / mobile).
   - Suporta `loginMode` (`normal` | `avulso`), armazenado no JWT.
 - **Middleware** (`src/middleware.ts`): `withAuth`
   - `/dashboard` exige token com `nivel === 'ADM'` (redireciona para `/apontamento` caso contrário).

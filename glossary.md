@@ -12,7 +12,7 @@ Termos usados no projeto Apontador.
 ## Autenticação e perfis
 
 - **ADM**: administrador. Acessa o painel (`/dashboard`), relatórios e integração. Senha comparada com hash bcrypt.
-- **OPERADOR**: operador de chão de fábrica. Acessa o fluxo mobile (`/apontamento`); senha padrão = própria matrícula.
+- **OPERADOR**: operador de chão de fábrica. Acessa o fluxo mobile (`/apontamento`); autentica apenas com a matrícula, sem senha.
 - **loginMode**: modo de login persistido no JWT. `normal` (login com matrícula/senha) ou `avulso` (produção avulsa, sem OP).
 - **JWT/Token**: sessão gerada pelo NextAuth (estratégia JWT).
 
