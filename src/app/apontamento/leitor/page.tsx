@@ -20,7 +20,10 @@ export default function LeitorPage() {
         scanner.clear();
 
         // REDIRECIONAMENTO AUTOMÁTICO POR SESSÃO
-        if (session?.user?.loginMode === 'avulso') {
+        // MANUTENCAO → apontamento de manutenção; demais → produção (normal ou avulsa)
+        if (session?.user?.nivel === 'MANUTENCAO') {
+          router.push(`/apontamento/manutencao/iniciar?machine=${id}`);
+        } else if (session?.user?.loginMode === 'avulso') {
           router.push(`/apontamento/avulso/iniciar?machine=${id}`);
         } else {
           router.push(`/apontamento/machine/${id}`);

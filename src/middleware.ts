@@ -19,10 +19,44 @@ export default withAuth(
       
       if (token.nivel !== 'ADM') {
         console.log('   ❌ Nível incorreto, redirecionando para apontamento');
-        return NextResponse.redirect(new URL('/apontamento', req.url));
+        return NextResponse.redirect(
+          new URL(token.nivel === 'MANUTENCAO' ? '/apontamento/manutencao' : '/apontamento', req.url)
+        );
       }
       
       console.log('   ✅ Acesso permitido ao dashboard');
+      return NextResponse.next();
+    }
+
+    // Módulo de manutenção: apenas MANUTENCAO e ADM
+    if (path.startsWith('/apontamento/manutencao')) {
+      if (!token) {
+        console.log('   ❌ Sem token, redirecionando para login');
+        return NextResponse.redirect(new URL('/login', req.url));
+      }
+
+      // ADM pode visualizar (dashboard) mas o fluxo mobile é do perfil MANUTENCAO.
+      // Para simplificar, ADM é redirecionado ao dashboard quando navega no mobile de manutenção.
+      if (token.nivel === 'OPERADOR') {
+        console.log('   ❌ OPERADOR não acessa manutenção, redirecionando para produção');
+        return NextResponse.redirect(new URL('/apontamento', req.url));
+      }
+
+      return NextResponse.next();
+    }
+
+    // Fluxo de produção: MANUTENCAO não acessa
+    if (path.startsWith('/apontamento')) {
+      if (!token) {
+        console.log('   ❌ Sem token, redirecionando para login');
+        return NextResponse.redirect(new URL('/login', req.url));
+      }
+
+      if (token.nivel === 'MANUTENCAO') {
+        console.log('   ❌ MANUTENCAO não acessa produção, redirecionando para manutenção');
+        return NextResponse.redirect(new URL('/apontamento/manutencao', req.url));
+      }
+
       return NextResponse.next();
     }
 
@@ -31,6 +65,9 @@ export default withAuth(
         if (token.nivel === 'ADM') {
           console.log('   ✅ Usuário ADMIN já logado, redirecionando para dashboard');
           return NextResponse.redirect(new URL('/dashboard', req.url));
+        } else if (token.nivel === 'MANUTENCAO') {
+          console.log('   ✅ Usuário MANUTENCAO já logado, redirecionando para manutenção');
+          return NextResponse.redirect(new URL('/apontamento/manutencao', req.url));
         } else {
           console.log('   ✅ Usuário OPERADOR já logado, redirecionando para apontamento');
           return NextResponse.redirect(new URL('/apontamento', req.url));

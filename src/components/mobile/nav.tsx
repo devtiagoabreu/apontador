@@ -4,44 +4,69 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { Home, QrCode, Factory, Clock, History } from 'lucide-react';
+import { Home, QrCode, Factory, Clock, History, CalendarDays } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function MobileNav() {
   const pathname = usePathname();
   const { data: session } = useSession();
   
-  // Identifica se o usuário está no modo avulso
+  // Identifica o perfil e o modo de login
+  const nivel = session?.user?.nivel;
+  const isManutencao = nivel === 'MANUTENCAO';
   const isAvulso = session?.user?.loginMode === 'avulso';
 
-  // Define as rotas dinamicamente
-  const navItems = [
-    {
-      label: 'Início',
-      href: isAvulso ? '/apontamento/avulso' : '/apontamento',
-      icon: Home,
-    },
-    {
-      label: 'Leitor',
-      href: '/apontamento/leitor',
-      icon: QrCode,
-    },
-    {
-      label: 'Produções',
-      href: isAvulso ? '/apontamento/avulso' : '/apontamento/producoes',
-      icon: Factory,
-    },
-    {
-      label: 'Paradas',
-      href: '/apontamento/paradas',
-      icon: Clock,
-    },
-    {
-      label: 'Histórico',
-      href: '/apontamento/historico',
-      icon: History,
-    },
-  ];
+  // Define as rotas dinamicamente — MANUTENCAO tem nav própria (sem produção)
+  const navItems = isManutencao
+    ? [
+        {
+          label: 'Início',
+          href: '/apontamento/manutencao',
+          icon: Home,
+        },
+        {
+          label: 'Leitor',
+          href: '/apontamento/leitor',
+          icon: QrCode,
+        },
+        {
+          label: 'Agendamentos',
+          href: '/apontamento/manutencao/agendamentos',
+          icon: CalendarDays,
+        },
+        {
+          label: 'Histórico',
+          href: '/apontamento/manutencao/historico',
+          icon: History,
+        },
+      ]
+    : [
+        {
+          label: 'Início',
+          href: isAvulso ? '/apontamento/avulso' : '/apontamento',
+          icon: Home,
+        },
+        {
+          label: 'Leitor',
+          href: '/apontamento/leitor',
+          icon: QrCode,
+        },
+        {
+          label: 'Produções',
+          href: isAvulso ? '/apontamento/avulso' : '/apontamento/producoes',
+          icon: Factory,
+        },
+        {
+          label: 'Paradas',
+          href: '/apontamento/paradas',
+          icon: Clock,
+        },
+        {
+          label: 'Histórico',
+          href: '/apontamento/historico',
+          icon: History,
+        },
+      ];
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 pb-safe">

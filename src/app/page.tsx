@@ -9,6 +9,8 @@ export default async function HomePage() {
   if (session) {
     if (session.user.nivel === 'ADM') {
       redirect('/dashboard');
+    } else if (session.user.nivel === 'MANUTENCAO') {
+      redirect('/apontamento/manutencao');
     } else {
       redirect('/apontamento');
     }

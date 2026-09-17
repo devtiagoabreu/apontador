@@ -19,7 +19,7 @@ import { QRCodeSVG } from 'qrcode.react';
 const usuarioBaseSchema = z.object({
   nome: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres'),
   matricula: z.string().min(1, 'Matrícula é obrigatória'),
-  nivel: z.enum(['ADM', 'OPERADOR']).default('OPERADOR'),
+  nivel: z.enum(['ADM', 'OPERADOR', 'MANUTENCAO']).default('OPERADOR'),
   senha: z.string().optional(),
   ativo: z.boolean().default(true),
 });
@@ -46,7 +46,8 @@ const columns = [
   { 
     key: 'nivel' as const, 
     title: 'Nível',
-    format: (value: string) => value === 'ADM' ? 'Administrador' : 'Operador'
+    format: (value: string) =>
+      value === 'ADM' ? 'Administrador' : value === 'MANUTENCAO' ? 'Manutenção' : 'Operador'
   },
   {
     key: 'ativo' as const,
@@ -70,6 +71,7 @@ const formFields = [
     type: 'select' as const,
     options: [
       { value: 'OPERADOR', label: 'Operador' },
+      { value: 'MANUTENCAO', label: 'Manutenção' },
       { value: 'ADM', label: 'Administrador' }
     ]
   },
@@ -104,8 +106,8 @@ export default function UsuariosPage() {
 
   async function handleSubmit(data: UsuarioFormData) {
     try {
-      // Se for operador, remover senha
-      if (data.nivel === 'OPERADOR') {
+      // Se não for admin, remover senha (OPERADOR e MANUTENCAO não usam senha)
+      if (data.nivel !== 'ADM') {
         delete data.senha;
       }
 

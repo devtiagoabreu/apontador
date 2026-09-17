@@ -1,4 +1,6 @@
 import { redirect } from 'next/navigation';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { maquinas } from '@/lib/db/schema/maquinas';
 import { eq } from 'drizzle-orm';
@@ -31,6 +33,12 @@ export default async function MachineQRPage({ params }: { params: { id: string }
     );
   }
 
-  // Redirecionar para a página de apontamento da máquina
+  // Redirecionar conforme o nível do usuário logado:
+  // - MANUTENCAO → apontamento de manutenção
+  // - demais → produção (página da máquina)
+  const session = await getServerSession(authOptions);
+  if (session?.user?.nivel === 'MANUTENCAO') {
+    redirect(`/apontamento/manutencao/iniciar?machine=${maquina.id}`);
+  }
   redirect(`/apontamento/machine/${maquina.id}`);
 }

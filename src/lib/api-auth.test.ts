@@ -12,7 +12,7 @@ vi.mock('@/lib/auth', () => ({
 
 const mockedGetServerSession = vi.mocked(getServerSession);
 
-function sessao(nivel: 'ADM' | 'OPERADOR') {
+function sessao(nivel: 'ADM' | 'OPERADOR' | 'MANUTENCAO') {
   return {
     user: { id: 'u1', nome: 'Usuário', matricula: 'MAT1', nivel },
     expires: '2099-01-01T00:00:00.000Z',
@@ -52,5 +52,39 @@ describe('requireAuth', () => {
     const resultado = await requireAuth();
     expect(resultado.error).toBeNull();
     expect(resultado.session?.user.nivel).toBe('OPERADOR');
+  });
+
+  it('autoriza MANUTENCAO quando está em allowedNiveis', async () => {
+    mockedGetServerSession.mockResolvedValue(sessao('MANUTENCAO'));
+    const resultado = await requireAuth({ allowedNiveis: ['MANUTENCAO', 'ADM'] });
+    expect(resultado.error).toBeNull();
+    expect(resultado.session?.user.nivel).toBe('MANUTENCAO');
+  });
+
+  it('retorna 403 para OPERADOR fora de allowedNiveis', async () => {
+    mockedGetServerSession.mockResolvedValue(sessao('OPERADOR'));
+    const resultado = await requireAuth({ allowedNiveis: ['MANUTENCAO', 'ADM'] });
+    expect(resultado.error?.status).toBe(403);
+  });
+
+  it('retorna 403 para ADM fora de allowedNiveis', async () => {
+    mockedGetServerSession.mockResolvedValue(sessao('ADM'));
+    const resultado = await requireAuth({ allowedNiveis: ['MANUTENCAO'] });
+    expect(resultado.error?.status).toBe(403);
+  });
+
+  it('autoriza ADM em allowedNiveis', async () => {
+    mockedGetServerSession.mockResolvedValue(sessao('ADM'));
+    const resultado = await requireAuth({ allowedNiveis: ['MANUTENCAO', 'ADM'] });
+    expect(resultado.error).toBeNull();
+  });
+
+  it('allowedNiveis tem precedência sobre requiredLevel', async () => {
+    mockedGetServerSession.mockResolvedValue(sessao('MANUTENCAO'));
+    const resultado = await requireAuth({
+      requiredLevel: 'ADM',
+      allowedNiveis: ['MANUTENCAO', 'ADM'],
+    });
+    expect(resultado.error).toBeNull();
   });
 });

@@ -462,7 +462,7 @@ Comparação conceitual do módulo com as principais implementações abertas de
 ## 12. Plano de implantação (fases)
 
 - **Fase 1 — Fundação** ✅ *concluída (2026-09-17)*: migrations + schemas Drizzle/Zod (4 tabelas: `tipos_manutencao`, `atividades_manutencao`, `manutencoes`, `agendamentos_manutencao`), enum `MANUTENCAO` e `EM_MANUTENCAO`, seed incremental idempotente (`db:seed-manutencao`, não trunca), `schema/index.ts`.
-- **Fase 2 — Auth e QR**: `api-auth` (allowedNiveis), redirects (`middleware`, `page.tsx`, layouts, nav), leitor + QR machine por nível, CRUD usuários aceita `MANUTENCAO`.
+- **Fase 2 — Auth e QR** ✅ *concluída (2026-09-17)*: `api-auth` (allowedNiveis com precedência sobre requiredLevel + testes), redirects (`middleware` com rotas `/apontamento/manutencao` para MANUTENCAO/ADM, `page.tsx`), leitor + QR machine por nível (MANUTENCAO → `/apontamento/manutencao/iniciar?machine=<id>`), nav/header mobile com variante MANUTENCAO, CRUD usuários aceita `MANUTENCAO` (form dashboard + `usuarioUpdateSchema`), home mínima de manutenção navegável (Fase 4 completa com dados).
 - **Fase 3 — CRUDs de catálogo**: APIs + telas dashboard (`tipos-manutencao`, `atividades-manutencao`).
 - **Fase 4 — Apontamento mobile**: home manutenção, iniciar (QR e agendamento), finalizar (+reagendamento), agendamentos, histórico; nav mobile.
 - **Fase 5 — Dashboard de manutenção**: visão geral, agendamentos (cancelar), histórico; item no menu.

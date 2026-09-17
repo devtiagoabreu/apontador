@@ -9,7 +9,7 @@ import { requireAuth } from '@/lib/api-auth';
 const updateUserSchema = z.object({
   nome: z.string().min(1).optional(),
   matricula: z.string().min(1).optional(),
-  nivel: z.enum(['OPERADOR', 'ADM']).optional(),
+  nivel: z.enum(['OPERADOR', 'ADM', 'MANUTENCAO']).optional(),
   ativo: z.boolean().optional(),
   senha: z.string().min(4).optional(),
 });
