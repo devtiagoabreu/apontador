@@ -45,6 +45,16 @@ export default withAuth(
       return NextResponse.next();
     }
 
+    // Leitor QR: rota compartilhada — MANUTENCAO usa para escanear (o leitor redireciona por nível)
+    if (path === '/apontamento/leitor' || path.startsWith('/apontamento/leitor/')) {
+      if (!token) {
+        console.log('   ❌ Sem token, redirecionando para login');
+        return NextResponse.redirect(new URL('/login', req.url));
+      }
+      console.log('   ✅ Acesso permitido ao leitor');
+      return NextResponse.next();
+    }
+
     // Fluxo de produção: MANUTENCAO não acessa
     if (path.startsWith('/apontamento')) {
       if (!token) {
