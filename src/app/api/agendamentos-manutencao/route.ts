@@ -16,11 +16,13 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const maquinaId = searchParams.get('maquinaId');
-    const status = searchParams.get('status') || 'AGENDADO';
+    const status = searchParams.get('status');
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    const conditions = [eq(agendamentosManutencao.status, status as any)];
+    // Sem parâmetro status = todos; com parâmetro = filtra (default AGENDADO no mobile)
+    const conditions = [];
+    if (status) conditions.push(eq(agendamentosManutencao.status, status as any));
     if (maquinaId) conditions.push(eq(agendamentosManutencao.maquinaId, maquinaId));
 
     const result = await db
@@ -44,7 +46,7 @@ export async function GET(request: Request) {
       .leftJoin(maquinas, eq(agendamentosManutencao.maquinaId, maquinas.id))
       .leftJoin(tiposManutencao, eq(agendamentosManutencao.tipoManutencaoId, tiposManutencao.id))
       .leftJoin(atividadesManutencao, eq(agendamentosManutencao.atividadeManutencaoId, atividadesManutencao.id))
-      .where(and(...conditions))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(agendamentosManutencao.dataPrevista)
       .limit(limit)
       .offset(offset);

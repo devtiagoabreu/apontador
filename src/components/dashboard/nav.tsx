@@ -21,12 +21,15 @@ import {
   Play,
   Wrench,
   ClipboardList,
+  CalendarDays,
+  History,
 } from 'lucide-react';
 
 interface NavItem {
   title: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
+  group?: string; // Cabeçalho de grupo visual (ex.: "Manutenção")
 }
 
 const navItems: NavItem[] = [
@@ -91,14 +94,34 @@ const navItems: NavItem[] = [
     icon: XCircle,
   },
   {
+    title: 'Manutenção',
+    href: '/dashboard/manutencao',
+    icon: Wrench,
+    group: 'Manutenção',
+  },
+  {
+    title: 'Agendamentos Manut.',
+    href: '/dashboard/manutencao/agendamentos',
+    icon: CalendarDays,
+    group: 'Manutenção',
+  },
+  {
+    title: 'Histórico Manut.',
+    href: '/dashboard/manutencao/historico',
+    icon: History,
+    group: 'Manutenção',
+  },
+  {
     title: 'Tipos de Manutenção',
     href: '/dashboard/tipos-manutencao',
     icon: Wrench,
+    group: 'Manutenção',
   },
   {
     title: 'Atividades de Manutenção',
     href: '/dashboard/atividades-manutencao',
     icon: ClipboardList,
+    group: 'Manutenção',
   },
   {
     title: 'Ordens de Produção',
@@ -166,26 +189,36 @@ export function DashboardNav({ isCollapsed = false, onToggle }: DashboardNavProp
 
       {/* Links do menu */}
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
-        {navItems.map((item) => {
+        {navItems.map((item, index) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;
+          const mostraGrupo = item.group && (index === 0 || navItems[index - 1].group !== item.group);
           
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-primary text-primary-foreground"
-                  : "text-gray-700 hover:bg-gray-100",
-                isCollapsed && "justify-center px-2"
+            <div key={item.href}>
+              {mostraGrupo && (
+                <div className={cn(
+                  "px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400",
+                  isCollapsed && "text-center px-0"
+                )}>
+                  {item.group}
+                </div>
               )}
-              title={isCollapsed ? item.title : undefined}
-            >
-              <Icon className={cn("h-5 w-5 flex-shrink-0", isCollapsed && "h-5 w-5")} />
-              {!isCollapsed && <span className="truncate">{item.title}</span>}
-            </Link>
+              <Link
+                href={item.href}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                  isActive
+                    ? "bg-primary text-primary-foreground"
+                    : "text-gray-700 hover:bg-gray-100",
+                  isCollapsed && "justify-center px-2"
+                )}
+                title={isCollapsed ? item.title : undefined}
+              >
+                <Icon className={cn("h-5 w-5 flex-shrink-0", isCollapsed && "h-5 w-5")} />
+                {!isCollapsed && <span className="truncate">{item.title}</span>}
+              </Link>
+            </div>
           );
         })}
       </div>
