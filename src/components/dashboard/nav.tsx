@@ -19,6 +19,8 @@ import {
   Layers,
   XCircle,
   Play,
+  Wrench,
+  ClipboardList,
 } from 'lucide-react';
 
 interface NavItem {
@@ -87,6 +89,16 @@ const navItems: NavItem[] = [
     title: 'Motivos de Cancelamento',
     href: '/dashboard/motivos-cancelamento',
     icon: XCircle,
+  },
+  {
+    title: 'Tipos de Manutenção',
+    href: '/dashboard/tipos-manutencao',
+    icon: Wrench,
+  },
+  {
+    title: 'Atividades de Manutenção',
+    href: '/dashboard/atividades-manutencao',
+    icon: ClipboardList,
   },
   {
     title: 'Ordens de Produção',
